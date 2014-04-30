@@ -1,6 +1,7 @@
 CC=gcc
 C_FLAGS=-m64 -std=c99 -pedantic -W -Wall -Wextra -Wshadow -Wpointer-arith -Wcast-qual \
 				-Wstrict-prototypes -Wmissing-prototypes -Wwrite-strings -Werror
+DEBUG_FLAGS=-g
 RELEASE_FLAGS=-O3 -DNDEBUG
 
 COMPILE=$(CC) -o convert_dsk convert_dsk.c $(C_FLAGS)
@@ -8,7 +9,7 @@ COMPILE=$(CC) -o convert_dsk convert_dsk.c $(C_FLAGS)
 default: debug
 
 debug: convert_dsk.c debug.h
-		$(COMPILE)
+		$(COMPILE) $(DEBUG_FLAGS)
 
 release: convert_dsk.c debug.h
 		$(COMPILE) $(RELEASE_FLAGS)
