@@ -267,11 +267,15 @@ int main(int argc, char * argv[]) {
   TRACE("     x  = %016llx %016llx\n", x.upper, x.lower);
   TRACE("  rc(x) = %016llx %016llx\n", y.upper, y.lower);
   #endif
-  //TRACE("              x = %016llx\n", x);
-  //TRACE("  block revcomp = %016llx\n", block_revcomp_64(x));
-  //TRACE("shifted revcomp = %016llx\n", block_revcomp_64(x) >> 10);
-  //TRACE("        revcomp = %016llx\n", reverse_complement_64(x, k));
 
+  // TODO: SORTING! just use quicksort at first? in the comparator function
+  // reverse the NTs for the whole integer (64 or 128)
+  // and compare how it goes...
+  // Then, maybe implement a radix sort on two bits?
+  // do 4 bits sort properly from the MSB?
+  // 0001 < but should sort after 1000
+  // so NO!
+  // so I HAVE to reverse the representation or do a radix sort for radix = 4
   /*
   printf("SORTING...\n");
   if (kmer_num_blocks == 1) {
