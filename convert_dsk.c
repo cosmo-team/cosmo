@@ -17,9 +17,42 @@ uint64_t swap_gt_64(uint64_t);
 int compare_64(const void *, const void *);
 int compare_128(const void *, const void *);
 
+// Swaps G (11 -> 10) and T (10 -> 11) representation so radix ordering is lexical
 inline uint64_t swap_gt_64(uint64_t x) {
   return x ^ ((x & 0xAAAAAAAAAAAAAAAA) >> 1);
 }
+
+// after swapping G and T, simple binary NOT gives a DNA complement
+#define complement(x) (!(x))
+// reverses 4 nucleotides (a byte)
+// TODO: replace with LUT for reverse_complement_8, then remove the !
+#define reverse_nt_8(x) ( (((x) & 0xC0) >> 6) | ((x) << 6) | (((x) & 0x30) >> 2) | (((x) & 0x0C) << 2) )
+#define reverse_nt_64(x) ( (reverse_nt_8((x)         & 0xff)  << 56) | \
+                           (reverse_nt_8(((x) >> 8)  & 0xff)  << 48) | \
+                           (reverse_nt_8(((x) >> 16) & 0xff)  << 40) | \
+                           (reverse_nt_8(((x) >> 24) & 0xff)  << 32) | \
+                           (reverse_nt_8(((x) >> 32) & 0xff)  << 24) | \
+                           (reverse_nt_8(((x) >> 40) & 0xff)  << 16) | \
+                           (reverse_nt_8(((x) >> 48) & 0xff)  <<  8) | \
+                           (reverse_nt_8(((x) >> 56) & 0xff)       ) )
+#define revcomp_64(x) (complement(reverse_nt_64((x))))
+
+// Different to the macro because it shifts the correct amount afterwards
+inline uint64_t reverse_complement_64(uint64_t x, uint32_t kmer_num_bits) {
+  return revcomp_64(x) >> (64 - kmer_num_bits * 2);
+}
+
+typedef struct {
+  uint64_t upper;
+  uint64_t lower;
+} uint64_pair_t;
+
+// inline uint64_pair_t reverse_complement_128(uint64_pair_t x, uint32_t kmer_num_bits);
+// inline uint64_pair_t reverse_complement_128(uint64_pair_t x, uint32_t kmer_num_bits) {}
+
+//void reverse_complements(uint64_t * kmers_in, uint64_t * kmers_out, size_t num_records, uint32_t kmer_num_bits);
+//void reverse_complements(uint64_t * kmers_in, uint64_t * kmers_out, size_t num_records, uint32_t kmer_num_bits) {
+//}
 
 int compare_64(const void * lhs, const void * rhs)
 {
@@ -46,6 +79,36 @@ size_t dsk_record_size(uint32_t);
 inline size_t dsk_record_size(uint32_t kmer_num_bits) {
   // record fmt: kmer, count
   return (kmer_num_bits/8) + 4;
+}
+
+void print_kmers_hex(FILE * outfile, uint64_t * kmers, size_t num_kmers, uint32_t kmer_num_bits);
+void print_kmers_hex(FILE * outfile, uint64_t * kmers, size_t num_kmers, uint32_t kmer_num_bits) {
+  assert(kmer_num_bits <= 128);
+  for (size_t i = 0; i < num_kmers; i++) {
+    if (kmer_num_bits == 64) {
+      fprintf(outfile, "%016llx\n", kmers[i]);
+    }
+    else if (kmer_num_bits == 128) {
+      uint64_t upper = kmers[i * 2];
+      uint64_t lower = kmers[i * 2 + 1];
+      fprintf(outfile, "%016llx %016llx\n", upper, lower);
+    }
+  }
+}
+
+void print_kmers_dec(FILE * outfile, uint64_t * kmers, size_t num_kmers, uint32_t kmer_num_bits);
+void print_kmers_dec(FILE * outfile, uint64_t * kmers, size_t num_kmers, uint32_t kmer_num_bits) {
+  assert(kmer_num_bits <= 128);
+  for (size_t i = 0; i < num_kmers; i++) {
+    if (kmer_num_bits == 64) {
+      fprintf(outfile, "%020llu\n", kmers[i]);
+    }
+    else if (kmer_num_bits == 128) {
+      uint64_t upper = kmers[i * 2];
+      uint64_t lower = kmers[i * 2 + 1];
+      fprintf(outfile, "%020llu %020llu\n", upper, lower);
+    }
+  }
 }
 
 int dsk_num_records(int handle, uint32_t kmer_num_bits, size_t * num_records);
@@ -96,7 +159,7 @@ size_t dsk_read_kmers(int handle, uint32_t kmer_num_bits, uint64_t * kmers_outpu
 
         // Iterate over kmers, skipping counts
         for (ssize_t offset = 0; offset < num_bytes_read; offset += sizeof(uint64_t) + sizeof(uint32_t), next_slot += 1) {
-          kmers_output[next_slot] = *((uint64_t*)(input_buffer + offset));
+          kmers_output[next_slot] = swap_gt_64(*((uint64_t*)(input_buffer + offset)));
         }
       }
     } while ( num_bytes_read );
@@ -115,8 +178,8 @@ size_t dsk_read_kmers(int handle, uint32_t kmer_num_bits, uint64_t * kmers_outpu
         // Iterate over kmers, skipping counts
         for (ssize_t offset = 0; offset < num_bytes_read; offset += 2 * sizeof(uint64_t) + sizeof(uint32_t), next_slot += 2) {
             // Swapping lower and upper block (to simplify sorting later)
-            kmers_output[next_slot + 1]     = *((uint64_t*)(input_buffer + offset));
-            kmers_output[next_slot] = *((uint64_t*)(input_buffer + offset + sizeof(uint64_t)));
+            kmers_output[next_slot + 1] = swap_gt_64(*((uint64_t*)(input_buffer + offset)));
+            kmers_output[next_slot]     = swap_gt_64(*((uint64_t*)(input_buffer + offset + sizeof(uint64_t))));
         }
       }
     } while ( num_bytes_read );
@@ -189,18 +252,8 @@ int main(int argc, char * argv[]) {
 
   close(handle);
 
-  // print em
-  for (size_t i = 0; i < num_records; i++)
-  {
-    if (kmer_num_blocks == 1) {
-      printf("%016llx\n", *kmers[i]);
-    }
-    else if (kmer_num_blocks == 2) {
-      uint64_t upper = kmers[i][0];
-      uint64_t lower = kmers[i][1];
-      printf("%016llx %016llx\n", upper, lower);
-    }
-  }
+  print_kmers_hex(stdout, (uint64_t*)kmers, num_records, kmer_num_bits);
+
   /*
   printf("SORTING...\n");
   if (kmer_num_blocks == 1) {
@@ -210,21 +263,9 @@ int main(int argc, char * argv[]) {
     qsort(kmers, num_records, 2 * sizeof(uint64_t), compare_128);
   }
 
-  for (size_t i = 0; i < num_records; i++)
-  {
-    if (kmer_num_blocks == 1) {
-      printf("%016llx\n", *kmers[i]);
-    }
-    else if (kmer_num_blocks == 2) {
-      uint64_t upper = kmers[i][0];
-      uint64_t lower = kmers[i][1];
-      printf("%016llx %016llx\n", lower, upper);
-    }
-  }
+  print_kmers_hex(stdout, (uint64_t*)kmers, num_records, kmer_num_bits);
   */
-  // TODO: refactor
-  //
-  // Convert to normal format
+
   // change buffer size to 2x
   // iterate over and read them into buffer
   // add their reverse complements
