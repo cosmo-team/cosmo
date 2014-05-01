@@ -48,6 +48,22 @@ inline size_t dsk_record_size(uint32_t kmer_num_bits) {
   return (kmer_num_bits/8) + 4;
 }
 
+int dsk_num_records(int handle, uint32_t kmer_num_bits, size_t * num_records);
+int dsk_num_records(int handle, uint32_t kmer_num_bits, size_t * num_records) {
+  size_t record_size = dsk_record_size(kmer_num_bits);
+  off_t original_pos = -1;
+  off_t end_pos = -1;
+  if ( (original_pos = lseek(handle, 0 ,SEEK_CUR)) == -1 ||
+       (end_pos = lseek(handle, 0, SEEK_END)) == -1  ) {
+    return -1;
+  }
+  if ( lseek(handle, original_pos, SEEK_SET) == -1 ) {
+    return -1;
+  }
+  *num_records = (end_pos - original_pos)/record_size;
+  return 0;
+}
+
 size_t dsk_read_kmers(int handle, uint32_t kmer_num_bits, uint64_t * kmers_output);
 size_t dsk_read_kmers(int handle, uint32_t kmer_num_bits, uint64_t * kmers_output) {
   // TODO: Add a parameter to specify a limit to how many records we read (eventually multipass merge-sort?)
@@ -128,8 +144,7 @@ int main(int argc, char * argv[]) {
   // read header
   uint32_t kmer_num_bits = 0;
   uint32_t k = 0;
-  if ( !dsk_read_header(handle, &kmer_num_bits, &k) )
-  {
+  if ( !dsk_read_header(handle, &kmer_num_bits, &k) ) {
     fprintf(stderr, "Error reading file %s\n", file_name);
     exit(1);
   }
@@ -144,21 +159,18 @@ int main(int argc, char * argv[]) {
   }
 
   // read how many items there are
-  size_t record_size = (kmer_num_bits / 8) + sizeof(uint32_t); 
-  off_t original_pos = -1;
-  off_t end_pos = -1;
-  if ( (original_pos = lseek(handle, 0 ,SEEK_CUR)) == -1 ||
-       (end_pos = lseek(handle, 0, SEEK_END)) == -1  ) {
+  size_t num_records = 0;
+  if ( dsk_num_records(handle, kmer_num_bits, &num_records) == -1) {
     fprintf(stderr, "Error seeking file %s\n", file_name);
     exit(1);
   }
-  if ( lseek(handle, original_pos, SEEK_SET) == -1 ) {
-    fprintf(stderr, "Error seeking file %s\n", file_name);
+  if (num_records == 0) {
+    fprintf(stderr, "File %s has no kmers.\n", file_name);
     exit(1);
   }
-  size_t num_records = (end_pos - original_pos)/record_size;
-  TRACE("num_records = %zu\n", num_records);
+  TRACE("num_records = %zd\n", num_records);
 
+  // allocate space for kmers
   typedef uint64_t kmer_t[kmer_num_blocks];
   kmer_t * kmers = malloc(num_records * sizeof(kmer_t));
 
