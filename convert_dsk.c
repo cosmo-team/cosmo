@@ -42,6 +42,74 @@ int dsk_read_header(int handle, uint32_t * kmer_num_bits, uint32_t * k) {
   return success;
 }
 
+size_t dsk_record_size(uint32_t);
+inline size_t dsk_record_size(uint32_t kmer_num_bits) {
+  // record fmt: kmer, count
+  return (kmer_num_bits/8) + 4;
+}
+
+size_t dsk_read_kmers(int handle, uint32_t kmer_num_bits, uint64_t * kmers_output);
+size_t dsk_read_kmers(int handle, uint32_t kmer_num_bits, uint64_t * kmers_output) {
+  // TODO: Add a parameter to specify a limit to how many records we read (eventually multipass merge-sort?)
+
+  // read the items items into the array via a buffer
+  char input_buffer[BUFFER_SIZE];
+
+  // Only read a multiple of records... this makes it easier to iterate over
+  size_t record_size = dsk_record_size(kmer_num_bits);
+  size_t read_size = (BUFFER_SIZE / record_size) * record_size;
+
+  // Technically we *could* read in bytes at a time if need-be... but nah.
+  assert(read_size > 0);
+
+  ssize_t num_bytes_read = 0;
+  size_t next_slot = 0;
+
+  // This if statement would be more readable inside the loop, but it's moved out here for performance.
+  // TODO: This might run better if we filled in another buffer on the stack with kmers only, then memcpy to the output?
+  if (kmer_num_bits <= 64) {
+    do {
+      // Try read a batch of records.
+      if ( (num_bytes_read = read(handle, input_buffer, read_size)) == -1 ) {
+        return -1;
+      }
+
+      // Did we read anything?
+      if (num_bytes_read ) {
+        TRACE("num_bytes_read = %zd\n", num_bytes_read);
+
+        // Iterate over kmers, skipping counts
+        for (ssize_t offset = 0; offset < num_bytes_read; offset += sizeof(uint64_t) + sizeof(uint32_t), next_slot += 1) {
+          kmers_output[next_slot] = *((uint64_t*)(input_buffer + offset));
+        }
+      }
+    } while ( num_bytes_read );
+  }
+  else if (64 < kmer_num_bits <= 128) {
+    do {
+      // Try read a batch of records.
+      if ( (num_bytes_read = read(handle, input_buffer, read_size)) == -1 ) {
+        return -1;
+      }
+
+      // Did we read anything?
+      if (num_bytes_read ) { 
+        TRACE("num_bytes_read = %zd\n", num_bytes_read);
+
+        // Iterate over kmers, skipping counts
+        for (ssize_t offset = 0; offset < num_bytes_read; offset += 2 * sizeof(uint64_t) + sizeof(uint32_t), next_slot += 2) {
+            // Swapping lower and upper block (to simplify sorting later)
+            kmers_output[next_slot + 1]     = *((uint64_t*)(input_buffer + offset));
+            kmers_output[next_slot] = *((uint64_t*)(input_buffer + offset + sizeof(uint64_t)));
+        }
+      }
+    } while ( num_bytes_read );
+  }
+  else assert (kmer_num_bits <= 128);
+  // Return the number of kmers read (whether 64 bit or 128 bit)
+  return next_slot / ((kmer_num_bits/8)/sizeof(uint64_t));
+}
+
 int main(int argc, char * argv[]) {
   // parse argv file
   if (argc != 2) {
@@ -76,7 +144,7 @@ int main(int argc, char * argv[]) {
   }
 
   // read how many items there are
-  size_t record_size = (kmer_num_bits / 8) + sizeof(uint32_t); // record fmt: kmer, count
+  size_t record_size = (kmer_num_bits / 8) + sizeof(uint32_t); 
   off_t original_pos = -1;
   off_t end_pos = -1;
   if ( (original_pos = lseek(handle, 0 ,SEEK_CUR)) == -1 ||
@@ -92,48 +160,24 @@ int main(int argc, char * argv[]) {
   TRACE("num_records = %zu\n", num_records);
 
   typedef uint64_t kmer_t[kmer_num_blocks];
-  kmer_t * kmers = calloc(num_records, sizeof(kmer_t));
-  size_t next_slot = 0;
+  kmer_t * kmers = malloc(num_records * sizeof(kmer_t));
 
-  // read the items items into the array via a buffer
-  char input_buffer[BUFFER_SIZE];
-  memset(input_buffer, 0, BUFFER_SIZE);
-  // Only read a multiple of records... we are going to remove the counts anyway
-  // So this makes it easier to iterate over
-  size_t read_size = (BUFFER_SIZE / record_size) * record_size;
-  ssize_t num_bytes_read = 0;
-  do {
-    if ( (num_bytes_read = read(handle, input_buffer, read_size)) == -1 ) {
+  // read items into array
+  size_t num_records_read = num_records_read = dsk_read_kmers(handle, kmer_num_bits, (uint64_t*) kmers);
+  switch (num_records_read) {
+    case -1:
       fprintf(stderr, "Error reading file %s\n", argv[1]);
       exit(1);
-    }
-    if (num_bytes_read ) { 
-      ssize_t offset = 0;
-      TRACE("num_bytes_read = %zd\n", num_bytes_read);
-      while (offset < num_bytes_read) {
-        kmer_t * kmer = (kmer_t*)(input_buffer+offset);
-        if (kmer_num_blocks == 1) {
-          kmers[next_slot][0] = *kmer[0];
-          //printf("%016llx\n", *kmer[0]);
-        }
-        else if (kmer_num_blocks == 2)
-        {
-          // TODO: move this if statement outside the loop
-          kmers[next_slot][0] = ((uint64_t*)(input_buffer + offset))[0];
-          kmers[next_slot][1] = ((uint64_t*)(input_buffer + offset))[1];
-          //printf("%016llx%016llx\n", upper, lower);
-        }
-        offset += sizeof(kmer_t) + sizeof(uint32_t);
-        next_slot++;
-      }
-    }
-  } while ( num_bytes_read );
+      break;
+    default:
+      TRACE("num_records_read = %zu\n", num_records_read);
+      assert (num_records_read == num_records);
+      break;
+  }
 
   close(handle);
 
-  assert(next_slot == num_records);
-  TRACE("next_slot = %zu\n", next_slot);
-
+  // print em
   for (size_t i = 0; i < num_records; i++)
   {
     if (kmer_num_blocks == 1) {
@@ -142,7 +186,7 @@ int main(int argc, char * argv[]) {
     else if (kmer_num_blocks == 2) {
       uint64_t upper = kmers[i][0];
       uint64_t lower = kmers[i][1];
-      printf("%016llx %016llx\n", lower, upper);
+      printf("%016llx %016llx\n", upper, lower);
     }
   }
   /*
