@@ -8,11 +8,14 @@ COMPILE=$(CC) -o convert_dsk convert_dsk.c $(C_FLAGS)
 
 default: debug
 
-debug: convert_dsk.c debug.h
+lut.h: make_lut.py
+		python make_lut.py > lut.h
+
+debug: convert_dsk.c lut.h debug.h
 		$(COMPILE) $(DEBUG_FLAGS)
 
-release: convert_dsk.c debug.h
+release: convert_dsk.c lut.h debug.h
 		$(COMPILE) $(RELEASE_FLAGS)
 
 clean:
-		rm -rf convert_dsk *.o
+		rm -rf convert_dsk *.o *.dSYM lut.h
