@@ -5,7 +5,9 @@
 #include <string.h>
 #include <limits.h>
 
+#include "lut.h"
 #include "debug.h"
+#include "uint128_t.h"
 //#include "nanotime.h"
 
 const char * USAGE = "<DSK output file>";
@@ -22,33 +24,37 @@ inline uint64_t swap_gt_64(uint64_t x) {
   return x ^ ((x & 0xAAAAAAAAAAAAAAAA) >> 1);
 }
 
-// after swapping G and T, simple binary NOT gives a DNA complement
-#define complement(x) (!(x))
-// reverses 4 nucleotides (a byte)
-// TODO: replace with LUT for reverse_complement_8, then remove the !
-#define reverse_nt_8(x) ( (((x) & 0xC0) >> 6) | ((x) << 6) | (((x) & 0x30) >> 2) | (((x) & 0x0C) << 2) )
-#define reverse_nt_64(x) ( (reverse_nt_8((x)         & 0xff)  << 56) | \
-                           (reverse_nt_8(((x) >> 8)  & 0xff)  << 48) | \
-                           (reverse_nt_8(((x) >> 16) & 0xff)  << 40) | \
-                           (reverse_nt_8(((x) >> 24) & 0xff)  << 32) | \
-                           (reverse_nt_8(((x) >> 32) & 0xff)  << 24) | \
-                           (reverse_nt_8(((x) >> 40) & 0xff)  << 16) | \
-                           (reverse_nt_8(((x) >> 48) & 0xff)  <<  8) | \
-                           (reverse_nt_8(((x) >> 56) & 0xff)       ) )
-#define revcomp_64(x) (complement(reverse_nt_64((x))))
+uint64_t block_revcomp_64(uint64_t x);
+inline uint64_t block_revcomp_64(uint64_t x) {
+  uint64_t output;
 
-// Different to the macro because it shifts the correct amount afterwards
-inline uint64_t reverse_complement_64(uint64_t x, uint32_t kmer_num_bits) {
-  return revcomp_64(x) >> (64 - kmer_num_bits * 2);
+  unsigned char * p = (unsigned char *) &x;
+  unsigned char * q = (unsigned char *) &output;
+  // TODO: replace with LUT for reverse_complement_8, then remove the !
+  q[7] = revcomp_8(p[0]);
+  q[6] = revcomp_8(p[1]);
+  q[5] = revcomp_8(p[2]);
+  q[4] = revcomp_8(p[3]);
+  q[3] = revcomp_8(p[4]);
+  q[2] = revcomp_8(p[5]);
+  q[1] = revcomp_8(p[6]);
+  q[0] = revcomp_8(p[7]);
+  return output;
 }
 
-typedef struct {
-  uint64_t upper;
-  uint64_t lower;
-} uint64_pair_t;
+// Different to the macro because it shifts the correct amount afterwards
+uint64_t reverse_complement_64(uint64_t x, uint32_t k);
+inline uint64_t reverse_complement_64(uint64_t x, uint32_t k) {
+  return block_revcomp_64(x) >> (64 - k * 2);
+}
 
-// inline uint64_pair_t reverse_complement_128(uint64_pair_t x, uint32_t kmer_num_bits);
-// inline uint64_pair_t reverse_complement_128(uint64_pair_t x, uint32_t kmer_num_bits) {}
+uint128_t reverse_complement_128(uint128_t x, uint32_t k);
+inline uint128_t reverse_complement_128(uint128_t x, uint32_t k) {
+  uint64_t temp = block_revcomp_64(x.upper);
+  x.upper = block_revcomp_64(x.lower);
+  x.lower = temp;
+  return right_shift_128(x, (128 - k*2));
+}
 
 //void reverse_complements(uint64_t * kmers_in, uint64_t * kmers_out, size_t num_records, uint32_t kmer_num_bits);
 //void reverse_complements(uint64_t * kmers_in, uint64_t * kmers_out, size_t num_records, uint32_t kmer_num_bits) {
@@ -253,6 +259,18 @@ int main(int argc, char * argv[]) {
   close(handle);
 
   print_kmers_hex(stdout, (uint64_t*)kmers, num_records, kmer_num_bits);
+
+  TRACE("TESTING REVERSE COMPLEMENTS\n");
+  #ifndef NDEBUG
+  uint128_t x = ((uint128_t*)kmers)[0];
+  uint128_t y = reverse_complement_128(x, k);
+  TRACE("     x  = %016llx %016llx\n", x.upper, x.lower);
+  TRACE("  rc(x) = %016llx %016llx\n", y.upper, y.lower);
+  #endif
+  //TRACE("              x = %016llx\n", x);
+  //TRACE("  block revcomp = %016llx\n", block_revcomp_64(x));
+  //TRACE("shifted revcomp = %016llx\n", block_revcomp_64(x) >> 10);
+  //TRACE("        revcomp = %016llx\n", reverse_complement_64(x, k));
 
   /*
   printf("SORTING...\n");
