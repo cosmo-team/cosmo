@@ -8,7 +8,9 @@
 #include "lut.h"
 #include "debug.h"
 #include "uint128_t.h"
-//#include "nanotime.h"
+#include "nanotime.h"
+
+//#define LIB_QSORT
 
 const char * USAGE = "<DSK output file>";
 const size_t MAX_BITS_PER_KMER = 128;
@@ -24,13 +26,58 @@ inline uint64_t swap_gt_64(uint64_t x) {
   return x ^ ((x & 0xAAAAAAAAAAAAAAAA) >> 1);
 }
 
+void swap_64(uint64_t *x, size_t i, size_t j);
+inline void swap_64(uint64_t *x, size_t i, size_t j) {
+  uint64_t temp = x[i];
+  x[i] = x[j];
+  x[j] = temp;
+}
+
+void qsort_64(uint64_t * x, size_t l, size_t u);
+void qsort_64(uint64_t * x, size_t l, size_t u) {
+  size_t i, j;
+  uint64_t t;
+  if (l >= u)
+    return;
+  t = x[l];
+  i = l;
+  j = u+1;
+  for (;;) {
+    do i++; while (i <= u && x[i] < t);
+    do j--; while (x[j] > t);
+    if (i > j)
+      break;
+    swap_64(x, i, j);
+  }
+  swap_64(x, l, j);
+  qsort_64(x, l, j-1);
+  qsort_64(x, j+1, u);
+}
+
+// Doesn't reverse on bit level, reverses at the two-bit level
+uint64_t block_reverse_64(uint64_t x);
+uint64_t block_reverse_64(uint64_t x) {
+  uint64_t output;
+
+  unsigned char * p = (unsigned char *) &x;
+  unsigned char * q = (unsigned char *) &output;
+  q[7] = reverse_8(p[0]);
+  q[6] = reverse_8(p[1]);
+  q[5] = reverse_8(p[2]);
+  q[4] = reverse_8(p[3]);
+  q[3] = reverse_8(p[4]);
+  q[2] = reverse_8(p[5]);
+  q[1] = reverse_8(p[6]);
+  q[0] = reverse_8(p[7]);
+  return output;
+}
+
 uint64_t block_revcomp_64(uint64_t x);
 inline uint64_t block_revcomp_64(uint64_t x) {
   uint64_t output;
 
   unsigned char * p = (unsigned char *) &x;
   unsigned char * q = (unsigned char *) &output;
-  // TODO: replace with LUT for reverse_complement_8, then remove the !
   q[7] = revcomp_8(p[0]);
   q[6] = revcomp_8(p[1]);
   q[5] = revcomp_8(p[2]);
@@ -42,7 +89,7 @@ inline uint64_t block_revcomp_64(uint64_t x) {
   return output;
 }
 
-// Different to the macro because it shifts the correct amount afterwards
+// Different to block_revcomp_64 because it shifts the correct amount after
 uint64_t reverse_complement_64(uint64_t x, uint32_t k);
 inline uint64_t reverse_complement_64(uint64_t x, uint32_t k) {
   return block_revcomp_64(x) >> (64 - k * 2);
@@ -56,15 +103,17 @@ inline uint128_t reverse_complement_128(uint128_t x, uint32_t k) {
   return right_shift_128(x, (128 - k*2));
 }
 
-//void reverse_complements(uint64_t * kmers_in, uint64_t * kmers_out, size_t num_records, uint32_t kmer_num_bits);
-//void reverse_complements(uint64_t * kmers_in, uint64_t * kmers_out, size_t num_records, uint32_t kmer_num_bits) {
-//}
-
 int compare_64(const void * lhs, const void * rhs)
 {
   uint64_t a = *(uint64_t*)lhs;
   uint64_t b = *(uint64_t*)rhs;
-  return a - b;
+  if (a < b) {
+    return -1;
+  }
+  else if (a > b){
+    return 1;
+  }
+  return 0;
 }
 
 int compare_128(const void * lhs, const void * rhs) {
@@ -260,39 +309,74 @@ int main(int argc, char * argv[]) {
 
   print_kmers_hex(stdout, (uint64_t*)kmers, num_records, kmer_num_bits);
 
-  TRACE("TESTING REVERSE COMPLEMENTS\n");
   #ifndef NDEBUG
-  uint128_t x = ((uint128_t*)kmers)[0];
-  uint128_t y = reverse_complement_128(x, k);
-  TRACE("     x  = %016llx %016llx\n", x.upper, x.lower);
-  TRACE("  rc(x) = %016llx %016llx\n", y.upper, y.lower);
+  TRACE("TESTING REVERSE COMPLEMENTS\n");
+  if (kmer_num_bits == 64) {
+    uint64_t x = ((uint64_t*)kmers)[0];
+    uint64_t y = reverse_complement_64(x, k);
+    TRACE("     x  = %016llx\n", x);
+    TRACE("  rc(x) = %016llx\n", y);
+  }
+  else if (kmer_num_bits == 128) {
+    uint128_t x = ((uint128_t*)kmers)[0];
+    uint128_t y = reverse_complement_128(x, k);
+    TRACE("     x  = %016llx %016llx\n", x.upper, x.lower);
+    TRACE("  rc(x) = %016llx %016llx\n", y.upper, y.lower);
+  }
   #endif
 
-  // TODO: SORTING! just use quicksort at first? in the comparator function
-  // reverse the NTs for the whole integer (64 or 128)
-  // and compare how it goes...
-  // Then, maybe implement a radix sort on two bits?
-  // do 4 bits sort properly from the MSB?
-  // 0001 < but should sort after 1000
-  // so NO!
-  // so I HAVE to reverse the representation or do a radix sort for radix = 4
-  /*
-  printf("SORTING...\n");
-  if (kmer_num_blocks == 1) {
+  // uint64_t * reverse_complements = kmers + num_kmers;
+  // add_reverse_complements(kmers, reverse_complements, num_kmers, sizeof);
+
+  #ifndef DEBUG
+  printf("\nSORTING\n");
+  #endif
+
+  // According to the paper linked below, merge sort is better for keys of 8 bytes
+  // or more
+  // http://203.144.248.23/ACM.FT/1810000/1807207/p351-satish.pdf
+  // and according to this, insertion sort is good for almost sorted lists:
+  // http://stackoverflow.com/questions/1513566/which-sorting-algorithm-is-best-suited-to-re-sort-an-almost-fully-sorted-list
+  // After the first sorting phase, we could do radix sort or insertion sort on the first char
+  // TODO: Add radix sort implementation (or do my own) and time it
+  // is it at least as fast as quicksort?
+  // TODO: Radix sort upper digits, then insertion sort the lower
+  // allocate same space
+  // iterate over and count based on bytes for first positions
+  // size_t counts[256];
+  // for this to work, we need to internally reverse the NTs in the bytes,
+  // but not inside the whole key type
+  // TODO: Use GPU implementation
+  // http://nvlabs.github.io/cub/classcub_1_1_block_radix_sort.html
+  // TODO: time on both GPU and CPU
+  // TODO: Reverse bytes first. Could do it in comparator, but probably need to
+  // Examine keys multiple times
+  if (kmer_num_bits == 64) {
+    nanotime_t start, end;
+    start = get_nanotime();
+    #ifdef LIB_QSORT
     qsort(kmers, num_records, sizeof(uint64_t), compare_64);
+    #else
+    qsort_64((uint64_t*)kmers, 0, num_records - 1);
+    #endif
+    end = get_nanotime();
+    double ms = (double)(end - start)/(1000000);
+    #ifdef LIB_QSORT
+    fprintf(stderr, "LIB QSORT timing: %.2f ms\n", ms);
+    #else
+    fprintf(stderr, "MY QSORT timing: %.2f ms\n", ms);
+    #endif
   }
-  else if (kmer_num_blocks == 2) {
-    qsort(kmers, num_records, 2 * sizeof(uint64_t), compare_128);
+  else if (kmer_num_bits == 128) {
+    // TODO: Fix compare_128
+    qsort(kmers, num_records, sizeof(uint128_t), compare_128);
   }
 
   print_kmers_hex(stdout, (uint64_t*)kmers, num_records, kmer_num_bits);
-  */
 
-  // change buffer size to 2x
-  // iterate over and read them into buffer
-  // add their reverse complements
-  // Convert
-  // Sort
+  // TODO: change buffer size to 2x
+  // add reverse complements
+  // FINISH SORT stuff
   // Filter dummy edges
   // - count how many
   // - create array
@@ -301,6 +385,7 @@ int main(int argc, char * argv[]) {
   // Filter for dummy edges
   // Merge
   // Write
+  // Find a server to run it on
   free(kmers);
 
   return 0;
