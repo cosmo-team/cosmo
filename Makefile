@@ -3,7 +3,7 @@ C_FLAGS=-m64 -std=c99 -pedantic -W -Wall -Wextra -Wshadow -Wpointer-arith -Wcast
 				-Wstrict-prototypes -Wmissing-prototypes -Wwrite-strings -Werror
 DEBUG_FLAGS=-g
 RELEASE_FLAGS=-O3 -DNDEBUG
-
+EXPERIMENT_FLAGS=-DEXPERIMENT
 COMPILE=$(CC) -o convert_dsk convert_dsk.c $(C_FLAGS)
 
 default: debug
@@ -11,10 +11,10 @@ default: debug
 lut.h: make_lut.py
 		python make_lut.py > lut.h
 
-debug: convert_dsk.c lut.h debug.h
+debug: convert_dsk.c lut.h debug.h nanotime.h
 		$(COMPILE) $(DEBUG_FLAGS)
 
-release: convert_dsk.c lut.h debug.h
+release: convert_dsk.c lut.h debug.h nanotime.h
 		$(COMPILE) $(RELEASE_FLAGS)
 
 clean:
