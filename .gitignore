@@ -1,0 +1,9 @@
+# Project Executable
+convert_dsk
+
+# Generated files
+lut.h
+
+# C stuff
+*.o
+*.dSYM
