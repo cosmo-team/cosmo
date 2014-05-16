@@ -10,7 +10,7 @@
 #include "uint128_t.h"
 #include "nanotime.h"
 
-//#define LIB_QSORT
+#define CPU // CUDA?
 
 const char * USAGE = "<DSK output file>";
 const size_t MAX_BITS_PER_KMER = 128;
@@ -290,7 +290,7 @@ int main(int argc, char * argv[]) {
 
   // allocate space for kmers
   typedef uint64_t kmer_t[kmer_num_blocks];
-  kmer_t * kmers = malloc(num_records * sizeof(kmer_t));
+  kmer_t * kmers = calloc(num_records * 2, sizeof(kmer_t));
 
   // read items into array
   size_t num_records_read = num_records_read = dsk_read_kmers(handle, kmer_num_bits, (uint64_t*) kmers);
@@ -325,12 +325,8 @@ int main(int argc, char * argv[]) {
   }
   #endif
 
-  // uint64_t * reverse_complements = kmers + num_kmers;
-  // add_reverse_complements(kmers, reverse_complements, num_kmers, sizeof);
-
-  #ifndef DEBUG
-  printf("\nSORTING\n");
-  #endif
+  kmer_t * reverse_complements = kmers + num_records;
+  add_reverse_complements(kmers, reverse_complements, num_records);
 
   // According to the paper linked below, merge sort is better for keys of 8 bytes
   // or more
@@ -372,20 +368,26 @@ int main(int argc, char * argv[]) {
     qsort(kmers, num_records, sizeof(uint128_t), compare_128);
   }
 
-  print_kmers_hex(stdout, (uint64_t*)kmers, num_records, kmer_num_bits);
+  //print_kmers_hex(stdout, (uint64_t*)kmers, num_records, kmer_num_bits);
 
-  // TODO: change buffer size to 2x
-  // add reverse complements
-  // FINISH SORT stuff
-  // Filter dummy edges
-  // - count how many
-  // - create array
-  // - create dummy edges
-  // Sort
-  // Filter for dummy edges
-  // Merge
-  // Write
+  // Store a copy of the kmers to sort in colex(row) order, for joining
+  // in order to calculate dummy edges
+  kmer_t * table_a = kmers;
+  kmer_t * table_b = kmers + num_records * 2; // x2 because of reverse complements
+  memcpy(table_b, table_a, num_records * 2 * sizeof(kmer_t));
+
+  // TODO: change buffer size to 2x (then to 4x)
+  // convert, then reverse all 2-bit fields
+  // add reverse complements to second half of array
+  // Use quicksort to sort them all
+  // Memcpy, transform and resort - insertion sort based on last field?
+  // filter dummy edges in two passes, keeping a list of positions
+  // update positions so we can write them out
+  // write out and keep edge counter, compare to dummy edge positions
+  // - fill output buffer, each entry takes 5 bits of a 64 bit int
   // Find a server to run it on
+  // compare time vs minia for SAME K VALUE
+  // 2 data sets
   free(kmers);
 
   return 0;
