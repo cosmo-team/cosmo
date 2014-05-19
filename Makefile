@@ -3,7 +3,6 @@ C_FLAGS=-m64 -std=c99 -pedantic -W -Wall -Wextra -Wshadow -Wpointer-arith -Wcast
 				-Wstrict-prototypes -Wmissing-prototypes -Wwrite-strings -Werror
 DEBUG_FLAGS=-g
 RELEASE_FLAGS=-O3 -DNDEBUG
-EXPERIMENT_FLAGS=-DEXPERIMENT
 COMPILE=$(CC) -o convert_dsk convert_dsk.c io.o transform.o lut.o $(C_FLAGS)
 
 default: debug
