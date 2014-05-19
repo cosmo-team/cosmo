@@ -8,32 +8,26 @@
 //uint128_t x = { 99, 20 };
 //printf("%016llx%016llx\n", x.upper, x.lower);
 
-
 typedef struct {
   uint64_t upper;
   uint64_t lower;
-} uint128_struct;
-
-typedef struct {
-  __uint128_t v;
-  uint128_struct parts;
 } uint128_t;
 
-/*
 // Prototypes
-uint128_t right_shift_128(uint128_t, unsigned int);
-uint128_t left_shift_128(uint128_t, unsigned int);
-uint128_t and_128(uint128_t, uint128_t);
-uint128_t or_128(uint128_t, uint128_t);
-uint128_t not_128(uint128_t);
+static uint128_t right_shift_128(uint128_t, unsigned int);
+//uint128_t left_shift_128(uint128_t, unsigned int);
+//uint128_t and_128(uint128_t, uint128_t);
+//uint128_t or_128(uint128_t, uint128_t);
+//uint128_t not_128(uint128_t);
 
-inline uint128_t right_shift_128(uint128_t x, unsigned int distance) {
+static inline uint128_t right_shift_128(uint128_t x, unsigned int distance) {
   x.lower >>= distance;
   x.lower |= (x.upper << (BLOCK_WIDTH - distance));
   x.upper >>= distance;
   return x;
 }
 
+/*
 inline uint128_t left_shift_128(uint128_t x, unsigned int distance) {
   x.upper <<= distance;
   x.upper |= (x.lower >> (BLOCK_WIDTH - distance));

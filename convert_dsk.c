@@ -99,7 +99,6 @@ int main(int argc, char * argv[]) {
 
   // TODO: TRANSFORM to have LSB at MSB position for sorting
 
-  /*
   #ifndef NDEBUG
   TRACE("TESTING REVERSE COMPLEMENTS\n");
   if (kmer_num_bits == 64) {
@@ -109,13 +108,12 @@ int main(int argc, char * argv[]) {
     TRACE("  rc(x) = %016llx\n", y);
   }
   else if (kmer_num_bits == 128) {
-    uint128_struct x = ((uint128_struct*)kmers)[0];
-    uint128_struct y = (uint128_struct)reverse_complement_128(x, k);
+    uint128_t x = ((uint128_t*)kmers)[0];
+    uint128_t y = reverse_complement_128(x, k);
     TRACE("     x  = %016llx %016llx\n", x.upper, x.lower);
     TRACE("  rc(x) = %016llx %016llx\n", y.upper, y.lower);
   }
   #endif
-  */
 
   if (kmer_num_bits == 64) {
     nanotime_t start, end;
@@ -127,9 +125,12 @@ int main(int argc, char * argv[]) {
   }
   else if (kmer_num_bits == 128) {
     // TODO: Fix compare_128
-    qsort(kmers, num_records, sizeof(uint128_t), compare_128);
+    fprintf(stderr, "NOT IMPLEMENTED FOR 128 BITS YET\n");
+    exit(1);
+    //qsort(kmers, num_records, sizeof(uint128_t), compare_128);
   }
 
+  // SECOND SORT PHASE
   // Store a copy of the kmers to sort in colex(row) order, for joining
   // in order to calculate dummy edges
   kmer_t * table_a = kmers;

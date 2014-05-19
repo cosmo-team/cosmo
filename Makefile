@@ -1,6 +1,6 @@
 CC=gcc
 C_FLAGS=-m64 -std=c99 -pedantic -W -Wall -Wextra -Wshadow -Wpointer-arith -Wcast-qual \
-				-Wstrict-prototypes -Wmissing-prototypes -Wwrite-strings -Werror
+				-Wstrict-prototypes -Wmissing-prototypes -Wwrite-strings
 DEBUG_FLAGS=-g
 RELEASE_FLAGS=-O3 -DNDEBUG
 EXPERIMENT_FLAGS=-DEXPERIMENT

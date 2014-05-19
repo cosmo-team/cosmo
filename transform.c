@@ -39,10 +39,11 @@ inline uint64_t reverse_complement_64(uint64_t x, uint32_t k) {
 }
 
 uint128_t reverse_complement_128(uint128_t x, uint32_t k) {
-  uint64_t temp = block_revcomp_64(x.parts.upper);
-  x.parts.upper = block_revcomp_64(x.parts.lower);
-  x.parts.lower = temp;
-  x.v = (x.v >> (128 - k*2));
+  uint64_t temp = x.upper;
+  x.upper = block_revcomp_64(x.lower);
+  x.lower = block_revcomp_64(temp);
+  //x.v >>= (128 - k*2);
+  x = right_shift_128(x, 128 - k*2);
   return x;
 }
 
