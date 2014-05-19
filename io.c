@@ -1,4 +1,5 @@
 #include "io.h"
+#include "transform.h"
 
 int dsk_read_header(int handle, uint32_t * kmer_num_bits, uint32_t * k) {
   return read(handle, (char*)kmer_num_bits, sizeof(uint32_t)) != -1 &&
@@ -51,7 +52,7 @@ size_t dsk_read_kmers(int handle, uint32_t kmer_num_bits, uint64_t * kmers_outpu
 
         // Iterate over kmers, skipping counts
         for (ssize_t offset = 0; offset < num_bytes_read; offset += sizeof(uint64_t) + sizeof(uint32_t), next_slot += 1) {
-          kmers_output[next_slot] = *((uint64_t*)(input_buffer + offset));
+          kmers_output[next_slot] = swap_gt_64(*((uint64_t*)(input_buffer + offset)));
         }
       }
     } while ( num_bytes_read );
@@ -70,8 +71,8 @@ size_t dsk_read_kmers(int handle, uint32_t kmer_num_bits, uint64_t * kmers_outpu
         // Iterate over kmers, skipping counts
         for (ssize_t offset = 0; offset < num_bytes_read; offset += 2 * sizeof(uint64_t) + sizeof(uint32_t), next_slot += 2) {
             // Swapping lower and upper block (to simplify sorting later)
-            kmers_output[next_slot + 1] = *((uint64_t*)(input_buffer + offset));
-            kmers_output[next_slot]     = *((uint64_t*)(input_buffer + offset + sizeof(uint64_t)));
+            kmers_output[next_slot + 1] = swap_gt_64(*((uint64_t*)(input_buffer + offset)));
+            kmers_output[next_slot]     = swap_gt_64(*((uint64_t*)(input_buffer + offset + sizeof(uint64_t))));
         }
       }
     } while ( num_bytes_read );

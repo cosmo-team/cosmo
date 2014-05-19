@@ -8,11 +8,18 @@
 //uint128_t x = { 99, 20 };
 //printf("%016llx%016llx\n", x.upper, x.lower);
 
+
 typedef struct {
   uint64_t upper;
   uint64_t lower;
+} uint128_struct;
+
+typedef struct {
+  __uint128_t v;
+  uint128_struct parts;
 } uint128_t;
 
+/*
 // Prototypes
 uint128_t right_shift_128(uint128_t, unsigned int);
 uint128_t left_shift_128(uint128_t, unsigned int);
@@ -50,6 +57,6 @@ inline uint128_t not_128(uint128_t x) {
   x.upper = !x.upper;
   x.lower = !x.lower;
   return x;
-}
+}*/
 
 #endif

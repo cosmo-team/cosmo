@@ -74,11 +74,11 @@ int main(int argc, char * argv[]) {
   }
   TRACE("num_records = %zd\n", num_records);
 
-  // allocate space for kmers
+  // ALLOCATE SPACE FOR KMERS (done in one malloc call)
   typedef uint64_t kmer_t[kmer_num_blocks];
   kmer_t * kmers = calloc(num_records * 2, sizeof(kmer_t));
 
-  // read items into array
+  // READ KMERS FROM DISK INTO ARRAY
   size_t num_records_read = num_records_read = dsk_read_kmers(handle, kmer_num_bits, (uint64_t*) kmers);
   switch (num_records_read) {
     case -1:
@@ -93,8 +93,13 @@ int main(int argc, char * argv[]) {
 
   close(handle);
 
+  #ifndef NDEBUG
   print_kmers_hex(stdout, (uint64_t*)kmers, num_records, kmer_num_bits);
+  #endif
 
+  // TODO: TRANSFORM to have LSB at MSB position for sorting
+
+  /*
   #ifndef NDEBUG
   TRACE("TESTING REVERSE COMPLEMENTS\n");
   if (kmer_num_bits == 64) {
@@ -104,35 +109,14 @@ int main(int argc, char * argv[]) {
     TRACE("  rc(x) = %016llx\n", y);
   }
   else if (kmer_num_bits == 128) {
-    uint128_t x = ((uint128_t*)kmers)[0];
-    uint128_t y = reverse_complement_128(x, k);
+    uint128_struct x = ((uint128_struct*)kmers)[0];
+    uint128_struct y = (uint128_struct)reverse_complement_128(x, k);
     TRACE("     x  = %016llx %016llx\n", x.upper, x.lower);
     TRACE("  rc(x) = %016llx %016llx\n", y.upper, y.lower);
   }
   #endif
+  */
 
-  //kmer_t * reverse_complements = kmers + num_records;
-  //add_reverse_complements(kmers, reverse_complements, num_records);
-
-  // According to the paper linked below, merge sort is better for keys of 8 bytes
-  // or more
-  // http://203.144.248.23/ACM.FT/1810000/1807207/p351-satish.pdf
-  // and according to this, insertion sort is good for almost sorted lists:
-  // http://stackoverflow.com/questions/1513566/which-sorting-algorithm-is-best-suited-to-re-sort-an-almost-fully-sorted-list
-  // After the first sorting phase, we could do radix sort or insertion sort on the first char
-  // TODO: Add radix sort implementation (or do my own) and time it
-  // is it at least as fast as quicksort?
-  // TODO: Radix sort upper digits, then insertion sort the lower
-  // allocate same space
-  // iterate over and count based on bytes for first positions
-  // size_t counts[256];
-  // for this to work, we need to internally reverse the NTs in the bytes,
-  // but not inside the whole key type
-  // TODO: Use GPU implementation
-  // http://nvlabs.github.io/cub/classcub_1_1_block_radix_sort.html
-  // TODO: time on both GPU and CPU
-  // TODO: Reverse bytes first. Could do it in comparator, but probably need to
-  // Examine keys multiple times
   if (kmer_num_bits == 64) {
     nanotime_t start, end;
     start = get_nanotime();
@@ -145,8 +129,6 @@ int main(int argc, char * argv[]) {
     // TODO: Fix compare_128
     qsort(kmers, num_records, sizeof(uint128_t), compare_128);
   }
-
-  //print_kmers_hex(stdout, (uint64_t*)kmers, num_records, kmer_num_bits);
 
   // Store a copy of the kmers to sort in colex(row) order, for joining
   // in order to calculate dummy edges

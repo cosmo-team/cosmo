@@ -2,7 +2,7 @@
 convert_dsk
 
 # Generated files
-lut.h
+lut.c
 
 # C stuff
 *.o
