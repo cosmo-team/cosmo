@@ -1,98 +1,13 @@
 #include "common.h"
+#include "transform.h"
 #include "io.h"
-#include "lut.h"
 #include "uint128_t.h"
 #include "nanotime.h"
 
-#define CPU // CUDA?
-
 const char * USAGE = "<DSK output file>";
 
-uint64_t swap_gt_64(uint64_t);
 int compare_64(const void *, const void *);
 int compare_128(const void *, const void *);
-
-// Swaps G (11 -> 10) and T (10 -> 11) representation so radix ordering is lexical
-inline uint64_t swap_gt_64(uint64_t x) {
-  return x ^ ((x & 0xAAAAAAAAAAAAAAAA) >> 1);
-}
-
-void swap_64(uint64_t *x, size_t i, size_t j);
-inline void swap_64(uint64_t *x, size_t i, size_t j) {
-  uint64_t temp = x[i];
-  x[i] = x[j];
-  x[j] = temp;
-}
-
-void qsort_64(uint64_t * x, size_t l, size_t u);
-void qsort_64(uint64_t * x, size_t l, size_t u) {
-  size_t i, j;
-  uint64_t t;
-  if (l >= u)
-    return;
-  t = x[l];
-  i = l;
-  j = u+1;
-  for (;;) {
-    do i++; while (i <= u && x[i] < t);
-    do j--; while (x[j] > t);
-    if (i > j)
-      break;
-    swap_64(x, i, j);
-  }
-  swap_64(x, l, j);
-  qsort_64(x, l, j-1);
-  qsort_64(x, j+1, u);
-}
-
-// Doesn't reverse on bit level, reverses at the two-bit level
-uint64_t block_reverse_64(uint64_t x);
-uint64_t block_reverse_64(uint64_t x) {
-  uint64_t output;
-
-  unsigned char * p = (unsigned char *) &x;
-  unsigned char * q = (unsigned char *) &output;
-  q[7] = reverse_8(p[0]);
-  q[6] = reverse_8(p[1]);
-  q[5] = reverse_8(p[2]);
-  q[4] = reverse_8(p[3]);
-  q[3] = reverse_8(p[4]);
-  q[2] = reverse_8(p[5]);
-  q[1] = reverse_8(p[6]);
-  q[0] = reverse_8(p[7]);
-  return output;
-}
-
-uint64_t block_revcomp_64(uint64_t x);
-inline uint64_t block_revcomp_64(uint64_t x) {
-  uint64_t output;
-
-  unsigned char * p = (unsigned char *) &x;
-  unsigned char * q = (unsigned char *) &output;
-  q[7] = revcomp_8(p[0]);
-  q[6] = revcomp_8(p[1]);
-  q[5] = revcomp_8(p[2]);
-  q[4] = revcomp_8(p[3]);
-  q[3] = revcomp_8(p[4]);
-  q[2] = revcomp_8(p[5]);
-  q[1] = revcomp_8(p[6]);
-  q[0] = revcomp_8(p[7]);
-  return output;
-}
-
-// Different to block_revcomp_64 because it shifts the correct amount after
-uint64_t reverse_complement_64(uint64_t x, uint32_t k);
-inline uint64_t reverse_complement_64(uint64_t x, uint32_t k) {
-  return block_revcomp_64(x) >> (64 - k * 2);
-}
-
-uint128_t reverse_complement_128(uint128_t x, uint32_t k);
-inline uint128_t reverse_complement_128(uint128_t x, uint32_t k) {
-  uint64_t temp = block_revcomp_64(x.upper);
-  x.upper = block_revcomp_64(x.lower);
-  x.lower = temp;
-  return right_shift_128(x, (128 - k*2));
-}
 
 int compare_64(const void * lhs, const void * rhs)
 {
@@ -113,36 +28,6 @@ int compare_128(const void * lhs, const void * rhs) {
   uint64_t b_upper = ((uint64_t*)rhs)[0];
   uint64_t b_lower = ((uint64_t*)rhs)[1];
   return (a_upper - b_upper) + (a_lower - b_lower);
-}
-
-void print_kmers_hex(FILE * outfile, uint64_t * kmers, size_t num_kmers, uint32_t kmer_num_bits);
-void print_kmers_hex(FILE * outfile, uint64_t * kmers, size_t num_kmers, uint32_t kmer_num_bits) {
-  assert(kmer_num_bits <= 128);
-  for (size_t i = 0; i < num_kmers; i++) {
-    if (kmer_num_bits == 64) {
-      fprintf(outfile, "%016llx\n", kmers[i]);
-    }
-    else if (kmer_num_bits == 128) {
-      uint64_t upper = kmers[i * 2];
-      uint64_t lower = kmers[i * 2 + 1];
-      fprintf(outfile, "%016llx %016llx\n", upper, lower);
-    }
-  }
-}
-
-void print_kmers_dec(FILE * outfile, uint64_t * kmers, size_t num_kmers, uint32_t kmer_num_bits);
-void print_kmers_dec(FILE * outfile, uint64_t * kmers, size_t num_kmers, uint32_t kmer_num_bits) {
-  assert(kmer_num_bits <= 128);
-  for (size_t i = 0; i < num_kmers; i++) {
-    if (kmer_num_bits == 64) {
-      fprintf(outfile, "%020llu\n", kmers[i]);
-    }
-    else if (kmer_num_bits == 128) {
-      uint64_t upper = kmers[i * 2];
-      uint64_t lower = kmers[i * 2 + 1];
-      fprintf(outfile, "%020llu %020llu\n", upper, lower);
-    }
-  }
 }
 
 int main(int argc, char * argv[]) {
@@ -251,18 +136,10 @@ int main(int argc, char * argv[]) {
   if (kmer_num_bits == 64) {
     nanotime_t start, end;
     start = get_nanotime();
-    #ifdef LIB_QSORT
     qsort(kmers, num_records, sizeof(uint64_t), compare_64);
-    #else
-    qsort_64((uint64_t*)kmers, 0, num_records - 1);
-    #endif
     end = get_nanotime();
     double ms = (double)(end - start)/(1000000);
-    #ifdef LIB_QSORT
-    fprintf(stderr, "LIB QSORT timing: %.2f ms\n", ms);
-    #else
-    fprintf(stderr, "MY QSORT timing: %.2f ms\n", ms);
-    #endif
+    fprintf(stderr, "QSORT timing: %.2f ms\n", ms);
   }
   else if (kmer_num_bits == 128) {
     // TODO: Fix compare_128
