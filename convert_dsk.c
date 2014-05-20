@@ -1,5 +1,6 @@
 #include "common.h"
 #include "transform.h"
+#include "sort.h"
 #include "io.h"
 #include "uint128_t.h"
 #include "nanotime.h"
@@ -23,11 +24,13 @@ int compare_64(const void * lhs, const void * rhs)
 }
 
 int compare_128(const void * lhs, const void * rhs) {
-  uint64_t a_upper = ((uint64_t*)lhs)[0];
-  uint64_t a_lower = ((uint64_t*)lhs)[1];
-  uint64_t b_upper = ((uint64_t*)rhs)[0];
-  uint64_t b_lower = ((uint64_t*)rhs)[1];
-  return (a_upper - b_upper) + (a_lower - b_lower);
+  uint128_t a = *(uint128_t*)lhs;
+  uint128_t b = *(uint128_t*)rhs;
+  if (a.upper < b.upper)      return -1;
+  else if (a.upper > b.upper) return  1;
+  else if (a.lower < b.lower) return -1;
+  else if (a.lower > b.lower) return  1;
+  return 0;
 }
 
 int main(int argc, char * argv[]) {
@@ -77,6 +80,8 @@ int main(int argc, char * argv[]) {
   // ALLOCATE SPACE FOR KMERS (done in one malloc call)
   typedef uint64_t kmer_t[kmer_num_blocks];
   kmer_t * kmers = calloc(num_records * 2, sizeof(kmer_t));
+  kmer_t * table_a = kmers;
+  kmer_t * table_b = kmers + num_records * 2; // x2 because of reverse complements
 
   // READ KMERS FROM DISK INTO ARRAY
   size_t num_records_read = num_records_read = dsk_read_kmers(handle, kmer_num_bits, (uint64_t*) kmers);
@@ -93,63 +98,45 @@ int main(int argc, char * argv[]) {
 
   close(handle);
 
+  // ADD REVERSE COMPLEMENTS
+  add_reverse_complements((uint64_t*)kmers, (uint64_t*)(kmers + num_records), num_records, k);
+
+  // TODO: Manipulate bits so we can sort in colex(node) order
+  // Which is to say, just rotate RIGHT one place
+  // Then the second sort can be a stable sort on the LSD
+  // x & 0x3 << (k - 1) * 2 | x >> 2
+
   #ifndef NDEBUG
-  print_kmers_hex(stdout, (uint64_t*)kmers, num_records, kmer_num_bits);
+  print_kmers_hex(stdout, (uint64_t*)kmers, num_records * 2, kmer_num_bits);
   #endif
 
-  // TODO: TRANSFORM to have LSB at MSB position for sorting
-
-  #ifndef NDEBUG
-  TRACE("TESTING REVERSE COMPLEMENTS\n");
+  nanotime_t start, end;
+  start = get_nanotime();
+  // TODO: Change sorting function to be LSD radix
+  // Can use the second table as a temp one
   if (kmer_num_bits == 64) {
-    uint64_t x = ((uint64_t*)kmers)[0];
-    uint64_t y = reverse_complement_64(x, k);
-    TRACE("     x  = %016llx\n", x);
-    TRACE("  rc(x) = %016llx\n", y);
+    //qsort(kmers, num_records*2, sizeof(uint64_t), compare_64);
+    lsd_radix_sort_64((uint64_t*)table_a, (uint64_t*)table_b, num_records*2, k);
   }
   else if (kmer_num_bits == 128) {
-    uint128_t x = ((uint128_t*)kmers)[0];
-    uint128_t y = reverse_complement_128(x, k);
-    TRACE("     x  = %016llx %016llx\n", x.upper, x.lower);
-    TRACE("  rc(x) = %016llx %016llx\n", y.upper, y.lower);
-  }
-  #endif
-
-  if (kmer_num_bits == 64) {
-    nanotime_t start, end;
-    start = get_nanotime();
-    qsort(kmers, num_records, sizeof(uint64_t), compare_64);
-    end = get_nanotime();
-    double ms = (double)(end - start)/(1000000);
-    fprintf(stderr, "QSORT timing: %.2f ms\n", ms);
-  }
-  else if (kmer_num_bits == 128) {
-    // TODO: Fix compare_128
-    fprintf(stderr, "NOT IMPLEMENTED FOR 128 BITS YET\n");
+    fprintf(stderr, "NOT YET IMPLEMENTED FOR 128 BIT KMERS\n");
     exit(1);
-    //qsort(kmers, num_records, sizeof(uint128_t), compare_128);
+    //qsort(kmers, num_records*2, sizeof(uint128_t), compare_128);
   }
+  end = get_nanotime();
+  double ms = (double)(end - start)/(1000000);
+  fprintf(stderr, "Sort Time: %.2f ms\n", ms);
+
+  #ifndef NDEBUG
+  printf("SORTING\n");
+  print_kmers_hex(stdout, (uint64_t*)kmers, num_records * 2, kmer_num_bits);
+  #endif
 
   // SECOND SORT PHASE
   // Store a copy of the kmers to sort in colex(row) order, for joining
   // in order to calculate dummy edges
-  kmer_t * table_a = kmers;
-  kmer_t * table_b = kmers + num_records * 2; // x2 because of reverse complements
-  memcpy(table_b, table_a, num_records * 2 * sizeof(kmer_t));
+  //memcpy(table_b, table_a, num_records * 2 * sizeof(kmer_t));
 
-  // TODO: change buffer size to 2x (then to 4x)
-  // convert, then reverse all 2-bit fields
-  // add reverse complements to second half of array
-  // Use quicksort to sort them all
-  // Memcpy, transform and resort - insertion sort based on last field?
-  // filter dummy edges in two passes, keeping a list of positions
-  // update positions so we can write them out
-  // write out and keep edge counter, compare to dummy edge positions
-  // - fill output buffer, each entry takes 5 bits of a 64 bit int
-  // Find a server to run it on
-  // compare time vs minia for SAME K VALUE
-  // 2 data sets
   free(kmers);
-
   return 0;
 }

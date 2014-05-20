@@ -48,8 +48,6 @@ size_t dsk_read_kmers(int handle, uint32_t kmer_num_bits, uint64_t * kmers_outpu
 
       // Did we read anything?
       if (num_bytes_read ) {
-        TRACE("num_bytes_read = %zd\n", num_bytes_read);
-
         // Iterate over kmers, skipping counts
         for (ssize_t offset = 0; offset < num_bytes_read; offset += sizeof(uint64_t) + sizeof(uint32_t), next_slot += 1) {
           kmers_output[next_slot] = swap_gt_64(*((uint64_t*)(input_buffer + offset)));
@@ -66,8 +64,6 @@ size_t dsk_read_kmers(int handle, uint32_t kmer_num_bits, uint64_t * kmers_outpu
 
       // Did we read anything?
       if (num_bytes_read ) { 
-        TRACE("num_bytes_read = %zd\n", num_bytes_read);
-
         // Iterate over kmers, skipping counts
         for (ssize_t offset = 0; offset < num_bytes_read; offset += 2 * sizeof(uint64_t) + sizeof(uint32_t), next_slot += 2) {
             // Swapping lower and upper block (to simplify sorting later)
@@ -92,20 +88,6 @@ void print_kmers_hex(FILE * outfile, uint64_t * kmers, size_t num_kmers, uint32_
       uint64_t upper = kmers[i * 2];
       uint64_t lower = kmers[i * 2 + 1];
       fprintf(outfile, "%016llx %016llx\n", upper, lower);
-    }
-  }
-}
-
-void print_kmers_dec(FILE * outfile, uint64_t * kmers, size_t num_kmers, uint32_t kmer_num_bits) {
-  assert(kmer_num_bits <= 128);
-  for (size_t i = 0; i < num_kmers; i++) {
-    if (kmer_num_bits == 64) {
-      fprintf(outfile, "%020llu\n", kmers[i]);
-    }
-    else if (kmer_num_bits == 128) {
-      uint64_t upper = kmers[i * 2];
-      uint64_t lower = kmers[i * 2 + 1];
-      fprintf(outfile, "%020llu %020llu\n", upper, lower);
     }
   }
 }
