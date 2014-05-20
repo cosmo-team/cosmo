@@ -1,107 +1,13 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <fcntl.h>
-#include <unistd.h>
-#include <string.h>
-#include <limits.h>
-
-#include "lut.h"
-#include "debug.h"
+#include "common.h"
+#include "transform.h"
+#include "io.h"
 #include "uint128_t.h"
 #include "nanotime.h"
 
-#define CPU // CUDA?
-
 const char * USAGE = "<DSK output file>";
-const size_t MAX_BITS_PER_KMER = 128;
-const size_t BUFFER_SIZE = 0x8000; // 32Kb data buffer
 
-int dsk_read_header(int, uint32_t *, uint32_t *);
-uint64_t swap_gt_64(uint64_t);
 int compare_64(const void *, const void *);
 int compare_128(const void *, const void *);
-
-// Swaps G (11 -> 10) and T (10 -> 11) representation so radix ordering is lexical
-inline uint64_t swap_gt_64(uint64_t x) {
-  return x ^ ((x & 0xAAAAAAAAAAAAAAAA) >> 1);
-}
-
-void swap_64(uint64_t *x, size_t i, size_t j);
-inline void swap_64(uint64_t *x, size_t i, size_t j) {
-  uint64_t temp = x[i];
-  x[i] = x[j];
-  x[j] = temp;
-}
-
-void qsort_64(uint64_t * x, size_t l, size_t u);
-void qsort_64(uint64_t * x, size_t l, size_t u) {
-  size_t i, j;
-  uint64_t t;
-  if (l >= u)
-    return;
-  t = x[l];
-  i = l;
-  j = u+1;
-  for (;;) {
-    do i++; while (i <= u && x[i] < t);
-    do j--; while (x[j] > t);
-    if (i > j)
-      break;
-    swap_64(x, i, j);
-  }
-  swap_64(x, l, j);
-  qsort_64(x, l, j-1);
-  qsort_64(x, j+1, u);
-}
-
-// Doesn't reverse on bit level, reverses at the two-bit level
-uint64_t block_reverse_64(uint64_t x);
-uint64_t block_reverse_64(uint64_t x) {
-  uint64_t output;
-
-  unsigned char * p = (unsigned char *) &x;
-  unsigned char * q = (unsigned char *) &output;
-  q[7] = reverse_8(p[0]);
-  q[6] = reverse_8(p[1]);
-  q[5] = reverse_8(p[2]);
-  q[4] = reverse_8(p[3]);
-  q[3] = reverse_8(p[4]);
-  q[2] = reverse_8(p[5]);
-  q[1] = reverse_8(p[6]);
-  q[0] = reverse_8(p[7]);
-  return output;
-}
-
-uint64_t block_revcomp_64(uint64_t x);
-inline uint64_t block_revcomp_64(uint64_t x) {
-  uint64_t output;
-
-  unsigned char * p = (unsigned char *) &x;
-  unsigned char * q = (unsigned char *) &output;
-  q[7] = revcomp_8(p[0]);
-  q[6] = revcomp_8(p[1]);
-  q[5] = revcomp_8(p[2]);
-  q[4] = revcomp_8(p[3]);
-  q[3] = revcomp_8(p[4]);
-  q[2] = revcomp_8(p[5]);
-  q[1] = revcomp_8(p[6]);
-  q[0] = revcomp_8(p[7]);
-  return output;
-}
-
-// Different to block_revcomp_64 because it shifts the correct amount after
-uint64_t reverse_complement_64(uint64_t x, uint32_t k);
-inline uint64_t reverse_complement_64(uint64_t x, uint32_t k) {
-  return block_revcomp_64(x) >> (64 - k * 2);
-}
-
-uint128_t reverse_complement_128(uint128_t x, uint32_t k);
-inline uint128_t reverse_complement_128(uint128_t x, uint32_t k) {
-  uint64_t temp = block_revcomp_64(x.upper);
-  x.upper = block_revcomp_64(x.lower);
-  x.lower = temp;
-  return right_shift_128(x, (128 - k*2));
-}
 
 int compare_64(const void * lhs, const void * rhs)
 {
@@ -122,126 +28,6 @@ int compare_128(const void * lhs, const void * rhs) {
   uint64_t b_upper = ((uint64_t*)rhs)[0];
   uint64_t b_lower = ((uint64_t*)rhs)[1];
   return (a_upper - b_upper) + (a_lower - b_lower);
-}
-
-int dsk_read_header(int handle, uint32_t * kmer_num_bits, uint32_t * k) {
-  int success = read(handle, (char*)kmer_num_bits, sizeof(uint32_t)) != -1 &&
-                read(handle, (char*)k, sizeof(uint32_t)) != -1;
-  return success;
-}
-
-size_t dsk_record_size(uint32_t);
-inline size_t dsk_record_size(uint32_t kmer_num_bits) {
-  // record fmt: kmer, count
-  return (kmer_num_bits/8) + 4;
-}
-
-void print_kmers_hex(FILE * outfile, uint64_t * kmers, size_t num_kmers, uint32_t kmer_num_bits);
-void print_kmers_hex(FILE * outfile, uint64_t * kmers, size_t num_kmers, uint32_t kmer_num_bits) {
-  assert(kmer_num_bits <= 128);
-  for (size_t i = 0; i < num_kmers; i++) {
-    if (kmer_num_bits == 64) {
-      fprintf(outfile, "%016llx\n", kmers[i]);
-    }
-    else if (kmer_num_bits == 128) {
-      uint64_t upper = kmers[i * 2];
-      uint64_t lower = kmers[i * 2 + 1];
-      fprintf(outfile, "%016llx %016llx\n", upper, lower);
-    }
-  }
-}
-
-void print_kmers_dec(FILE * outfile, uint64_t * kmers, size_t num_kmers, uint32_t kmer_num_bits);
-void print_kmers_dec(FILE * outfile, uint64_t * kmers, size_t num_kmers, uint32_t kmer_num_bits) {
-  assert(kmer_num_bits <= 128);
-  for (size_t i = 0; i < num_kmers; i++) {
-    if (kmer_num_bits == 64) {
-      fprintf(outfile, "%020llu\n", kmers[i]);
-    }
-    else if (kmer_num_bits == 128) {
-      uint64_t upper = kmers[i * 2];
-      uint64_t lower = kmers[i * 2 + 1];
-      fprintf(outfile, "%020llu %020llu\n", upper, lower);
-    }
-  }
-}
-
-int dsk_num_records(int handle, uint32_t kmer_num_bits, size_t * num_records);
-int dsk_num_records(int handle, uint32_t kmer_num_bits, size_t * num_records) {
-  size_t record_size = dsk_record_size(kmer_num_bits);
-  off_t original_pos = -1;
-  off_t end_pos = -1;
-  if ( (original_pos = lseek(handle, 0 ,SEEK_CUR)) == -1 ||
-       (end_pos = lseek(handle, 0, SEEK_END)) == -1  ) {
-    return -1;
-  }
-  if ( lseek(handle, original_pos, SEEK_SET) == -1 ) {
-    return -1;
-  }
-  *num_records = (end_pos - original_pos)/record_size;
-  return 0;
-}
-
-size_t dsk_read_kmers(int handle, uint32_t kmer_num_bits, uint64_t * kmers_output);
-size_t dsk_read_kmers(int handle, uint32_t kmer_num_bits, uint64_t * kmers_output) {
-  // TODO: Add a parameter to specify a limit to how many records we read (eventually multipass merge-sort?)
-
-  // read the items items into the array via a buffer
-  char input_buffer[BUFFER_SIZE];
-
-  // Only read a multiple of records... this makes it easier to iterate over
-  size_t record_size = dsk_record_size(kmer_num_bits);
-  size_t read_size = (BUFFER_SIZE / record_size) * record_size;
-
-  // Technically we *could* read in bytes at a time if need-be... but nah.
-  assert(read_size > 0);
-
-  ssize_t num_bytes_read = 0;
-  size_t next_slot = 0;
-
-  // This if statement would be more readable inside the loop, but it's moved out here for performance.
-  // TODO: This might run better if we filled in another buffer on the stack with kmers only, then memcpy to the output?
-  if (kmer_num_bits <= 64) {
-    do {
-      // Try read a batch of records.
-      if ( (num_bytes_read = read(handle, input_buffer, read_size)) == -1 ) {
-        return -1;
-      }
-
-      // Did we read anything?
-      if (num_bytes_read ) {
-        TRACE("num_bytes_read = %zd\n", num_bytes_read);
-
-        // Iterate over kmers, skipping counts
-        for (ssize_t offset = 0; offset < num_bytes_read; offset += sizeof(uint64_t) + sizeof(uint32_t), next_slot += 1) {
-          kmers_output[next_slot] = swap_gt_64(*((uint64_t*)(input_buffer + offset)));
-        }
-      }
-    } while ( num_bytes_read );
-  }
-  else if (64 < kmer_num_bits <= 128) {
-    do {
-      // Try read a batch of records.
-      if ( (num_bytes_read = read(handle, input_buffer, read_size)) == -1 ) {
-        return -1;
-      }
-
-      // Did we read anything?
-      if (num_bytes_read ) { 
-        TRACE("num_bytes_read = %zd\n", num_bytes_read);
-
-        // Iterate over kmers, skipping counts
-        for (ssize_t offset = 0; offset < num_bytes_read; offset += 2 * sizeof(uint64_t) + sizeof(uint32_t), next_slot += 2) {
-            // Swapping lower and upper block (to simplify sorting later)
-            kmers_output[next_slot + 1] = swap_gt_64(*((uint64_t*)(input_buffer + offset)));
-            kmers_output[next_slot]     = swap_gt_64(*((uint64_t*)(input_buffer + offset + sizeof(uint64_t))));
-        }
-      }
-    } while ( num_bytes_read );
-  }
-  else assert (kmer_num_bits <= 128);
-  // Return the number of kmers read (whether 64 bit or 128 bit)
-  return next_slot / ((kmer_num_bits/8)/sizeof(uint64_t));
 }
 
 int main(int argc, char * argv[]) {
@@ -288,11 +74,11 @@ int main(int argc, char * argv[]) {
   }
   TRACE("num_records = %zd\n", num_records);
 
-  // allocate space for kmers
+  // ALLOCATE SPACE FOR KMERS (done in one malloc call)
   typedef uint64_t kmer_t[kmer_num_blocks];
   kmer_t * kmers = calloc(num_records * 2, sizeof(kmer_t));
 
-  // read items into array
+  // READ KMERS FROM DISK INTO ARRAY
   size_t num_records_read = num_records_read = dsk_read_kmers(handle, kmer_num_bits, (uint64_t*) kmers);
   switch (num_records_read) {
     case -1:
@@ -307,7 +93,11 @@ int main(int argc, char * argv[]) {
 
   close(handle);
 
+  #ifndef NDEBUG
   print_kmers_hex(stdout, (uint64_t*)kmers, num_records, kmer_num_bits);
+  #endif
+
+  // TODO: TRANSFORM to have LSB at MSB position for sorting
 
   #ifndef NDEBUG
   TRACE("TESTING REVERSE COMPLEMENTS\n");
@@ -325,51 +115,22 @@ int main(int argc, char * argv[]) {
   }
   #endif
 
-  kmer_t * reverse_complements = kmers + num_records;
-  add_reverse_complements(kmers, reverse_complements, num_records);
-
-  // According to the paper linked below, merge sort is better for keys of 8 bytes
-  // or more
-  // http://203.144.248.23/ACM.FT/1810000/1807207/p351-satish.pdf
-  // and according to this, insertion sort is good for almost sorted lists:
-  // http://stackoverflow.com/questions/1513566/which-sorting-algorithm-is-best-suited-to-re-sort-an-almost-fully-sorted-list
-  // After the first sorting phase, we could do radix sort or insertion sort on the first char
-  // TODO: Add radix sort implementation (or do my own) and time it
-  // is it at least as fast as quicksort?
-  // TODO: Radix sort upper digits, then insertion sort the lower
-  // allocate same space
-  // iterate over and count based on bytes for first positions
-  // size_t counts[256];
-  // for this to work, we need to internally reverse the NTs in the bytes,
-  // but not inside the whole key type
-  // TODO: Use GPU implementation
-  // http://nvlabs.github.io/cub/classcub_1_1_block_radix_sort.html
-  // TODO: time on both GPU and CPU
-  // TODO: Reverse bytes first. Could do it in comparator, but probably need to
-  // Examine keys multiple times
   if (kmer_num_bits == 64) {
     nanotime_t start, end;
     start = get_nanotime();
-    #ifdef LIB_QSORT
     qsort(kmers, num_records, sizeof(uint64_t), compare_64);
-    #else
-    qsort_64((uint64_t*)kmers, 0, num_records - 1);
-    #endif
     end = get_nanotime();
     double ms = (double)(end - start)/(1000000);
-    #ifdef LIB_QSORT
-    fprintf(stderr, "LIB QSORT timing: %.2f ms\n", ms);
-    #else
-    fprintf(stderr, "MY QSORT timing: %.2f ms\n", ms);
-    #endif
+    fprintf(stderr, "QSORT timing: %.2f ms\n", ms);
   }
   else if (kmer_num_bits == 128) {
     // TODO: Fix compare_128
-    qsort(kmers, num_records, sizeof(uint128_t), compare_128);
+    fprintf(stderr, "NOT IMPLEMENTED FOR 128 BITS YET\n");
+    exit(1);
+    //qsort(kmers, num_records, sizeof(uint128_t), compare_128);
   }
 
-  //print_kmers_hex(stdout, (uint64_t*)kmers, num_records, kmer_num_bits);
-
+  // SECOND SORT PHASE
   // Store a copy of the kmers to sort in colex(row) order, for joining
   // in order to calculate dummy edges
   kmer_t * table_a = kmers;
