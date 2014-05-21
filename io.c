@@ -92,3 +92,25 @@ void print_kmers_hex(FILE * outfile, uint64_t * kmers, size_t num_kmers, uint32_
   }
 }
 
+void print_kmers_acgt(FILE * outfile, uint64_t * kmers, size_t num_kmers, uint32_t k) {
+  assert(k <= 64);
+  const char * table = "acgt";
+  char buf[k+1];
+  buf[k] = '\0';
+  for (size_t i = 0; i < num_kmers; i++) {
+    if (k <= 32) {
+      uint64_t kmer = kmers[i];
+      for (uint32_t j = 0; j < k; j++) {
+        buf[k-j-1] = table[(kmer >> (j * 2)) & 0x3];
+      }
+      fprintf(outfile, "%s\n", buf);
+    }
+    else if (k <= 64) {
+      exit(1);
+      uint64_t upper = kmers[i * 2];
+      uint64_t lower = kmers[i * 2 + 1];
+      fprintf(outfile, "%016llx %016llx\n", upper, lower);
+    }
+  }
+}
+

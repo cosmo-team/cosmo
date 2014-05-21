@@ -2,7 +2,7 @@ CC=gcc
 C_FLAGS=-m64 -std=c99 -pedantic -W -Wall -Wextra -Wshadow -Wpointer-arith -Wcast-qual \
 				-Wstrict-prototypes -Wmissing-prototypes -Wwrite-strings -Werror
 DEBUG_FLAGS=-g
-RELEASE_FLAGS= #-O3 -DNDEBUG
+RELEASE_FLAGS=#-O3 -DNDEBUG
 COMPILE=$(CC) $(C_FLAGS) $(DEBUG_FLAGS) $(RELEASE_FLAGS)
 #COMPILE=$(CC) -o convert_dsk convert_dsk.c io.o transform.o lut.o $(C_FLAGS)
 

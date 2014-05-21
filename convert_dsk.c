@@ -1,37 +1,12 @@
 #include "common.h"
 #include "transform.h"
 #include "sort.h"
+#include "join.h"
 #include "io.h"
 #include "uint128_t.h"
 #include "nanotime.h"
 
 const char * USAGE = "<DSK output file>";
-
-int compare_64(const void *, const void *);
-int compare_128(const void *, const void *);
-
-int compare_64(const void * lhs, const void * rhs)
-{
-  uint64_t a = *(uint64_t*)lhs;
-  uint64_t b = *(uint64_t*)rhs;
-  if (a < b) {
-    return -1;
-  }
-  else if (a > b){
-    return 1;
-  }
-  return 0;
-}
-
-int compare_128(const void * lhs, const void * rhs) {
-  uint128_t a = *(uint128_t*)lhs;
-  uint128_t b = *(uint128_t*)rhs;
-  if (a.upper < b.upper)      return -1;
-  else if (a.upper > b.upper) return  1;
-  else if (a.lower < b.lower) return -1;
-  else if (a.lower > b.lower) return  1;
-  return 0;
-}
 
 int main(int argc, char * argv[]) {
   // parse argv file
@@ -79,12 +54,13 @@ int main(int argc, char * argv[]) {
 
   // ALLOCATE SPACE FOR KMERS (done in one malloc call)
   typedef uint64_t kmer_t[kmer_num_blocks];
-  kmer_t * kmers = calloc(num_records * 2, sizeof(kmer_t));
+  // x 4 because we need to add reverse complements, and then we have two copies of the table
+  kmer_t * kmers = calloc(num_records * 4, sizeof(kmer_t));
   kmer_t * table_a = kmers;
   kmer_t * table_b = kmers + num_records * 2; // x2 because of reverse complements
 
   // READ KMERS FROM DISK INTO ARRAY
-  size_t num_records_read = num_records_read = dsk_read_kmers(handle, kmer_num_bits, (uint64_t*) kmers);
+  size_t num_records_read = dsk_read_kmers(handle, kmer_num_bits, (uint64_t*) kmers);
   switch (num_records_read) {
     case -1:
       fprintf(stderr, "Error reading file %s\n", argv[1]);
@@ -101,22 +77,17 @@ int main(int argc, char * argv[]) {
   // ADD REVERSE COMPLEMENTS
   add_reverse_complements((uint64_t*)kmers, (uint64_t*)(kmers + num_records), num_records, k);
 
-  // TODO: Manipulate bits so we can sort in colex(node) order
-  // Which is to say, just rotate RIGHT one place
-  // Then the second sort can be a stable sort on the LSD
-  // x & 0x3 << (k - 1) * 2 | x >> 2
-
-  #ifndef NDEBUG
-  print_kmers_hex(stdout, (uint64_t*)kmers, num_records * 2, kmer_num_bits);
-  #endif
-
   nanotime_t start, end;
   start = get_nanotime();
-  // TODO: Change sorting function to be LSD radix
-  // Can use the second table as a temp one
   if (kmer_num_bits == 64) {
     //qsort(kmers, num_records*2, sizeof(uint64_t), compare_64);
-    lsd_radix_sort_64((uint64_t*)table_a, (uint64_t*)table_b, num_records*2, k);
+    // First step so that the edges are sorted after the node is sorted later
+    colex_partial_radix_sort_64((uint64_t*)table_a, (uint64_t*)table_b, num_records*2, 1, 0, (uint64_t**)&table_a, (uint64_t**)&table_b);
+    // from (k, 0] instead of (k, 1] because we want the colex(row) AND the second last result, which will be colex(node), edge
+    // Note that new_a and new_b map to table_b and table_a respectively.
+    colex_partial_radix_sort_64((uint64_t*)table_a, (uint64_t*)table_b, num_records*2, k, 0, (uint64_t**)&table_b, (uint64_t**)&table_a);
+    // At this point, a will have colex(node), edge sorting (as required)
+    // and b will have colex(row)
   }
   else if (kmer_num_bits == 128) {
     fprintf(stderr, "NOT YET IMPLEMENTED FOR 128 BIT KMERS\n");
@@ -128,14 +99,37 @@ int main(int argc, char * argv[]) {
   fprintf(stderr, "Sort Time: %.2f ms\n", ms);
 
   #ifndef NDEBUG
-  printf("SORTING\n");
-  print_kmers_hex(stdout, (uint64_t*)kmers, num_records * 2, kmer_num_bits);
+  printf("TABLE A:\n");
+  //print_kmers_hex(stdout, (uint64_t*)table_a, num_records * 2, kmer_num_bits);
+  print_kmers_acgt(stdout, (uint64_t*)table_a, num_records * 2, k);
+  printf("TABLE B:\n");
+  //print_kmers_hex(stdout, (uint64_t*)table_b, num_records * 2, kmer_num_bits);
+  print_kmers_acgt(stdout, (uint64_t*)table_b, num_records * 2, k);
   #endif
 
-  // SECOND SORT PHASE
-  // Store a copy of the kmers to sort in colex(row) order, for joining
-  // in order to calculate dummy edges
-  //memcpy(table_b, table_a, num_records * 2 * sizeof(kmer_t));
+  size_t num_incoming_dummy_edges = count_incoming_dummy_edges((uint64_t*)table_a, (uint64_t*)table_b, k);
+  //size_t num_outgoing_dummy_edges = count_outgoing_dummy_edges((uint64_t*)table_a, (uint64_t*)table_b, k);
+
+  // TODO: implement joining algorithm for 64 bit kmers (counting first)
+  // join.h, join.c
+  // count_incoming_dummy_edges
+  // count_outgoing_dummy_edges
+  // allocate space for in and out dummies
+  // find_incoming_dummy_edges
+  // find_outgoing_dummy_edges
+  // dummy: position integer and kmers
+  // TODO: Support 128-bit kmers (for sorting and printing)
+  // TODO: implement joining algorithm for 128 bit kmers
+  // TODO: count how many dummy edges there are and allocate that much space
+  // find_dummy_edges(table_a, table_b, k, dummy_out_ptr, dummy_in_ptr)
+  // TODO: count how many of each symbol there are in the 2nd last column
+  // TODO: filter leftmost k-1 symbols to add LAST flag
+  // TODO: filter for the rightmost k-1 symbols to add minus (have a seen boolean for each symbol)
+  // TODO: implement buffered output for our fmt:
+  // Header: k, num records (incl dummy, etc), ACGT table
+  // uint64_t vector of 4x5 bits = 4 edges.
+  // make struct for 5 bits: last_flag(1), symbol(2), minus_flag(1), dummy_flag(1)
+  // make struct for record (4 bits waste + array for 4 records) - check size
 
   free(kmers);
   return 0;
