@@ -2,28 +2,29 @@ CC=gcc
 C_FLAGS=-m64 -std=c99 -pedantic -W -Wall -Wextra -Wshadow -Wpointer-arith -Wcast-qual \
 				-Wstrict-prototypes -Wmissing-prototypes -Wwrite-strings -Werror
 DEBUG_FLAGS=-g
-RELEASE_FLAGS=-O3 -DNDEBUG
-COMPILE=$(CC) -o convert_dsk convert_dsk.c io.o transform.o lut.o $(C_FLAGS)
+RELEASE_FLAGS=#-O3 -DNDEBUG
+COMPILE=$(CC) $(C_FLAGS) $(DEBUG_FLAGS) $(RELEASE_FLAGS)
+#COMPILE=$(CC) -o convert_dsk convert_dsk.c io.o transform.o lut.o $(C_FLAGS)
 
-default: debug
+default: all
 
 lut.c: make_lut.py
 		python make_lut.py > lut.c
 
 lut.o: lut.h lut.c
-		$(CC) $(C_FLAGS) $(DEBUG_FLAGS) -c lut.c
+		$(COMPILE) -c lut.c
 
 io.o: io.h io.c
-		$(CC) $(C_FLAGS) $(DEBUG_FLAGS) -c io.c
+		$(COMPILE) -c io.c
+
+sort.o: sort.c sort.h common.h
+		$(COMPILE) -c sort.c
 
 transform.o: transform.h transform.c lut.h
-		$(CC) $(C_FLAGS) $(DEBUG_FLAGS) -c transform.c
+		$(COMPILE) -c transform.c
 
-debug: convert_dsk.c lut.h debug.h nanotime.h io.o transform.o lut.o
-		$(COMPILE) $(DEBUG_FLAGS)
-
-release: convert_dsk.c lut.h debug.h nanotime.h io.o transform.o lut.o
-		$(COMPILE) $(RELEASE_FLAGS)
+all: convert_dsk.c lut.h debug.h nanotime.h io.o transform.o lut.o sort.o
+		$(COMPILE) -o convert_dsk convert_dsk.c io.o transform.o lut.o sort.o
 
 clean:
 		rm -rf convert_dsk *.o *.dSYM lut.c

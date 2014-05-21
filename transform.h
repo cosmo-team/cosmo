@@ -12,5 +12,5 @@ uint64_t block_revcomp_64(uint64_t x);
 uint64_t block_reverse_64(uint64_t x);
 uint64_t reverse_complement_64(uint64_t x, uint32_t k);
 uint128_t reverse_complement_128(uint128_t x, uint32_t k);
-
+void add_reverse_complements(const uint64_t *, uint64_t *, size_t, uint32_t);
 #endif

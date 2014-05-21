@@ -47,3 +47,18 @@ uint128_t reverse_complement_128(uint128_t x, uint32_t k) {
   return x;
 }
 
+void add_reverse_complements(const uint64_t * kmers_in, uint64_t * kmers_out, size_t num_kmers, uint32_t k) {
+  assert(k <= 64);
+  if (k <= 32) {
+    for (size_t i = 0; i < num_kmers; i++) {
+      kmers_out[i] = reverse_complement_64(kmers_in[i], k);
+    }
+  }
+  else {
+    for (size_t i = 0; i < num_kmers; i++) {
+      uint128_t * in = (uint128_t*) kmers_in;
+      uint128_t * out = (uint128_t*) kmers_out;
+      out[i] = reverse_complement_128(in[i], k);
+    }
+  }
+}
