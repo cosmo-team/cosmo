@@ -107,7 +107,8 @@ int main(int argc, char * argv[]) {
   print_kmers_acgt(stdout, (uint64_t*)table_b, num_records * 2, k);
   #endif
 
-  size_t num_incoming_dummy_edges = count_incoming_dummy_edges((uint64_t*)table_a, (uint64_t*)table_b, k);
+  size_t num_incoming_dummy_edges = count_incoming_dummy_edges_64((uint64_t*)table_a, (uint64_t*)table_b, num_records*2, k);
+  TRACE("num_incoming_dummy_edges = %zu\n", num_incoming_dummy_edges);
   //size_t num_outgoing_dummy_edges = count_outgoing_dummy_edges((uint64_t*)table_a, (uint64_t*)table_b, k);
 
   // TODO: implement joining algorithm for 64 bit kmers (counting first)

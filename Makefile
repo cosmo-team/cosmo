@@ -20,11 +20,14 @@ io.o: io.h io.c
 sort.o: sort.c sort.h common.h
 		$(COMPILE) -c sort.c
 
+join.o: join.c join.h common.h
+		$(COMPILE) -c join.c
+
 transform.o: transform.h transform.c lut.h
 		$(COMPILE) -c transform.c
 
-all: convert_dsk.c lut.h debug.h nanotime.h io.o transform.o lut.o sort.o
-		$(COMPILE) -o convert_dsk convert_dsk.c io.o transform.o lut.o sort.o
+all: convert_dsk.c lut.h debug.h nanotime.h io.o transform.o lut.o sort.o join.o
+		$(COMPILE) -o convert_dsk convert_dsk.c io.o transform.o lut.o sort.o join.o
 
 clean:
 		rm -rf convert_dsk *.o *.dSYM lut.c

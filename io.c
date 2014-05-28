@@ -107,6 +107,7 @@ void print_kmers_acgt(FILE * outfile, uint64_t * kmers, size_t num_kmers, uint32
     }
     else if (k <= 64) {
       exit(1);
+      //TODO: impl for 128 bit
       uint64_t upper = kmers[i * 2];
       uint64_t lower = kmers[i * 2 + 1];
       fprintf(outfile, "%016llx %016llx\n", upper, lower);
