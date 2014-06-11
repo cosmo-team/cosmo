@@ -17,5 +17,6 @@ size_t dsk_read_kmers(int handle, uint32_t kmer_num_bits, uint64_t * kmers_outpu
 // Convenience function for printing all kmers
 void print_kmers_hex(FILE * outfile, uint64_t * kmers, size_t num_kmers, uint32_t kmer_num_bits);
 void print_kmers_acgt(FILE * outfile, uint64_t * kmers, size_t num_kmers, uint32_t k);
+void sprint_kmer_acgt(char * buf, uint64_t * kmer, uint32_t k);
 
 #endif
