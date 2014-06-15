@@ -29,20 +29,20 @@ size_t count_incoming_dummy_edges_64(uint64_t * table_a, uint64_t * table_b, siz
 
     // TODO: handle duplicates in both tables
     // These y-nodes from table B will require outgoing dummy edges
-    while (y < x) {
+    while (a_idx < num_records && b_idx < num_records && y < x) {
       // add y to result
-      /*
       uint64_t temp = get_right_64(table_b[b_idx],k) << 2;
       sprint_kmer_acgt(buf, &temp, k);
       buf[k-1] = '$';
       fprintf(stderr, "%s\n", buf);
       // TODO: add checks that we aren't going past the end of the arrays
-      */
-      y = get_b(++b_idx);
+      count++;
+      if (++b_idx >= num_records) break;
+      y = get_b(b_idx);
     }
 
     // These x-nodes from table A will require incoming dummy edges
-    while (y > x) {
+    while (a_idx < num_records && b_idx < num_records && y > x) {
       // add x to result
       /*
       uint64_t temp = table_a[a_idx] >> 2;
@@ -50,21 +50,23 @@ size_t count_incoming_dummy_edges_64(uint64_t * table_a, uint64_t * table_b, siz
       buf[0] = '$';
       fprintf(stderr, "%s\n", buf);
       */
-      x = get_a(++a_idx);
+      if (++a_idx >= num_records) break;
+      x = get_a(a_idx);
     }
 
     // These are the nodes that don't need dummy edges
     // TODO: understand why these are printing when I have output a dummy - probably duplication?
-    while (y == x) {
+    while (a_idx < num_records && b_idx < num_records && y == x) {
       // progress to end
-      while (y == x) {
+      while (a_idx < num_records && b_idx < num_records && y == x) {
         uint64_t temp = table_a[a_idx];
         sprint_kmer_acgt(buf, &temp, k);
         fprintf(stderr, "%s\n", buf);
-        // if outputting, add x to result
-        x = get_a(++a_idx);
+        if (++a_idx >= num_records) break;
+        x = get_a(a_idx);
       }
-      y = get_b(++b_idx);
+      if (++b_idx >= num_records) break;
+      y = get_b(b_idx);
     }
   }
   return count;
