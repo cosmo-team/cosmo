@@ -19,17 +19,19 @@ size_t count_incoming_dummy_edges_64(uint64_t * table_a, uint64_t * table_b, siz
   #define get_a(i) (block_reverse_64(get_left_64(table_a[(i)])))
   #define get_b(i) (block_reverse_64(get_right_64(table_b[(i)], k)))
   size_t count = 0;
-  size_t a_idx = 0, b_idx = 0;
-  uint64_t x = 0, y = 0;
+  size_t a_idx = 0, b_idx = 0, g_idx = 0;
+  uint64_t x = 0, y = 0, g = 0;
   char buf[k+1];
 
   while (a_idx < num_records && b_idx < num_records) {
     x = get_a(a_idx);
     y = get_b(b_idx);
+    // add prev_x and prev_y
+    g = x;
 
     // TODO: handle duplicates in both tables
     // These y-nodes from table B will require outgoing dummy edges
-    while (a_idx < num_records && b_idx < num_records && y < x) {
+    while (b_idx < num_records && y < g) {
       // add y to result
       uint64_t temp = get_right_64(table_b[b_idx],k) << 2;
       sprint_kmer_acgt(buf, &temp, k);
@@ -42,7 +44,7 @@ size_t count_incoming_dummy_edges_64(uint64_t * table_a, uint64_t * table_b, siz
     }
 
     // These x-nodes from table A will require incoming dummy edges
-    while (a_idx < num_records && b_idx < num_records && y > x) {
+    while (g_idx < num_records && y > g) {
       // add x to result
       /*
       uint64_t temp = table_a[a_idx] >> 2;
@@ -50,13 +52,18 @@ size_t count_incoming_dummy_edges_64(uint64_t * table_a, uint64_t * table_b, siz
       buf[0] = '$';
       fprintf(stderr, "%s\n", buf);
       */
-      if (++a_idx >= num_records) break;
-      x = get_a(a_idx);
+      if (++g_idx >= num_records) break;
+      g = get_a(g_idx);
     }
+
+    a_idx = g_idx;
+    x = g;
 
     // These are the nodes that don't need dummy edges
     // TODO: understand why these are printing when I have output a dummy - probably duplication?
-    while (a_idx < num_records && b_idx < num_records && y == x) {
+    while (a_idx < num_records && b_idx < num_records && g_idx < num_records && y == x) {
+      a_idx = g_idx;
+      x = g;
       // progress to end
       while (a_idx < num_records && b_idx < num_records && y == x) {
         uint64_t temp = table_a[a_idx];
