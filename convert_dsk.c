@@ -98,7 +98,6 @@ int main(int argc, char * argv[]) {
   double ms = (double)(end - start)/(1000000);
   fprintf(stderr, "Sort Time: %.2f ms\n", ms);
 
-  /*
   #ifndef NDEBUG
   printf("TABLE A:\n");
   //print_kmers_hex(stdout, (uint64_t*)table_a, num_records * 2, kmer_num_bits);
@@ -107,7 +106,6 @@ int main(int argc, char * argv[]) {
   //print_kmers_hex(stdout, (uint64_t*)table_b, num_records * 2, kmer_num_bits);
   print_kmers_acgt(stdout, (uint64_t*)table_b, num_records * 2, k);
   #endif
-  */
 
   size_t num_incoming_dummy_edges = count_incoming_dummy_edges_64((uint64_t*)table_a, (uint64_t*)table_b, num_records*2, k);
   TRACE("num_incoming_dummy_edges = %zu\n", num_incoming_dummy_edges);
