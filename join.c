@@ -19,108 +19,74 @@ size_t count_incoming_dummy_edges_64(uint64_t * table_a, uint64_t * table_b, siz
   #define get_a(i) (block_reverse_64(get_left_64(table_a[(i)])))
   #define get_b(i) (block_reverse_64(get_right_64(table_b[(i)], k)))
   size_t count = 0;
-  size_t a_idx = 0, b_idx = 0, g_idx = 0;
-  uint64_t x = 0, y, g = 0, x_prev = 0, y_prev = 0;
+  size_t a_idx = 0, b_idx = 0;
+  uint64_t x = 0, y = 0, x_prev = 0, y_prev = 0;
   char buf[k+1];
 
+  if (num_records == 0) return 0;
+
   x = get_a(a_idx);
-  g = x;
   y = get_b(b_idx);
-  // nothing special about the operation here, just need a different value
+  // nothing special about the NOT operation here, just need a guaranteed different value to start with
   x_prev = ~x;
   y_prev = ~y;
 
   while (a_idx < num_records && b_idx < num_records) {
-
-    // TODO: handle duplicates in both tables
-    // These y-nodes from table B will require outgoing dummy edges
-    // B - A
-    // if y = y_prev: set skip flag
-    while (b_idx < num_records && y < g) {
+    // B - A: These y-nodes from table B will require outgoing dummy edges
+    while (b_idx < num_records && y < x) {
       // add y to result
-      // should probably use the already fetched y
       if (y != y_prev) {
+        // should probably use the already fetched y
         uint64_t temp = get_right_64(table_b[b_idx],k) << 2;
         sprint_kmer_acgt(buf, &temp, k);
         buf[k-1] = '$';
         fprintf(stderr, "%s\n", buf);
         count++;
       }
-      if (++b_idx >= num_records) {
-        fprintf(stderr, ">> BREAK\n");
-        break;
-      }
+      if (++b_idx >= num_records) break;
       y_prev = y;
       y = get_b(b_idx);
     }
 
-    // These x-nodes from table A will require incoming dummy edges
-    // A - B
+    // A - B: These x-nodes from table A will require incoming dummy edges
     // TODO: work out how to merge the results in, as they wont be in the correct position (but will be relatively sorted)
-    while (g_idx < num_records && y > g) {
+    while (a_idx < num_records && y > x) {
       // add x to result
-      if (g != x_prev) {
-        uint64_t temp = table_a[g_idx] >> 2;
+      if (x != x_prev) {
+        uint64_t temp = table_a[a_idx] >> 2;
         sprint_kmer_acgt(buf, &temp, k);
         buf[0] = '$';
         fprintf(stderr, "%s\n", buf);
         count++;
       }
-      if (++g_idx >= num_records) {
-        fprintf(stderr, ">> BREAK\n");
-        break;
-      }
-      x_prev = g;
-      g = get_a(g_idx);
+      if (++a_idx >= num_records) break;
+      x_prev = x;
+      x = get_a(a_idx);
     }
-    fprintf(stderr, ">> WELP...\n");
-
-    a_idx = g_idx;
-    x_prev = x;
-    x = g;
 
     // These are the nodes that don't need dummy edges
-    // TODO: add a partition reset for y as well - or is there a better way? since I don't care... just skip to the next change in the inner loop...
-    while (a_idx < num_records && b_idx < num_records && g_idx < num_records && y == g) {
-      fprintf(stderr, ">> PARTITION: %016llx\n", g);
-      fprintf(stderr, ">> a_idx, b_idx, g_idx = %zu, %zu, %zu\n", a_idx, b_idx, g_idx);
-      a_idx = g_idx;
+    while (a_idx < num_records && b_idx < num_records && y == x) {
       x_prev = x;
-      x = g;
-      // progress to end
-      while (a_idx < num_records && b_idx < num_records && y == x) {
+      y_prev = y;
+
+      // Scan to next non-equal (outputing all table entries?)
+      while (a_idx < num_records && x == x_prev) {
         uint64_t temp = table_a[a_idx];
         sprint_kmer_acgt(buf, &temp, k);
         fprintf(stderr, "%s\n", buf);
-        if (++a_idx >= num_records) {
-          fprintf(stderr, ">> BREAK\n");
-          break;
-        }
+        if (++a_idx >= num_records) break;
         x_prev = x;
         x = get_a(a_idx);
       }
-      if (++b_idx >= num_records) {
-        fprintf(stderr, ">> BREAK\n");
-        break;
+
+      // Scan to next non-equal
+      while (b_idx < num_records && y == y_prev) {
+        if (++b_idx >= num_records) break;
+        y_prev = y;
+        y = get_b(b_idx);
       }
-      y_prev = y;
-      y = get_b(b_idx);
     }
-    g_idx = a_idx;
-    g = x;
   }
   return count;
 }
 
-/*
-// right join
-// Don't think I actually need this function? Just pass in the tables as opposite pointers
-size_t count_outgoing_dummy_edges_64(uint64_t * table_a, uint64_t * table_b, size_t num_records, uint32_t k) {
-  // Iterate over table b (last k-1 nts per record) as outer loop as y
-  // Iterate over table a (first k-1 nts per record) as inner loop as x
-  // NOTE: comparison done colexically - need to reverse it
-  // If x > y output y$ and progress x
-  // else progress y
-  return 0;
-}
-*/
