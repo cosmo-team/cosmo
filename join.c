@@ -53,7 +53,10 @@ size_t count_incoming_dummy_edges_64(uint64_t * table_a, uint64_t * table_b, siz
     while (a_idx < num_records && y > x) {
       // add x to result
       if (x != x_prev) {
-        uint64_t temp = table_a[a_idx] >> 2;
+        uint64_t temp = table_a[a_idx];
+        sprint_kmer_acgt(buf, &temp, k);
+        fprintf(stderr, "%s\n", buf);
+        temp >>= 2;
         sprint_kmer_acgt(buf, &temp, k);
         buf[0] = '$';
         fprintf(stderr, "%s\n", buf);
