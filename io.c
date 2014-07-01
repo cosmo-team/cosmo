@@ -92,6 +92,30 @@ void print_kmers_hex(FILE * outfile, uint64_t * kmers, size_t num_kmers, uint32_
   }
 }
 
+void sprint_kmer_acgt(char * buf, uint64_t * kmer, uint32_t k) {
+  assert(k <= 64);
+  const char * table = "acgt";
+  buf[k] = '\0';
+
+  if (k <= 32) {
+    uint64_t x = *kmer;
+    for (uint32_t i = 0; i < k; i++) {
+      buf[k-i-1] = table[(x >> (i * 2)) & 0x3];
+    }
+  }
+  else if (k <= 64) {
+    exit(1);
+    uint64_t upper = kmer[0];
+    uint64_t lower = kmer[1];
+    for (uint32_t i = 0; i < 32; i++) {
+      buf[k-i-1] = table[(lower >> (i * 2)) & 0x3];
+    }
+    for (uint32_t i = 0; i < k - 32; i++) {
+      buf[k-i-33] = table[(upper >> (i * 2)) & 0x3];
+    }
+  }
+}
+
 void print_kmers_acgt(FILE * outfile, uint64_t * kmers, size_t num_kmers, uint32_t k) {
   assert(k <= 64);
   const char * table = "acgt";
@@ -107,6 +131,7 @@ void print_kmers_acgt(FILE * outfile, uint64_t * kmers, size_t num_kmers, uint32
     }
     else if (k <= 64) {
       exit(1);
+      //TODO: impl for 128 bit
       uint64_t upper = kmers[i * 2];
       uint64_t lower = kmers[i * 2 + 1];
       fprintf(outfile, "%016llx %016llx\n", upper, lower);
@@ -114,3 +139,20 @@ void print_kmers_acgt(FILE * outfile, uint64_t * kmers, size_t num_kmers, uint32
   }
 }
 
+
+void print_dummies_acgt(FILE * outfile, uint64_t * incoming_dummies, unsigned char * incoming_dummy_lengths, size_t num_dummies, uint32_t max_k) {
+  assert(max_k <= 64);
+  const char * table = "acgt";
+  char buf[max_k+1];
+  memset(buf, '$', max_k);
+  buf[max_k] = '\0';
+  for (size_t i = 0; i < num_dummies; i++) {
+    memset(buf, '$', max_k);
+    uint64_t kmer = block_reverse_64(incoming_dummies[i]);
+    uint32_t this_k = incoming_dummy_lengths[i];
+    for (uint32_t j = 0; j < this_k; j++) {
+      buf[max_k-j-1] = table[(kmer >> (j * 2)) & 0x3];
+    }
+    fprintf(outfile, "i: %3zu, k: %2d, %s\n", i, this_k, buf);
+  }
+}
