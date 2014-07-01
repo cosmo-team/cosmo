@@ -175,11 +175,11 @@ void prepare_incoming_dummy_edges_64(uint64_t * dummy_nodes, unsigned char * k_v
   // loop over each dummy edge, and have a pointer for next, loop over k, write k and edge >> 2
   uint64_t * output = dummy_nodes + num_dummies;
   for (size_t i = 0; i < num_dummies; i++) {
-    generate_dummies_64(dummy_nodes[i], output + i * (k-2), k-1);
+    generate_dummies_64(dummy_nodes[i], output + i * (k-1), k);
   }
-  prepare_k_values(k_values, num_dummies, k-1);
+  prepare_k_values(k_values, num_dummies, k);
   // SORT - quicksort since it is probably a small vector and I don't want to double the space even further
   // but since we have two arrays I have to write my own instead of just a comparator
   // compare the kmer first, if they are equal then compare the k
-  qsort_varlen(dummy_nodes, k_values, 0, num_dummies*(k-1) - 1);
+  // colex_varlen_partial_radix_sort_64(uint64_t * a, uint64_t * b, unsigned char * lengths_a, unsigned char * lengths_b, size_t num_records, uint32_t k, uint32_t j, uint64_t ** new_a, uint64_t** new_b, uint64_t ** new_lengths_a, uint64_t ** new_lengths_b);
 }

@@ -111,42 +111,28 @@ int main(int argc, char * argv[]) {
   // position, but are sorted relatively, hence can be merged if collected in previous passes
   size_t num_incoming_dummies = count_incoming_dummy_edges_64((uint64_t*)table_a, (uint64_t*)table_b, num_records*2, k);
   TRACE("num_incoming_dummy_edges = %zu\n", num_incoming_dummies);
-  uint64_t * incoming_dummies = calloc(num_incoming_dummies*k, sizeof(kmer_t));
-  unsigned char * incoming_dummy_lengths = calloc(num_incoming_dummies*k, sizeof(kmer_t));
+  uint64_t * incoming_dummies = calloc(num_incoming_dummies*(k-1)*2, sizeof(kmer_t));
+  uint64_t * dummies_a = incoming_dummies;
+  uint64_t * dummies_b = incoming_dummies + num_incoming_dummies * (k-1);
+  unsigned char * incoming_dummy_lengths = calloc(num_incoming_dummies*(k-1)*2, sizeof(kmer_t));
+  unsigned char * lengths_a = incoming_dummy_lengths;
+  unsigned char * lengths_b = incoming_dummy_lengths + num_incoming_dummies * (k-1);
   get_incoming_dummy_edges_64((uint64_t*)table_a, (uint64_t*)table_b, num_records*2, k, incoming_dummies, num_incoming_dummies);
-  prepare_incoming_dummy_edges_64(incoming_dummies, incoming_dummy_lengths, num_incoming_dummies, k);
+  prepare_incoming_dummy_edges_64(incoming_dummies, incoming_dummy_lengths, num_incoming_dummies, k-1);
+  colex_varlen_partial_radix_sort_64(dummies_a, dummies_b, lengths_a, lengths_b, num_incoming_dummies*(k-1), 1, 0, &dummies_a, &dummies_b, &lengths_a, &lengths_b);
+  //TRACE("FOOO\n");
+  colex_varlen_partial_radix_sort_64(dummies_a, dummies_b, lengths_a, lengths_b, num_incoming_dummies*(k-1), k-1, 1, &dummies_a, &dummies_b, &lengths_a, &lengths_b);
 #ifndef NDEBUG
   printf("Incoming Dummies:\n");
-  print_dummies_acgt(stdout, incoming_dummies, incoming_dummy_lengths, num_incoming_dummies*(k-1), k);
+  print_dummies_acgt(stdout, dummies_a, lengths_a, num_incoming_dummies*(k-1), k);
   //colex_partial_radix_sort_64(incoming_dummies_sub_a, incoming_dummies_sub_b, num_incoming_dummies, k-1, 0, &incoming_dummies_sub_a, &incoming_dummies_sub_b);
   //print_kmers_acgt(stdout, incoming_dummies_sub_a, num_incoming_dummies, k-1);
 #endif
   // output in ascii first
-  //
   //merge_and_output(stderr, table_a, table_b, incoming_dummies, num_records*2, k);
   free(incoming_dummies);
+  free(incoming_dummy_lengths);
   free(kmers);
-
-  // TODO: implement joining algorithm for 64 bit kmers (counting first)
-  // join.h, join.c
-  // count_incoming_dummy_edges
-  // count_outgoing_dummy_edges
-  // allocate space for in and out dummies
-  // find_incoming_dummy_edges
-  // find_outgoing_dummy_edges
-  // dummy: position integer and kmers
-  // TODO: Support 128-bit kmers (for sorting and printing)
-  // TODO: implement joining algorithm for 128 bit kmers
-  // TODO: count how many dummy edges there are and allocate that much space
-  // find_dummy_edges(table_a, table_b, k, dummy_out_ptr, dummy_in_ptr)
-  // TODO: count how many of each symbol there are in the 2nd last column
-  // TODO: filter leftmost k-1 symbols to add LAST flag
-  // TODO: filter for the rightmost k-1 symbols to add minus (have a seen boolean for each symbol)
-  // TODO: implement buffered output for our fmt:
-  // Header: k, num records (incl dummy, etc), ACGT table
-  // uint64_t vector of 4x5 bits = 4 edges.
-  // make struct for 5 bits: last_flag(1), symbol(2), minus_flag(1), dummy_flag(1)
-  // make struct for record (4 bits waste + array for 4 records) - check size
 
   return 0;
 }
