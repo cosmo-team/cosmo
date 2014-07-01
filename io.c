@@ -139,3 +139,20 @@ void print_kmers_acgt(FILE * outfile, uint64_t * kmers, size_t num_kmers, uint32
   }
 }
 
+
+void print_dummies_acgt(FILE * outfile, uint64_t * incoming_dummies, unsigned char * incoming_dummy_lengths, size_t num_dummies, uint32_t max_k) {
+  assert(max_k <= 64);
+  const char * table = "acgt";
+  char buf[max_k+1];
+  memset(buf, '$', max_k);
+  buf[max_k] = '\0';
+  for (size_t i = 0; i < num_dummies; i++) {
+    memset(buf, '$', max_k);
+    uint64_t kmer = block_reverse_64(incoming_dummies[i]);
+    uint32_t this_k = incoming_dummy_lengths[i];
+    for (uint32_t j = 0; j < this_k; j++) {
+      buf[max_k-j-1] = table[(kmer >> (j * 2)) & 0x3];
+    }
+    fprintf(outfile, "i: %3zu, k: %2d, %s\n", i, this_k, buf);
+  }
+}

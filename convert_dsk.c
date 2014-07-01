@@ -86,7 +86,7 @@ int main(int argc, char * argv[]) {
     // from (k, 0] instead of (k, 1] because we want the colex(row) AND the second last result, which will be colex(node), edge
     // Note that new_a and new_b map to table_b and table_a respectively.
     colex_partial_radix_sort_64((uint64_t*)table_a, (uint64_t*)table_b, num_records*2, k, 0, (uint64_t**)&table_b, (uint64_t**)&table_a);
-    // At this point, a will have colex(node), edge sorting (as required)
+    // At this point, a will have colex(node), edge sorting (as required for output)
     // and b will have colex(row)
   }
   else if (kmer_num_bits == 128) {
@@ -107,9 +107,25 @@ int main(int argc, char * argv[]) {
   print_kmers_acgt(stdout, (uint64_t*)table_b, num_records * 2, k);
   #endif
 
-  size_t num_incoming_dummy_edges = count_incoming_dummy_edges_64((uint64_t*)table_a, (uint64_t*)table_b, num_records*2, k);
-  TRACE("num_incoming_dummy_edges = %zu\n", num_incoming_dummy_edges);
-  //size_t num_outgoing_dummy_edges = count_outgoing_dummy_edges((uint64_t*)table_a, (uint64_t*)table_b, k);
+  // outgoing dummy edges are output in correct order while merging, whereas incoming dummy edges are not in the correct
+  // position, but are sorted relatively, hence can be merged if collected in previous passes
+  size_t num_incoming_dummies = count_incoming_dummy_edges_64((uint64_t*)table_a, (uint64_t*)table_b, num_records*2, k);
+  TRACE("num_incoming_dummy_edges = %zu\n", num_incoming_dummies);
+  uint64_t * incoming_dummies = calloc(num_incoming_dummies*k, sizeof(kmer_t));
+  unsigned char * incoming_dummy_lengths = calloc(num_incoming_dummies*k, sizeof(kmer_t));
+  get_incoming_dummy_edges_64((uint64_t*)table_a, (uint64_t*)table_b, num_records*2, k, incoming_dummies, num_incoming_dummies);
+  prepare_incoming_dummy_edges_64(incoming_dummies, incoming_dummy_lengths, num_incoming_dummies, k);
+#ifndef NDEBUG
+  printf("Incoming Dummies:\n");
+  print_dummies_acgt(stdout, incoming_dummies, incoming_dummy_lengths, num_incoming_dummies*(k-1), k);
+  //colex_partial_radix_sort_64(incoming_dummies_sub_a, incoming_dummies_sub_b, num_incoming_dummies, k-1, 0, &incoming_dummies_sub_a, &incoming_dummies_sub_b);
+  //print_kmers_acgt(stdout, incoming_dummies_sub_a, num_incoming_dummies, k-1);
+#endif
+  // output in ascii first
+  //
+  //merge_and_output(stderr, table_a, table_b, incoming_dummies, num_records*2, k);
+  free(incoming_dummies);
+  free(kmers);
 
   // TODO: implement joining algorithm for 64 bit kmers (counting first)
   // join.h, join.c
@@ -132,6 +148,5 @@ int main(int argc, char * argv[]) {
   // make struct for 5 bits: last_flag(1), symbol(2), minus_flag(1), dummy_flag(1)
   // make struct for record (4 bits waste + array for 4 records) - check size
 
-  free(kmers);
   return 0;
 }
