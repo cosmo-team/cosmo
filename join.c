@@ -180,6 +180,7 @@ void merge_dummies(FILE * outfile, uint64_t * table_a, uint64_t * table_b, size_
   unsigned char d_len = 0, d_len_prev = 0;
   uint64_t x = 0, y = 0, x_prev = 0, y_prev = 0, d = 0, d_prev =0, prev_out = 0;
   char buf[k+1];
+  int last=0;
 
   if (num_records == 0 && num_incoming_dummies == 0) return;
 
@@ -292,11 +293,12 @@ void merge_dummies(FILE * outfile, uint64_t * table_a, uint64_t * table_b, size_
       }
     }
   }
+  last = 1;
   while (d_idx < num_incoming_dummies) {
     if (d != d_prev && d_len != d_len_prev) {
       // print d
       sprint_dummy_acgt(buf, d, k, d_len);
-      fprintf(outfile, "%s\n", buf);
+      fprintf(outfile, "%d %s\n", last, buf);
     }
     if (++d_idx >= num_incoming_dummies) break;
     d_prev = d;
