@@ -153,7 +153,7 @@ void print_dummies_acgt(FILE * outfile, uint64_t * incoming_dummies, unsigned ch
     for (uint32_t j = 0; j < this_k; j++) {
       buf[max_k-j-1] = table[(kmer >> (j * 2)) & 0x3];
     }
-    fprintf(outfile, "i: %3zu, k: %2d, %s\n", i, this_k, buf);
+    fprintf(outfile, "%s\n", buf);
   }
 }
 

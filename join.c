@@ -196,9 +196,6 @@ void merge_dummies(FILE * outfile, uint64_t * table_a, uint64_t * table_b, size_
     d = get_dummy(d_idx);
     d_len = dummy_lengths[d_idx];
     d_prev = ~d;
-    memset(buf, '$', k);
-    buf[k] = '\0';
-    fprintf(outfile, "%s\n", buf);
   }
 
   while (a_idx < num_records && b_idx < num_records) {
@@ -207,7 +204,7 @@ void merge_dummies(FILE * outfile, uint64_t * table_a, uint64_t * table_b, size_
       // add y to result
       if (y != y_prev) {
         while (d_idx < num_incoming_dummies && (d << 2) <= y) {
-          if (d != d_prev && d_len != d_len_prev) {
+          if (d != d_prev || d_len != d_len_prev) {
             // print d
             sprint_dummy_acgt(buf, d, k, d_len);
             fprintf(outfile, "%s\n", buf);
@@ -236,7 +233,7 @@ void merge_dummies(FILE * outfile, uint64_t * table_a, uint64_t * table_b, size_
         // make this already fetched, and x calculated from it
         // if not, continue. otherwise print dummy... (this has to be a loop...)
         while (d_idx < num_incoming_dummies && (d << 2) <= x) {
-          if (d != d_prev && d_len != d_len_prev) {
+          if (d != d_prev || d_len != d_len_prev) {
             // print d
             sprint_dummy_acgt(buf, d, k, d_len);
             fprintf(outfile, "%s\n", buf);
@@ -266,7 +263,7 @@ void merge_dummies(FILE * outfile, uint64_t * table_a, uint64_t * table_b, size_
       // Scan to next non-equal (outputing all table entries?)
       while (a_idx < num_records && x == x_prev) {
         while (d_idx < num_incoming_dummies && (d << 2) <= x) {
-          if (d != d_prev && d_len != d_len_prev) {
+          if (d != d_prev || d_len != d_len_prev) {
             // print d
             sprint_dummy_acgt(buf, d, k, d_len);
             fprintf(outfile, "%s\n", buf);
@@ -293,12 +290,11 @@ void merge_dummies(FILE * outfile, uint64_t * table_a, uint64_t * table_b, size_
       }
     }
   }
-  last = 1;
   while (d_idx < num_incoming_dummies) {
-    if (d != d_prev && d_len != d_len_prev) {
+    if (d != d_prev || d_len != d_len_prev) {
       // print d
       sprint_dummy_acgt(buf, d, k, d_len);
-      fprintf(outfile, "%d %s\n", last, buf);
+      fprintf(outfile, "%s\n", buf);
     }
     if (++d_idx >= num_incoming_dummies) break;
     d_prev = d;
