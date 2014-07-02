@@ -79,7 +79,6 @@ void get_incoming_dummy_edges_64(uint64_t * table_a, uint64_t * table_b, size_t 
   size_t next = 0;
   size_t a_idx = 0, b_idx = 0;
   uint64_t x = 0, y = 0, x_prev = 0, y_prev = 0;
-  char buf[k+1];
 
   if (num_records == 0 || num_incoming_dummies == 0) return;
 
@@ -95,10 +94,6 @@ void get_incoming_dummy_edges_64(uint64_t * table_a, uint64_t * table_b, size_t 
       // add y to result
       if (y != y_prev) {
         // should probably use the already fetched y
-        uint64_t temp = get_right_64(table_b[b_idx],k) << 2;
-        sprint_kmer_acgt(buf, &temp, k);
-        buf[k-1] = '$';
-        fprintf(stderr, "%s\n", buf);
       }
       if (++b_idx >= num_records) break;
       y_prev = y;
@@ -111,12 +106,7 @@ void get_incoming_dummy_edges_64(uint64_t * table_a, uint64_t * table_b, size_t 
       if (x != x_prev) {
         // make this already fetched, and x calculated from it
         uint64_t temp = table_a[a_idx];
-        sprint_kmer_acgt(buf, &temp, k);
-        fprintf(stderr, "%s\n", buf);
         temp >>= 2;
-        sprint_kmer_acgt(buf, &temp, k);
-        buf[0] = '$';
-        fprintf(stderr, "%s\n", buf);
         incoming_dummies[next++] = block_reverse_64(temp);
         if (next == num_incoming_dummies) return;
       }
@@ -132,9 +122,6 @@ void get_incoming_dummy_edges_64(uint64_t * table_a, uint64_t * table_b, size_t 
 
       // Scan to next non-equal (outputing all table entries?)
       while (a_idx < num_records && x == x_prev) {
-        uint64_t temp = table_a[a_idx];
-        sprint_kmer_acgt(buf, &temp, k);
-        fprintf(stderr, "%s\n", buf);
         if (++a_idx >= num_records) break;
         x_prev = x;
         x = get_a(a_idx);
@@ -182,4 +169,140 @@ void prepare_incoming_dummy_edges_64(uint64_t * dummy_nodes, unsigned char * k_v
   // but since we have two arrays I have to write my own instead of just a comparator
   // compare the kmer first, if they are equal then compare the k
   // colex_varlen_partial_radix_sort_64(uint64_t * a, uint64_t * b, unsigned char * lengths_a, unsigned char * lengths_b, size_t num_records, uint32_t k, uint32_t j, uint64_t ** new_a, uint64_t** new_b, uint64_t ** new_lengths_a, uint64_t ** new_lengths_b);
+}
+
+void merge_dummies(FILE * outfile, uint64_t * table_a, uint64_t * table_b, size_t num_records, uint32_t k, uint64_t * incoming_dummies, size_t num_incoming_dummies, unsigned char * dummy_lengths) {
+  #define get_a(i) (block_reverse_64(get_left_64(table_a[(i)])))
+  #define get_b(i) (block_reverse_64(get_right_64(table_b[(i)], k)))
+  #define get_dummy(i) (incoming_dummies[(i)])
+  size_t next = 0;
+  size_t a_idx = 0, b_idx = 0, d_idx = 0;
+  unsigned char d_len = 0, d_len_prev = 0;
+  uint64_t x = 0, y = 0, x_prev = 0, y_prev = 0, d = 0, d_prev =0, prev_out = 0;
+  char buf[k+1];
+
+  if (num_records == 0 && num_incoming_dummies == 0) return;
+
+  if (num_records > 0) {
+    x = get_a(a_idx);
+    y = get_b(b_idx);
+    // nothing special about the NOT operation here, just need a guaranteed different value to start with
+    x_prev = ~x;
+    y_prev = ~y;
+  }
+
+  if (num_incoming_dummies > 0) {
+    d = get_dummy(d_idx);
+    d_len = dummy_lengths[d_idx];
+    d_prev = ~d;
+    memset(buf, '$', k);
+    buf[k] = '\0';
+    fprintf(outfile, "%s\n", buf);
+  }
+
+  while (a_idx < num_records && b_idx < num_records) {
+    // B - A: These y-nodes from table B will require outgoing dummy edges
+    while (b_idx < num_records && y < x) {
+      // add y to result
+      if (y != y_prev) {
+        while (d_idx < num_incoming_dummies && (d << 2) <= y) {
+          if (d != d_prev && d_len != d_len_prev) {
+            // print d
+            sprint_dummy_acgt(buf, d, k, d_len);
+            fprintf(outfile, "%s\n", buf);
+          }
+          if (++d_idx >= num_incoming_dummies) break;
+          d_prev = d;
+          d = incoming_dummies[d_idx];
+          d_len_prev = d_len;
+          d_len = dummy_lengths[d_idx];
+        }
+        // Should always print this after the incoming dummies
+        uint64_t temp = get_right_64(table_b[b_idx],k) << 2;
+        sprint_kmer_acgt(buf, &temp, k);
+        buf[k-1] = '$';
+        fprintf(outfile, "%s\n", buf);
+      }
+      if (++b_idx >= num_records) break;
+      y_prev = y;
+      y = get_b(b_idx);
+    }
+
+    // A - B: These x-nodes from table A will require incoming dummy edges
+    while (a_idx < num_records && y > x) {
+      // add x to result
+      if (x != x_prev) {
+        // make this already fetched, and x calculated from it
+        // if not, continue. otherwise print dummy... (this has to be a loop...)
+        while (d_idx < num_incoming_dummies && (d << 2) <= x) {
+          if (d != d_prev && d_len != d_len_prev) {
+            // print d
+            sprint_dummy_acgt(buf, d, k, d_len);
+            fprintf(outfile, "%s\n", buf);
+          }
+          if (++d_idx >= num_incoming_dummies) break;
+          d_prev = d;
+          d = incoming_dummies[d_idx];
+          d_len_prev = d_len;
+          d_len = dummy_lengths[d_idx];
+        }
+        uint64_t temp = table_a[a_idx];
+        sprint_kmer_acgt(buf, &temp, k);
+        fprintf(outfile, "%s\n", buf);
+        //incoming_dummies[next++] = block_reverse_64(temp);
+        if (next == num_incoming_dummies) return;
+      }
+      if (++a_idx >= num_records) break;
+      x_prev = x;
+      x = get_a(a_idx);
+    }
+
+    // These are the nodes that don't need dummy edges
+    while (a_idx < num_records && b_idx < num_records && y == x) {
+      x_prev = x;
+      y_prev = y;
+
+      // Scan to next non-equal (outputing all table entries?)
+      while (a_idx < num_records && x == x_prev) {
+        while (d_idx < num_incoming_dummies && (d << 2) <= x) {
+          if (d != d_prev && d_len != d_len_prev) {
+            // print d
+            sprint_dummy_acgt(buf, d, k, d_len);
+            fprintf(outfile, "%s\n", buf);
+          }
+          if (++d_idx >= num_incoming_dummies) break;
+          d_prev = d;
+          d = incoming_dummies[d_idx];
+          d_len_prev = d_len;
+          d_len = dummy_lengths[d_idx];
+        }
+        uint64_t temp = table_a[a_idx];
+        sprint_kmer_acgt(buf, &temp, k);
+        fprintf(outfile, "%s\n", buf);
+        if (++a_idx >= num_records) break;
+        x_prev = x;
+        x = get_a(a_idx);
+      }
+
+      // Scan to next non-equal
+      while (b_idx < num_records && y == y_prev) {
+        if (++b_idx >= num_records) break;
+        y_prev = y;
+        y = get_b(b_idx);
+      }
+    }
+  }
+  while (d_idx < num_incoming_dummies) {
+    if (d != d_prev && d_len != d_len_prev) {
+      // print d
+      sprint_dummy_acgt(buf, d, k, d_len);
+      fprintf(outfile, "%s\n", buf);
+    }
+    if (++d_idx >= num_incoming_dummies) break;
+    d_prev = d;
+    d = incoming_dummies[d_idx];
+    d_len_prev = d_len;
+    d_len = dummy_lengths[d_idx];
+  }
+  return;
 }
