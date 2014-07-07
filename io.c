@@ -148,7 +148,7 @@ void print_dummies_acgt(FILE * outfile, uint64_t * incoming_dummies, unsigned ch
   buf[max_k] = '\0';
   for (size_t i = 0; i < num_dummies; i++) {
     memset(buf, '$', max_k);
-    uint64_t kmer = block_reverse_64(incoming_dummies[i]);
+    uint64_t kmer = incoming_dummies[i];
     uint32_t this_k = incoming_dummy_lengths[i];
     for (uint32_t j = 0; j < this_k; j++) {
       buf[max_k-j-1] = table[(kmer >> (j * 2)) & 0x3];
@@ -162,7 +162,7 @@ void sprint_dummy_acgt(char * buf, uint64_t dummy, uint32_t max_k, unsigned char
   memset(buf, '$', max_k);
   buf[max_k] = '\0';
 
-  uint64_t kmer = block_reverse_64(dummy);
+  uint64_t kmer = dummy;
   for (uint32_t j = 0; j < this_k; j++) {
     buf[max_k-j-1] = table[(kmer >> (j * 2)) & 0x3];
   }

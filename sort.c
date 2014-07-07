@@ -54,8 +54,6 @@ void colex_partial_radix_sort_64(uint64_t * a, uint64_t * b, size_t num_records,
 }
 
 void colex_varlen_partial_radix_sort_64(uint64_t * a, uint64_t * b, unsigned char * lengths_a, unsigned char * lengths_b, size_t num_records, uint32_t k, uint32_t j, uint64_t ** new_a, uint64_t** new_b, unsigned char ** new_lengths_a, unsigned char ** new_lengths_b) {
-  // TODO: add optional size check -> each position that is in a > size position is a $
-  // TODO: support lo and hi swapping to reverse order
   assert(k > j);
   // Init counts (+1 for $ sign)
   size_t bases[BASE + 1];
@@ -69,7 +67,7 @@ void colex_varlen_partial_radix_sort_64(uint64_t * a, uint64_t * b, unsigned cha
       if (lengths_a[i] < digit_pos) {
         bases[0]++;
       } else {
-        bases[get_digit_64(block_reverse_64(a[i]), digit_pos)+1]++;
+        bases[get_digit_64(a[i], digit_pos)+1]++;
       }
 
     // prefix sum the counts to give us starting positions
@@ -78,7 +76,7 @@ void colex_varlen_partial_radix_sort_64(uint64_t * a, uint64_t * b, unsigned cha
     // Stably copy each element into its corresponding location
     // Done in reverse to simplify sub-array calculations
     for (ssize_t i = num_records - 1; i >= 0; i--) {
-      int x = (lengths_a[i] < digit_pos)? 0 : get_digit_64(block_reverse_64(a[i]), digit_pos) + 1;
+      int x = (lengths_a[i] < digit_pos)? 0 : get_digit_64(a[i], digit_pos) + 1;
       b[--bases[x]] = a[i];
       lengths_b[bases[x]] = lengths_a[i];
     }

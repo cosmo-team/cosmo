@@ -116,7 +116,7 @@ int main(int argc, char * argv[]) {
   uint64_t * incoming_dummies = calloc(num_incoming_dummies*(k-1)*2, sizeof(kmer_t));
   uint64_t * dummies_a = incoming_dummies;
   uint64_t * dummies_b = incoming_dummies + num_incoming_dummies * (k-1);
-  unsigned char * incoming_dummy_lengths = calloc(num_incoming_dummies*(k-1)*2, sizeof(kmer_t));
+  unsigned char * incoming_dummy_lengths = calloc(num_incoming_dummies*(k-1)*2, sizeof(unsigned char));
   unsigned char * lengths_a = incoming_dummy_lengths;
   unsigned char * lengths_b = incoming_dummy_lengths + num_incoming_dummies * (k-1);
   get_incoming_dummy_edges_64((uint64_t*)table_a, (uint64_t*)table_b, num_records*2, k, incoming_dummies, num_incoming_dummies);
@@ -124,12 +124,10 @@ int main(int argc, char * argv[]) {
   colex_varlen_partial_radix_sort_64(dummies_a, dummies_b, lengths_a, lengths_b, num_incoming_dummies*(k-1), 1, 0, &dummies_a, &dummies_b, &lengths_a, &lengths_b);
   colex_varlen_partial_radix_sort_64(dummies_a, dummies_b, lengths_a, lengths_b, num_incoming_dummies*(k-1), k-1, 1, &dummies_a, &dummies_b, &lengths_a, &lengths_b);
 
-/*
 #ifndef NDEBUG
   printf("Incoming Dummies:\n");
   print_dummies_acgt(stdout, dummies_a, lengths_a, num_incoming_dummies*(k-1), k);
 #endif
-*/
 
   // output in ascii first
   //merge_and_output(stderr, table_a, table_b, incoming_dummies, num_records*2, k);
