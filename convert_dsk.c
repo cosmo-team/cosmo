@@ -98,6 +98,7 @@ int main(int argc, char * argv[]) {
   double ms = (double)(end - start)/(1000000);
   fprintf(stderr, "Sort Time: %.2f ms\n", ms);
 
+  /*
   #ifndef NDEBUG
   printf("TABLE A:\n");
   //print_kmers_hex(stdout, (uint64_t*)table_a, num_records * 2, kmer_num_bits);
@@ -106,30 +107,32 @@ int main(int argc, char * argv[]) {
   //print_kmers_hex(stdout, (uint64_t*)table_b, num_records * 2, kmer_num_bits);
   print_kmers_acgt(stdout, (uint64_t*)table_b, num_records * 2, k);
   #endif
+  */
 
   // outgoing dummy edges are output in correct order while merging, whereas incoming dummy edges are not in the correct
   // position, but are sorted relatively, hence can be merged if collected in previous passes
   size_t num_incoming_dummies = count_incoming_dummy_edges_64((uint64_t*)table_a, (uint64_t*)table_b, num_records*2, k);
-  TRACE("num_incoming_dummy_edges = %zu\n", num_incoming_dummies);
+  //TRACE("num_incoming_dummy_edges = %zu\n", num_incoming_dummies);
   uint64_t * incoming_dummies = calloc(num_incoming_dummies*(k-1)*2, sizeof(kmer_t));
   uint64_t * dummies_a = incoming_dummies;
   uint64_t * dummies_b = incoming_dummies + num_incoming_dummies * (k-1);
-  unsigned char * incoming_dummy_lengths = calloc(num_incoming_dummies*(k-1)*2, sizeof(kmer_t));
+  unsigned char * incoming_dummy_lengths = calloc(num_incoming_dummies*(k-1)*2, sizeof(unsigned char));
   unsigned char * lengths_a = incoming_dummy_lengths;
   unsigned char * lengths_b = incoming_dummy_lengths + num_incoming_dummies * (k-1);
   get_incoming_dummy_edges_64((uint64_t*)table_a, (uint64_t*)table_b, num_records*2, k, incoming_dummies, num_incoming_dummies);
   prepare_incoming_dummy_edges_64(incoming_dummies, incoming_dummy_lengths, num_incoming_dummies, k-1);
   colex_varlen_partial_radix_sort_64(dummies_a, dummies_b, lengths_a, lengths_b, num_incoming_dummies*(k-1), 1, 0, &dummies_a, &dummies_b, &lengths_a, &lengths_b);
-  //TRACE("FOOO\n");
   colex_varlen_partial_radix_sort_64(dummies_a, dummies_b, lengths_a, lengths_b, num_incoming_dummies*(k-1), k-1, 1, &dummies_a, &dummies_b, &lengths_a, &lengths_b);
+
 #ifndef NDEBUG
   printf("Incoming Dummies:\n");
   print_dummies_acgt(stdout, dummies_a, lengths_a, num_incoming_dummies*(k-1), k);
-  //colex_partial_radix_sort_64(incoming_dummies_sub_a, incoming_dummies_sub_b, num_incoming_dummies, k-1, 0, &incoming_dummies_sub_a, &incoming_dummies_sub_b);
-  //print_kmers_acgt(stdout, incoming_dummies_sub_a, num_incoming_dummies, k-1);
 #endif
+
   // output in ascii first
   //merge_and_output(stderr, table_a, table_b, incoming_dummies, num_records*2, k);
+  fprintf(stderr, "MERGING DUMMIES\n");
+  merge_dummies(stderr, (uint64_t*)table_a, (uint64_t*)table_b, num_records*2, k, dummies_a, num_incoming_dummies*(k-1), lengths_a);
   free(incoming_dummies);
   free(incoming_dummy_lengths);
   free(kmers);
