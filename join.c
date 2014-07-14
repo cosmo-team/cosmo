@@ -172,7 +172,7 @@ void merge_dummies(FILE * outfile, uint64_t * table_a, uint64_t * table_b, size_
   #define get_b(i) (block_reverse_64(get_right_64(table_b[(i)], k)))
   #define get_dummy(i) (block_reverse_64(incoming_dummies[(i)]))
   #define get_edge(x) (((x) & 0xC000000000000000) >> 62)
-  #define get_node_suffix(d,k) (((d)<<2) >> 2*(32 - (k) + 1))
+  #define get_node_suffix(d) (((d)<<2) & ~(0xC000000000000000 >> (k-2)*2))
   size_t next = 0;
   size_t a_idx = 0, b_idx = 0, d_idx = 0;
   unsigned char d_len = 0, d_len_prev = 0, prev_out_len = 0;
@@ -207,14 +207,14 @@ void merge_dummies(FILE * outfile, uint64_t * table_a, uint64_t * table_b, size_
         while (d_idx < num_incoming_dummies && (d << 2) <= y) {
           if (d != d_prev || d_len != d_len_prev) {
             // print d
-            first = (d<<2 != prev_out || d_len_prev != prev_out_len);
+            first = (d<<2 != prev_out || d_len != prev_out_len);
             // if the suffix is equal, the length might be different
             // but d_len = k-1
             // If change then reset flags, output 0
             int edge = get_edge(d);
             // do we need a minus flag on our edge?
             // Is this a new node suffix group?
-            if (get_node_suffix(d, d_len) != get_node_suffix(prev_out >> 2,prev_out_len)
+            if (get_node_suffix(d) != get_node_suffix(prev_out >> 2)
                 || d_len != prev_out_len) {
               needs_edge_flag = 0;
               // These are incoming dummies so have outgoing edges that arent $
@@ -227,7 +227,7 @@ void merge_dummies(FILE * outfile, uint64_t * table_a, uint64_t * table_b, size_
             // update edge flag since we saw this edge, regardless of if we are at a new suffix group or not
             edge_flags[edge] = 1;
             sprint_dummy_acgt(buf, block_reverse_64(d), k, d_len);
-            fprintf(outfile, "a %d %s %d\n", first, buf, needs_edge_flag);
+            fprintf(outfile, "%d %s %d\n", first, buf, needs_edge_flag);
             prev_out = d << 2;
             prev_out_len = d_len;
           }
@@ -239,18 +239,18 @@ void merge_dummies(FILE * outfile, uint64_t * table_a, uint64_t * table_b, size_
         }
         // Should always print this after the incoming dummies
         uint64_t temp = get_right_64(table_b[b_idx],k);
-        if (get_node_suffix(temp, d_len) != get_node_suffix(prev_out >> 2,prev_out_len)
+        if (get_node_suffix(block_reverse_64(temp)) != get_node_suffix(prev_out >> 2)
                 || k != prev_out_len) {
           // reset edge_flags
           memset(edge_flags, 0, 4);
         }
-        prev_out = temp << 2;
+        prev_out = block_reverse_64(temp) << 2;
         prev_out_len = k;
         sprint_kmer_acgt(buf, &temp, k);
         buf[k-1] = '$';
         // Outgoing dummies by definition are the last edge of their node
         // And by definition we don't care about the minus flags for dummies (it is marked as a $ instead)
-        fprintf(outfile, "b 1 %s 0\n", buf);
+        fprintf(outfile, "1 %s 0\n", buf);
       }
       if (++b_idx >= num_records) break;
       y_prev = y;
@@ -265,7 +265,7 @@ void merge_dummies(FILE * outfile, uint64_t * table_a, uint64_t * table_b, size_
             // print d
             first = (d << 2 != prev_out || d_len != prev_out_len);
             int edge = get_edge(d);
-            if (get_node_suffix(d, d_len) != get_node_suffix(prev_out >> 2,prev_out_len)
+            if (get_node_suffix(d) != get_node_suffix(prev_out >> 2)
                 || d_len != prev_out_len) {
               needs_edge_flag = 0;
               // These are incoming dummies so have outgoing edges that arent $
@@ -277,7 +277,7 @@ void merge_dummies(FILE * outfile, uint64_t * table_a, uint64_t * table_b, size_
             }
             edge_flags[edge] = 1;
             sprint_dummy_acgt(buf, block_reverse_64(d), k, d_len);
-            fprintf(outfile, "c %d %s %d\n", first, buf, needs_edge_flag);
+            fprintf(outfile, "%d %s %d\n", first, buf, needs_edge_flag);
             prev_out = d<<2;
             prev_out_len = d_len;
           }
@@ -288,9 +288,9 @@ void merge_dummies(FILE * outfile, uint64_t * table_a, uint64_t * table_b, size_
           d_len = dummy_lengths[d_idx];
         }
         uint64_t temp = table_a[a_idx];
-        first = (temp >> 2 != prev_out || k != prev_out_len);
-        int edge = get_edge(temp);
-        if (get_node_suffix(temp, k) != get_node_suffix(prev_out >> 2,prev_out_len)
+        first = (block_reverse_64(temp) << 2 != prev_out || k != prev_out_len);
+        int edge = get_edge(block_reverse_64(temp));
+        if (get_node_suffix(block_reverse_64(temp)) != get_node_suffix(prev_out >> 2)
           || k != prev_out_len) {
           needs_edge_flag = 0;
           // These are incoming dummies so have outgoing edges that arent $
@@ -302,10 +302,10 @@ void merge_dummies(FILE * outfile, uint64_t * table_a, uint64_t * table_b, size_
         }
         edge_flags[edge] = 1;
  
-        prev_out = temp <<2;
+        prev_out = block_reverse_64(temp) <<2;
         prev_out_len = k;
         sprint_kmer_acgt(buf, &temp, k);
-        fprintf(outfile, "d %d %s %d\n", first, buf, needs_edge_flag);
+        fprintf(outfile, "%d %s %d\n", first, buf, needs_edge_flag);
         //incoming_dummies[next++] = block_reverse_64(temp);
         if (next == num_incoming_dummies) return;
       }
@@ -326,7 +326,7 @@ void merge_dummies(FILE * outfile, uint64_t * table_a, uint64_t * table_b, size_
             // print d
             first = (d << 2 != prev_out || d_len != prev_out_len);
             int edge = get_edge(d);
-            if (get_node_suffix(d, d_len) != get_node_suffix(prev_out >> 2,prev_out_len)
+            if (get_node_suffix(d) != get_node_suffix(prev_out >> 2)
               || d_len != prev_out_len) {
               needs_edge_flag = 0;
               // These are incoming dummies so have outgoing edges that arent $
@@ -341,7 +341,7 @@ void merge_dummies(FILE * outfile, uint64_t * table_a, uint64_t * table_b, size_
             prev_out = d <<2;
             prev_out_len = d_len;
             sprint_dummy_acgt(buf, block_reverse_64(d), k, d_len);
-            fprintf(outfile, "e %d %s %d\n", first, buf, needs_edge_flag);
+            fprintf(outfile, "%d %s %d\n", first, buf, needs_edge_flag);
           }
           if (++d_idx >= num_incoming_dummies) break;
           d_prev = d;
@@ -350,9 +350,9 @@ void merge_dummies(FILE * outfile, uint64_t * table_a, uint64_t * table_b, size_
           d_len = dummy_lengths[d_idx];
         }
         uint64_t temp = table_a[a_idx];
-        first = (temp << 2 != prev_out || k != prev_out_len);
-        int edge = get_edge(temp);
-        if (get_node_suffix(temp, k) != get_node_suffix(prev_out >> 2,prev_out_len)
+        first = (block_reverse_64(temp) << 2 != prev_out || k != prev_out_len);
+        int edge = get_edge(block_reverse_64(temp));
+        if (get_node_suffix(block_reverse_64(temp)) != get_node_suffix(prev_out >> 2)
           || k != prev_out_len) {
           //TRACE("k, prev_out_len = %d, %d..... ", k, prev_out_len)
           needs_edge_flag = 0;
@@ -365,10 +365,10 @@ void merge_dummies(FILE * outfile, uint64_t * table_a, uint64_t * table_b, size_
         }
         edge_flags[edge] = 1;
 
-        prev_out = temp <<2;
+        prev_out = block_reverse_64(temp) <<2;
         prev_out_len = k;
         sprint_kmer_acgt(buf, &temp, k);
-        fprintf(outfile, "f %d %s %d\n", first, buf, needs_edge_flag);
+        fprintf(outfile, "%d %s %d\n", first, buf, needs_edge_flag);
         if (++a_idx >= num_records) break;
         x_prev = x;
         x = get_a(a_idx);
@@ -387,7 +387,7 @@ void merge_dummies(FILE * outfile, uint64_t * table_a, uint64_t * table_b, size_
       // print d
       first = (d << 2 != prev_out || d_len != prev_out_len);
       int edge = get_edge(d);
-      if (get_node_suffix(d, d_len) != get_node_suffix(prev_out >> 2,prev_out_len)
+      if (get_node_suffix(d) != get_node_suffix(prev_out >> 2)
         || d_len != prev_out_len) {
         needs_edge_flag = 0;
         // These are incoming dummies so have outgoing edges that arent $
@@ -402,7 +402,7 @@ void merge_dummies(FILE * outfile, uint64_t * table_a, uint64_t * table_b, size_
       prev_out = d <<2;
       prev_out_len = d_len;
       sprint_dummy_acgt(buf, block_reverse_64(d), k, d_len);
-      fprintf(outfile, "g %d %s _\n", first, buf);
+      fprintf(outfile, "%d %s %d\n", first, buf, needs_edge_flag);
     }
     if (++d_idx >= num_incoming_dummies) break;
     d_prev = d;
