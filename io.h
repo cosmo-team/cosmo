@@ -22,4 +22,15 @@ void sprint_kmer_acgt(char * buf, uint64_t * kmer, uint32_t k);
 void sprint_dummy_acgt(char * buf, uint64_t dummy, uint32_t max_k, unsigned char k);
 void print_dummies_acgt(FILE * outfile, uint64_t * incoming_dummies, unsigned char * incoming_dummy_lengths, size_t num_incoming_dummies, uint32_t max_k);
 
+template <typename T>
+inline sprint_kmer_acgt(const T & kmer_block, uint8_t max_k, uint8_t this_k = max_k) {
+  const char * table = "acgt";
+  memset(buf, '$', max_k);
+  buf[max_k] = '\0';
+
+  for (uint32_t j = 0; j < this_k; j++) {
+    buf[max_k-j-1] = table[(kmer >> (j * 2)) & 0x3];
+  }
+}
+
 #endif

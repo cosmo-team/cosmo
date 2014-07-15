@@ -1,21 +1,3 @@
-#include "transform.h"
-
-// Doesn't reverse on bit level, reverses at the two-bit level
-uint64_t block_reverse_64(uint64_t x) {
-  uint64_t output;
-
-  unsigned char * p = (unsigned char *) &x;
-  unsigned char * q = (unsigned char *) &output;
-  q[7] = reverse_8(p[0]);
-  q[6] = reverse_8(p[1]);
-  q[5] = reverse_8(p[2]);
-  q[4] = reverse_8(p[3]);
-  q[3] = reverse_8(p[4]);
-  q[2] = reverse_8(p[5]);
-  q[1] = reverse_8(p[6]);
-  q[0] = reverse_8(p[7]);
-  return output;
-}
 
 uint64_t block_revcomp_64(uint64_t x) {
   uint64_t output;

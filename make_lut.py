@@ -1,15 +1,22 @@
 import numpy as np
 
 src = """
-#include "lut.h"
+#pragma once
+#ifndef LUT_HPP
+#define LUT_HPP
 
-const unsigned char reverse_8_lut[256] = {
+#define reverse_8(x) (reverse_8_lut[(x)])
+#define revcomp_8(x) (revcomp_8_lut[(x)])
+
+static const uint8_t reverse_8_lut[256] = {
   %s
 };
 
-const unsigned char revcomp_8_lut[256] = {
+static const uint8_t revcomp_8_lut[256] = {
   %s
 };
+
+#endif
 """
 
 # Generate tables
