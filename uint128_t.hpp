@@ -1,9 +1,10 @@
 #pragma once
-#ifndef UINT128_T_H
-#define UINT128_T_H
+#ifndef UINT128_T_HPP
+#define UINT128_T_HPP
 
-#include <iostream>
 #include <climits> // For CHAR_BIT
+
+// TODO: reimplement this as wide_uint_t<pwr_two> in a general form - with assertions that it is indeed a pwr of two
 
 /* UINT128_T
  * Useful for wider blocks (e.g. when 32 < k <= 64 in a DNA kmer program)
@@ -21,7 +22,7 @@
  * Sorry! Maybe in another version.
  */
 
-// ORIGINAL UINT128_T LICENSE MESSAGE
+// ORIGINAL UINT128_T LICENSE MESSAGE:
 
 /*
 uint128_t.h
@@ -275,12 +276,5 @@ template <typename T> bool operator>=(const T & lhs, const uint128_t & rhs){
 template <typename T> bool operator<=(const T & lhs, const uint128_t & rhs){
   return (rhs._upper)? true : (uint64_t) lhs <= rhs._lower;
 }
-
-// TODO: Write harness to test
-// TODO: read in, reverse, print in 64 bit and 128
-// TODO: Write kmer function file for:
-// TODO: Write parametric get_range, get_item functions
-// TODO: Write parametric reversal function (and other transforms)
-// TODO: Trace through the flow of the program and find where the widths are off
 
 #endif

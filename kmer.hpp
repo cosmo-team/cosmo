@@ -3,6 +3,7 @@
 #define KMER_HPP
 
 #include <string>
+#include "debug.h"
 #include "lut.hpp"
 #include "utility.hpp"
 #include "uint128_t.hpp"
@@ -12,7 +13,9 @@
 #define DNA "acgt"
 #define DUMMY '$'
 
-// Swaps G (11 -> 11) and T (10 -> 11) representation so radix ordering is lexical
+// Swaps G (11 -> 10) and T (10 -> 11) representation so radix ordering is lexical
+// (needed because some kmer counters like DSK swap this representation, but we assume G < T
+// in our de bruijn graph implementation)
 inline uint64_t swap_gt(uint64_t x) {
   return (x ^ ((x & 0xAAAAAAAAAAAAAAAA) >> 1));
 }
@@ -33,6 +36,33 @@ inline uint8_t get_nt(const uint128_t & block, uint8_t i) {
   // but should be reusable for larger block types
   uint64_t block_64 = ((uint64_t*)(&block))[block_idx];
   return get_nt(block_64, i%nts_per_block);
+}
+
+template <typename T>
+uint8_t get_edge_label(const T & x) {
+  return get_nt(x, 0);
+}
+
+// return kmer[lo, hi) - like pythons x[lo:hi] indexing
+template <typename T>
+T get_range(T x, uint8_t lo = 0, uint8_t hi = -1) {
+  if (hi <= lo) return T(0);
+  const size_t NUM_NTS = bitwidth<T>()/NT_WIDTH;
+  uint8_t shift = (hi < NUM_NTS)? (NUM_NTS - hi) * NT_WIDTH : 0;
+  return (x >> shift) << (shift + lo * NT_WIDTH);
+}
+
+// It might look like the implementations for get_start_node and get_end_node
+// are around the wrong way, but remember that the kmers are stored in reverse
+// to enable integer comparison => colex ordering of the string representation
+template <typename T>
+T get_start_node(const T & x, uint8_t k) {
+  return get_range(x, 1, k);
+}
+
+template <typename T>
+T get_end_node(const T & x, uint8_t k) {
+  return get_range(x, 0, k-1);
 }
 
 // Doesn't reverse on bit level, reverses at the two-bit level
