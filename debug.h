@@ -3,10 +3,13 @@
 
 #include <assert.h>
 
-// Default is to be opposite NDEBUG
-#define DEBUG !NDEBUG
+// Default is to be opposite NDEBUG, but debug levels may be added sometime...
+// Other ideas: Specifying multiple logging sources (with C++)
+#ifndef NDEBUG
+#define DEBUG
+#endif
 
-#if DEBUG
+#ifdef DEBUG
     #include <stdio.h>
     #define TRACE(...) {fprintf(stderr, __VA_ARGS__);}
 #else

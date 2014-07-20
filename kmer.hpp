@@ -2,6 +2,7 @@
 #ifndef KMER_HPP
 #define KMER_HPP
 
+#include <functional>
 #include <string>
 #include "debug.h"
 #include "lut.hpp"
@@ -16,13 +17,13 @@
 // Swaps G (11 -> 10) and T (10 -> 11) representation so radix ordering is lexical
 // (needed because some kmer counters like DSK swap this representation, but we assume G < T
 // in our de bruijn graph implementation)
-inline uint64_t swap_gt(uint64_t x) {
-  return (x ^ ((x & 0xAAAAAAAAAAAAAAAA) >> 1));
-}
 
-inline uint128_t swap_gt(const uint128_t & x) {
-  return uint128_t(swap_gt(x._upper), swap_gt(x._lower));
-}
+struct swap_gt_f : std::unary_function<uint64_t, uint64_t> {
+  inline uint64_t operator() (const uint64_t & x) const { return (x ^ ((x & 0xAAAAAAAAAAAAAAAA) >> 1)); }
+} swap_gt;
+
+// This could be used for uint128_t conversion, but it isn't needed, and including it requires messy templating
+// inline uint128_t swap_gt(uint128_t x) { return uint128_t(swap_gt(x._upper), swap_gt(x._lower)); }
 
 inline uint8_t get_nt(uint64_t block, uint8_t i) {
   // Assumes the nts are numbered from the left (which allows them to be compared as integers)
@@ -66,7 +67,7 @@ T get_end_node(const T & x, uint8_t k) {
 }
 
 // Doesn't reverse on bit level, reverses at the two-bit level
-inline uint64_t reverse_nt(uint64_t x) {
+inline uint64_t reverse_block(uint64_t x) {
   uint64_t output;
 
   unsigned char * p = (unsigned char *) &x;
@@ -82,11 +83,19 @@ inline uint64_t reverse_nt(uint64_t x) {
   return output;
 }
 
-inline uint128_t reverse_nt(const uint128_t & x) {
-  return uint128_t(reverse_nt(x._lower), reverse_nt(x._upper));
-}
+template <class T>
+struct reverse_nt : std::unary_function<T, T> {
+  T operator() (const T& x) const {return reverse_block((uint64_t)x);}
+};
 
-inline static uint64_t block_revcomp(uint64_t x) {
+template <>
+struct reverse_nt<uint128_t> : std::unary_function<uint128_t, uint128_t> {
+  inline uint128_t operator() (const uint128_t & x) const {
+    return uint128_t(reverse_block(x._lower), reverse_block(x._upper));
+  }
+};
+
+inline static uint64_t revcomp_block(uint64_t x) {
   uint64_t output;
 
   unsigned char * p = (unsigned char *) &x;
@@ -102,14 +111,23 @@ inline static uint64_t block_revcomp(uint64_t x) {
   return output;
 }
 
-inline uint64_t reverse_complement(uint64_t x, uint8_t k) {
-  return block_revcomp(x) << (BLOCK_WIDTH - k * NT_WIDTH);
-}
+template <class T>
+struct reverse_complement : std::unary_function<T, T> {
+  const uint8_t _k;
+  reverse_complement(uint8_t k) : _k(k) {}
+  T operator() (const T& x) const {
+    return revcomp_block((uint64_t)x) << (BLOCK_WIDTH - _k * NT_WIDTH);
+  }
+};
 
-inline uint128_t reverse_complement(const uint128_t & x, uint8_t k) {
-  // should be rewritable for larger block types using map and reverse for arrays
-  return uint128_t(block_revcomp(x._lower), block_revcomp(x._upper)) << (bitwidth<uint128_t>() - k * NT_WIDTH);
-}
+template <>
+struct reverse_complement<uint128_t> : std::unary_function<uint128_t, uint128_t> {
+  const uint8_t _k;
+  reverse_complement(uint8_t k) : _k(k) {}
+  uint128_t operator() (const uint128_t & x) const {
+    return uint128_t(revcomp_block(x._lower), revcomp_block(x._upper)) << (bitwidth<uint128_t>() - _k * NT_WIDTH);
+  }
+};
 
 template <typename T>
 std::string kmer_to_string(const T & kmer_block, uint8_t max_k, uint8_t this_k = -1) {
