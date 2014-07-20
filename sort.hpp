@@ -5,8 +5,8 @@
 // using table_b as the temporary table, and writing the new ptrs to
 // new_a and new_b. new_a will point to the final result, while
 // new_b will be the results of the second-last iteration.
-template <typename T, typename F>
-void colex_partial_radix_sort(T * a, T * b, size_t num_records, const uint8_t base, uint32_t lo, uint32_t hi, T ** new_a, T ** new_b, F get_digit) {
+template <int base, typename T, typename F>
+void colex_partial_radix_sort(T * a, T * b, size_t num_records, uint32_t lo, uint32_t hi, T ** new_a, T ** new_b, F get_digit) {
   // TODO: add optional size check -> each position that is in a > size position is a $
   // TODO: support lo and hi swapping to reverse order
   assert(hi > lo);

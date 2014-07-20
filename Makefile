@@ -1,33 +1,24 @@
-CC=gcc
-C_FLAGS=-m64 -std=c99 -pedantic -W -Wall -Wextra -Wshadow -Wpointer-arith -Wcast-qual \
-				-Wstrict-prototypes -Wmissing-prototypes -Wwrite-strings #-Werror
-DEBUG_FLAGS=-g
-RELEASE_FLAGS=#-O3 -DNDEBUG
-COMPILE=$(CC) $(C_FLAGS) $(DEBUG_FLAGS) $(RELEASE_FLAGS)
-#COMPILE=$(CC) -o convert_dsk convert_dsk.c io.o transform.o lut.o $(C_FLAGS)
+CPP=g++
+CPP_FLAGS=-m64 -std=c++0x -pedantic-errors -W -Wall -Wextra -Wshadow -Wpointer-arith -Wcast-qual \
+					-Wstrict-prototypes -Wmissing-prototypes -Wwrite-strings -Werror
+DEBUG_FLAGS=-g -O0
+RELEASE_FLAGS=-O3 -DNDEBUG
+REQS=convert_dsk.cpp lut.hpp debug.h nanotime.h io.o sort.hpp kmer.hpp utility.hpp
+COMPILE=$(CPP) $(CPP_FLAGS)
 
 default: all
 
-lut.c: make_lut.py
-		python make_lut.py > lut.c
+lut.hpp: make_lut.py
+		python make_lut.py > lut.hpp
 
-lut.o: lut.h lut.c
-		$(COMPILE) -c lut.c
+io.o: io.hpp io.cpp
+		$(COMPILE) $(RELEASE_FLAGS) -c io.cpp
 
-io.o: io.h io.c
-		$(COMPILE) -c io.c
+all: $(REQS)
+		$(COMPILE) $(RELEASE_FLAGS) -o convert_dsk convert_dsk.cpp io.o
 
-sort.o: sort.c sort.h common.h
-		$(COMPILE) -c sort.c
-
-join.o: join.c join.h common.h
-		$(COMPILE) -c join.c
-
-transform.o: transform.h transform.c lut.h
-		$(COMPILE) -c transform.c
-
-all: convert_dsk.c lut.h debug.h nanotime.h io.o transform.o lut.o sort.o join.o
-		$(COMPILE) -o convert_dsk convert_dsk.c io.o transform.o lut.o sort.o join.o
+debug: $(REQS)
+		$(COMPILE) $(DEBUG_FLAGS) -o convert_dsk convert_dsk.cpp io.o
 
 clean:
-		rm -rf convert_dsk *.o *.dSYM lut.c
+		rm -rf convert_dsk *.o *.dSYM lut.hpp

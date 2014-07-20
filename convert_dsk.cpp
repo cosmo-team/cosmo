@@ -99,8 +99,8 @@ int main(int argc, char * argv[]) {
     // NOTE: THESE SHOULD NOT BE FREED
     kmer_t * table_a = kmers;
     kmer_t * table_b = kmers + num_kmers * 2; // x2 because of reverse complements
-    colex_partial_radix_sort(table_a, table_b, num_kmers * 2, 4, 0, 1, &table_a, &table_b, get_nt_functor<kmer_t>());
-    colex_partial_radix_sort(table_a, table_b, num_kmers * 2, 4, 0, k, &table_a, &table_b, get_nt_functor<kmer_t>());
+    colex_partial_radix_sort<4>(table_a, table_b, num_kmers * 2, 0, 1, &table_a, &table_b, get_nt_functor<kmer_t>());
+    colex_partial_radix_sort<4>(table_a, table_b, num_kmers * 2, 0, k, &table_a, &table_b, get_nt_functor<kmer_t>());
 
     print_kmers(cout, table_a, num_kmers * 2, k);
   }
@@ -119,8 +119,8 @@ int main(int argc, char * argv[]) {
     // NOTE: THESE SHOULD NOT BE FREED
     kmer_t * table_a = kmers;
     kmer_t * table_b = kmers + num_kmers * 2; // x2 because of reverse complements
-    colex_partial_radix_sort(table_a, table_b, num_kmers * 2, 4, 0, 1, &table_a, &table_b, get_nt_functor<kmer_t>());
-    colex_partial_radix_sort(table_a, table_b, num_kmers * 2, 4, 0, k, &table_a, &table_b, get_nt_functor<kmer_t>());
+    colex_partial_radix_sort<4>(table_a, table_b, num_kmers * 2, 0, 1, &table_a, &table_b, get_nt_functor<kmer_t>());
+    colex_partial_radix_sort<4>(table_a, table_b, num_kmers * 2, 0, k, &table_a, &table_b, get_nt_functor<kmer_t>());
 
     print_kmers(cout, table_a, num_kmers * 2, k);
   }
