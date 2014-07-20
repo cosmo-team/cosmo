@@ -2,7 +2,9 @@
 #ifndef KMER_HPP
 #define KMER_HPP
 
+#include <ostream>
 #include <functional>
+#include <algorithm>
 #include <string>
 #include "debug.h"
 #include "lut.hpp"
@@ -22,9 +24,6 @@ struct swap_gt_f : std::unary_function<uint64_t, uint64_t> {
   inline uint64_t operator() (const uint64_t & x) const { return (x ^ ((x & 0xAAAAAAAAAAAAAAAA) >> 1)); }
 } swap_gt;
 
-// This could be used for uint128_t conversion, but it isn't needed, and including it requires messy templating
-// inline uint128_t swap_gt(uint128_t x) { return uint128_t(swap_gt(x._upper), swap_gt(x._lower)); }
-
 inline uint8_t get_nt(uint64_t block, uint8_t i) {
   // Assumes the nts are numbered from the left (which allows them to be compared as integers)
   return (block << (i * NT_WIDTH) >> (BLOCK_WIDTH - NT_WIDTH));
@@ -38,6 +37,13 @@ inline uint8_t get_nt(const uint128_t & block, uint8_t i) {
   uint64_t block_64 = ((uint64_t*)(&block))[block_idx];
   return get_nt(block_64, i%nts_per_block);
 }
+
+template <typename T>
+struct get_nt_functor : std::binary_function<T, uint8_t, uint8_t> {
+  uint8_t operator() (const T & x, uint8_t i) {
+    return get_nt(x, i);
+  }
+};
 
 template <typename T>
 uint8_t get_edge_label(const T & x) {
@@ -141,5 +147,22 @@ std::string kmer_to_string(const T & kmer_block, uint8_t max_k, uint8_t this_k =
   }
   return buf;
 }
+
+template <typename kmer_t>
+void convert_representation(kmer_t * kmers_in, kmer_t * kmers_out, size_t num_kmers) {
+  // Swap G and T and reverses the nucleotides so that they can
+  // be compared and sorted as integers to give colexicographical ordering
+  std::transform((uint64_t*)kmers_in, (uint64_t*)(kmers_in + num_kmers), (uint64_t*)kmers_out, swap_gt);
+  std::transform(kmers_in, kmers_out + num_kmers, kmers_in, reverse_nt<kmer_t>());
+}
+
+// Convenience function to print array of kmers
+template <typename kmer_t>
+void print_kmers(std::ostream & out, kmer_t * kmers, size_t num_kmers, uint32_t k, uint8_t * dummy_lengths = 0) {
+  for (size_t i = 0; i<num_kmers; i++) {
+    out << kmer_to_string(kmers[i], k, ((dummy_lengths)? dummy_lengths[i]:k)) << std::endl;
+  }
+}
+
 
 #endif

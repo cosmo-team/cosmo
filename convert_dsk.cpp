@@ -11,27 +11,13 @@
 #include "uint128_t.hpp"
 #include "kmer.hpp"
 #include "io.hpp"
+#include "sort.hpp"
 #include "debug.h"
 #include "nanotime.h"
 
 using namespace std;
 
 static const char * USAGE = "<DSK output file>";
-
-template <typename kmer_t>
-void convert_representation(kmer_t * kmers_in, kmer_t * kmers_out, size_t num_kmers) {
-  // Swap G and T and reverses the nucleotides so that they can
-  // be compared and sorted as integers to give colexicographical ordering
-  transform((uint64_t*)kmers_in, (uint64_t*)(kmers_in + num_kmers), (uint64_t*)kmers_out, swap_gt);
-  transform(kmers_in, kmers_out + num_kmers, kmers_in, reverse_nt<kmer_t>());
-}
-
-template <typename kmer_t>
-void print_kmers(ostream & out, kmer_t * kmers, size_t num_kmers, uint32_t k, uint8_t * dummy_lengths = 0) {
-  for (size_t i = 0; i<num_kmers; i++) {
-    out << kmer_to_string(kmers[i], k, ((dummy_lengths)? dummy_lengths[i]:k)) << endl;
-  }
-}
 
 int main(int argc, char * argv[]) {
   // Parse argv
@@ -82,8 +68,6 @@ int main(int argc, char * argv[]) {
   // ALLOCATE SPACE FOR KMERS (done in one malloc call)
   // x 4 because we need to add reverse complements, and then we have two copies of the table
   uint64_t * kmer_blocks = (uint64_t*)calloc(num_kmers * 4, sizeof(uint64_t) * kmer_num_blocks);
-  //kmer_t * table_a = kmers;
-  //kmer_t * table_b = kmers + num_records * 2; // x2 because of reverse complements
 
   // READ KMERS FROM DISK INTO ARRAY
   size_t num_records_read = dsk_read_kmers(handle, kmer_num_bits, kmer_blocks);
@@ -104,23 +88,48 @@ int main(int argc, char * argv[]) {
   if (kmer_num_bits == 64) {
     typedef uint64_t kmer_t;
     kmer_t * kmers = (kmer_t*)kmer_blocks;
+
+    // Convert the nucleotide representation to allow tricks
     convert_representation(kmers, kmers, num_kmers);
+    // Append reverse complements
     transform(kmers, kmers + num_kmers, kmers + num_kmers, reverse_complement<kmer_t>(k));
-    print_kmers(cout, kmers, num_kmers * 2, k);
+    // After the sorting phase, Table_a will in <colex(node), edge> order (as required for output)
+    // and Table B will be in colex(row) order. This is helpful for detecting the missing dummy
+    // edges with a simple O(N) join algorithm.
+    // NOTE: THESE SHOULD NOT BE FREED
+    kmer_t * table_a = kmers;
+    kmer_t * table_b = kmers + num_kmers * 2; // x2 because of reverse complements
+    colex_partial_radix_sort(table_a, table_b, num_kmers * 2, 4, 0, 1, &table_a, &table_b, get_nt_functor<kmer_t>());
+    colex_partial_radix_sort(table_a, table_b, num_kmers * 2, 4, 0, k, &table_a, &table_b, get_nt_functor<kmer_t>());
+
+    print_kmers(cout, table_a, num_kmers * 2, k);
   }
+
   else if (kmer_num_bits == 128) {
     typedef uint128_t kmer_t;
     kmer_t * kmers = (kmer_t*)kmer_blocks;
+
+    // Convert the nucleotide representation to allow tricks
     convert_representation(kmers, kmers, num_kmers);
+    // Append reverse complements
     transform(kmers, kmers + num_kmers, kmers + num_kmers, reverse_complement<kmer_t>(k));
-    print_kmers(cout, kmers, num_kmers * 2, k);
+    // After the sorting phase, Table_a will in <colex(node), edge> order (as required for output)
+    // and Table B will be in colex(row) order. This is helpful for detecting the missing dummy
+    // edges with a simple O(N) join algorithm.
+    // NOTE: THESE SHOULD NOT BE FREED
+    kmer_t * table_a = kmers;
+    kmer_t * table_b = kmers + num_kmers * 2; // x2 because of reverse complements
+    colex_partial_radix_sort(table_a, table_b, num_kmers * 2, 4, 0, 1, &table_a, &table_b, get_nt_functor<kmer_t>());
+    colex_partial_radix_sort(table_a, table_b, num_kmers * 2, 4, 0, k, &table_a, &table_b, get_nt_functor<kmer_t>());
+
+    print_kmers(cout, table_a, num_kmers * 2, k);
   }
 
-  // add reverse_complements
-  // sort
+  // TODO
+  // count dummies
   // allocate space for dummies
   // extract dummies
-  // sort dummies
+  // sort dummies (varlen)
   // merge
   // output (iterator?) -> write to file
   // free dummies
