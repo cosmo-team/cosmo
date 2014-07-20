@@ -8,7 +8,6 @@
 #include <string>
 #include "debug.h"
 #include "lut.hpp"
-#include "utility.hpp"
 #include "uint128_t.hpp"
 
 #define BLOCK_WIDTH 64
@@ -122,7 +121,7 @@ struct reverse_complement : std::unary_function<T, T> {
   const uint8_t _k;
   reverse_complement(uint8_t k) : _k(k) {}
   T operator() (const T& x) const {
-    return revcomp_block((uint64_t)x) << (BLOCK_WIDTH - _k * NT_WIDTH);
+    return revcomp_block((uint64_t)x) << (64 - _k * NT_WIDTH);
   }
 };
 
@@ -131,7 +130,7 @@ struct reverse_complement<uint128_t> : std::unary_function<uint128_t, uint128_t>
   const uint8_t _k;
   reverse_complement(uint8_t k) : _k(k) {}
   uint128_t operator() (const uint128_t & x) const {
-    return uint128_t(revcomp_block(x._lower), revcomp_block(x._upper)) << (bitwidth<uint128_t>() - _k * NT_WIDTH);
+    return uint128_t(revcomp_block(x._lower), revcomp_block(x._upper)) << (128 - _k * NT_WIDTH);
   }
 };
 

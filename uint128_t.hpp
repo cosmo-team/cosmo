@@ -4,6 +4,12 @@
 
 #include <climits> // For CHAR_BIT
 
+// Possibly handy function for users of this type
+template <typename T>
+size_t bitwidth() {
+  return sizeof(T) * CHAR_BIT;
+}
+
 // TODO: reimplement this as wide_uint_t<pwr_two> in a general form - with assertions that it is indeed a pwr of two
 
 /* UINT128_T
@@ -144,7 +150,8 @@ struct uint128_t {
 
   // Shift Operators
   template <typename T>
-  uint128_t operator<<(const T & shift) const {
+  uint128_t operator<<(const T & rhs) const {
+    uint64_t shift = uint64_t(rhs);
     if (shift >= total_width) return uint128_t(0);
     else if (shift == block_width) return uint128_t(_lower, 0);
     else if (shift == 0) return *this;
@@ -154,7 +161,8 @@ struct uint128_t {
   }
 
   template <typename T>
-  uint128_t operator>>(const T & shift) const {
+  uint128_t operator>>(const T & rhs) const {
+    uint64_t shift = uint64_t(rhs);
     if (shift >= total_width) return uint128_t(0);
     else if (shift == block_width) return uint128_t(0, _upper);
     else if (shift == 0) return *this;
