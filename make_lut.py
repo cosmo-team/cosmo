@@ -1,7 +1,6 @@
 import numpy as np
 
-src = """
-#pragma once
+src = """#pragma once
 #ifndef LUT_HPP
 #define LUT_HPP
 
