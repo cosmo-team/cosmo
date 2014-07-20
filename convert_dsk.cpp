@@ -19,6 +19,43 @@ using namespace std;
 
 static const char * USAGE = "<DSK output file>";
 
+template <typename kmer_t>
+void convert(kmer_t * kmers, size_t num_kmers, uint32_t k) {
+  // Convert the nucleotide representation to allow tricks
+  convert_representation(kmers, kmers, num_kmers);
+
+  // Append reverse complements
+  transform(kmers, kmers + num_kmers, kmers + num_kmers, reverse_complement<kmer_t>(k));
+
+  // After the sorting phase, Table A will in <colex(node), edge> order (as required for output)
+  // and Table B will be in colex(row) order. Having both tables is helpful for detecting the missing dummy
+  // edges with a simple O(N) merge-join algorithm.
+  // NOTE: THESE SHOULD NOT BE FREED (the kmers array is freed by the caller)
+  kmer_t * table_a = kmers;
+  kmer_t * table_b = kmers + num_kmers * 2; // x2 because of reverse complements
+  // Sort by last column to do the edge-sorted part of our <colex(node), edge>-sorted table
+  colex_partial_radix_sort<4>(table_a, table_b, num_kmers * 2, 0, 1, &table_a, &table_b, get_nt_functor<kmer_t>());
+  // Sort from k to last column (not k to 1 - we need to sort by the edge column a second time to get colex(row) table).
+  // Note: The output names are swapped (we want table a to be the primary table and b to be aux), because our desired
+  // result is the second last iteration (<colex(node), edge>-sorted) but we still have use for the last iteration (colex(row)-sorted).
+  // Hence, table_b is the output sorted from [hi-1 to lo], and table_a is the 2nd last iter sorted from (hi-1 to lo]
+  colex_partial_radix_sort<4>(table_a, table_b, num_kmers * 2, 0, k, &table_b, &table_a, get_nt_functor<kmer_t>());
+
+  // TODO:
+  // count dummies
+  // outgoing dummy edges are output in correct order while merging, whereas incoming dummy edges are not in the correct
+  // position, but are sorted relatively, hence can be merged if collected in previous passes
+  // size_t num_incoming_dummies = count_incoming_dummy_edges(table_a, table_b, num_records*2, k);
+  // allocate space for dummies
+  // extract dummies
+  // sort dummies (varlen)
+  // merge
+  // output (iterator?) -> write to file
+  // free dummies
+
+  print_kmers(cout, table_a, num_kmers * 2, k);
+}
+
 int main(int argc, char * argv[]) {
   // Parse argv
   if (argc != 2) {
@@ -72,67 +109,22 @@ int main(int argc, char * argv[]) {
   // READ KMERS FROM DISK INTO ARRAY
   size_t num_records_read = dsk_read_kmers(handle, kmer_num_bits, kmer_blocks);
   close(handle);
-  switch (num_records_read) {
-    // Case 0 would have been captured above;
-    case 0:
-      fprintf(stderr, "Error reading file %s\n", argv[1]);
-      exit(EXIT_FAILURE);
-      break;
-    default:
-      TRACE("num_records_read = %zu\n", num_records_read);
-      assert (num_records_read == num_kmers);
-      break;
+  if (num_records_read == 0) {
+    fprintf(stderr, "Error reading file %s\n", argv[1]);
+    exit(EXIT_FAILURE);
   }
+  TRACE("num_records_read = %zu\n", num_records_read);
+  assert (num_records_read == num_kmers);
 
   // TODO: move this to a template or somethin...
   if (kmer_num_bits == 64) {
     typedef uint64_t kmer_t;
-    kmer_t * kmers = (kmer_t*)kmer_blocks;
-
-    // Convert the nucleotide representation to allow tricks
-    convert_representation(kmers, kmers, num_kmers);
-    // Append reverse complements
-    transform(kmers, kmers + num_kmers, kmers + num_kmers, reverse_complement<kmer_t>(k));
-    // After the sorting phase, Table_a will in <colex(node), edge> order (as required for output)
-    // and Table B will be in colex(row) order. This is helpful for detecting the missing dummy
-    // edges with a simple O(N) join algorithm.
-    // NOTE: THESE SHOULD NOT BE FREED
-    kmer_t * table_a = kmers;
-    kmer_t * table_b = kmers + num_kmers * 2; // x2 because of reverse complements
-    colex_partial_radix_sort<4>(table_a, table_b, num_kmers * 2, 0, 1, &table_a, &table_b, get_nt_functor<kmer_t>());
-    colex_partial_radix_sort<4>(table_a, table_b, num_kmers * 2, 0, k, &table_a, &table_b, get_nt_functor<kmer_t>());
-
-    print_kmers(cout, table_a, num_kmers * 2, k);
+    convert(kmer_blocks, num_kmers, k);
   }
-
   else if (kmer_num_bits == 128) {
     typedef uint128_t kmer_t;
-    kmer_t * kmers = (kmer_t*)kmer_blocks;
-
-    // Convert the nucleotide representation to allow tricks
-    convert_representation(kmers, kmers, num_kmers);
-    // Append reverse complements
-    transform(kmers, kmers + num_kmers, kmers + num_kmers, reverse_complement<kmer_t>(k));
-    // After the sorting phase, Table_a will in <colex(node), edge> order (as required for output)
-    // and Table B will be in colex(row) order. This is helpful for detecting the missing dummy
-    // edges with a simple O(N) join algorithm.
-    // NOTE: THESE SHOULD NOT BE FREED
-    kmer_t * table_a = kmers;
-    kmer_t * table_b = kmers + num_kmers * 2; // x2 because of reverse complements
-    colex_partial_radix_sort<4>(table_a, table_b, num_kmers * 2, 0, 1, &table_a, &table_b, get_nt_functor<kmer_t>());
-    colex_partial_radix_sort<4>(table_a, table_b, num_kmers * 2, 0, k, &table_a, &table_b, get_nt_functor<kmer_t>());
-
-    print_kmers(cout, table_a, num_kmers * 2, k);
+    convert((kmer_t*)kmer_blocks, num_kmers, k);
   }
-
-  // TODO
-  // count dummies
-  // allocate space for dummies
-  // extract dummies
-  // sort dummies (varlen)
-  // merge
-  // output (iterator?) -> write to file
-  // free dummies
 
   free(kmer_blocks);
   return 0;
