@@ -173,20 +173,33 @@ struct uint128_t {
 
   uint128_t operator<<(const uint128_t & rhs) const {
     if ((bool)rhs._upper) return uint128_t(0);
-    else return *this >> (uint64_t) rhs;
+    else return *this << (uint64_t) rhs;
   }
 
   uint128_t operator>>(const uint128_t & rhs) const {
     if ((bool)rhs._upper) return uint128_t(0);
     else return *this >> (uint64_t) rhs;
   }
+
   uint128_t & operator<<=(const uint128_t & rhs) {
     *this = *this << rhs;
+    return *this;
+  }
+ 
+  template <typename T>
+  uint128_t & operator<<=(const T & rhs) {
+    *this = *this << (uint64_t) rhs;
     return *this;
   }
 
   uint128_t & operator>>=(const uint128_t & rhs) {
     *this = *this >> rhs;
+    return *this;
+  }
+  
+  template <typename T>
+  uint128_t & operator>>=(const T & rhs) {
+    *this = *this >> (uint64_t) rhs;
     return *this;
   }
 
@@ -198,27 +211,27 @@ struct uint128_t {
   bool operator>=(const uint128_t & rhs) const { return *this > rhs || *this == rhs; }
   bool operator<=(const uint128_t & rhs) const { return *this < rhs || *this == rhs; }
 
-  template <typename T> bool operator==(const T & rhs) const{
+  template <typename T> bool operator==(const T & rhs) const {
     return (!_upper && (_lower == (uint64_t) rhs));
   }
 
-  template <typename T> bool operator!=(const T & rhs) const{
-    return (_upper | (_lower != (uint64_t) rhs));
+  template <typename T> bool operator!=(const T & rhs) const {
+    return (_upper || (_lower != (uint64_t) rhs));
   }
 
-  template <typename T> bool operator>(const T & rhs) const{
+  template <typename T> bool operator>(const T & rhs) const {
     return (_upper || (_lower > (uint64_t) rhs));
   }
 
-  template <typename T> bool operator<(const T & rhs) const{
+  template <typename T> bool operator<(const T & rhs) const {
     return (!_upper)? (_lower < (uint64_t) rhs) : false;
   }
 
-  template <typename T> bool operator>=(const T & rhs) const{
+  template <typename T> bool operator>=(const T & rhs) const {
     return ((*this > rhs) | (*this == rhs));
   }
 
-  template <typename T> bool operator<=(const T & rhs) const{
+  template <typename T> bool operator<=(const T & rhs) const {
     return ((*this < rhs) | (*this == rhs));
   }
 
@@ -236,6 +249,8 @@ struct uint128_t {
 // If the output is not a bool, casts to type T
 
 // Bitwise Operators
+// I get errors if 
+/*
 template <typename T> T operator&(const T & lhs, const uint128_t & rhs){
   return (T) (lhs & (T) rhs._lower);
 }
@@ -262,15 +277,15 @@ template <typename T> T operator^=(T & lhs, const uint128_t & rhs){
 
 // Comparison Operators
 template <typename T> bool operator==(const T & lhs, const uint128_t & rhs){
-  return (!rhs._upper && (uint64_t) lhs == rhs._lower);
+  return (!rhs._upper && ((uint64_t) lhs == rhs._lower));
 }
 
 template <typename T> bool operator!=(const T & lhs, const uint128_t & rhs){
-  return (rhs._upper | ((uint64_t) lhs != rhs._lower));
+  return (rhs._upper || ((uint64_t) lhs != rhs._lower));
 }
 
 template <typename T> bool operator>(const T & lhs, const uint128_t & rhs){
-  return (!rhs._upper && (uint64_t) lhs > rhs._lower);
+  return (!rhs._upper && ((uint64_t) lhs > rhs._lower));
 }
 
 template <typename T> bool operator<(const T & lhs, const uint128_t & rhs){
@@ -284,5 +299,6 @@ template <typename T> bool operator>=(const T & lhs, const uint128_t & rhs){
 template <typename T> bool operator<=(const T & lhs, const uint128_t & rhs){
   return (rhs._upper)? true : (uint64_t) lhs <= rhs._lower;
 }
+*/
 
 #endif

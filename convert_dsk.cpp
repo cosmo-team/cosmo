@@ -1,3 +1,4 @@
+// TODO: fix up pointer and calloc to use smart arrays
 // STL Headers
 //#include <fstream>
 #include <iostream>
@@ -12,6 +13,7 @@
 #include "kmer.hpp"
 #include "io.hpp"
 #include "sort.hpp"
+#include "dummies.hpp"
 #include "debug.h"
 #include "nanotime.h"
 
@@ -34,26 +36,37 @@ void convert(kmer_t * kmers, size_t num_kmers, uint32_t k) {
   kmer_t * table_a = kmers;
   kmer_t * table_b = kmers + num_kmers * 2; // x2 because of reverse complements
   // Sort by last column to do the edge-sorted part of our <colex(node), edge>-sorted table
-  colex_partial_radix_sort<4>(table_a, table_b, num_kmers * 2, 0, 1, &table_a, &table_b, get_nt_functor<kmer_t>());
-  // Sort from k to last column (not k to 1 - we need to sort by the edge column a second time to get colex(row) table).
+  colex_partial_radix_sort<DNA_RADIX>(table_a, table_b, num_kmers * 2, 0, 1, &table_a, &table_b, get_nt_functor<kmer_t>());
+  // Sort from k to last column (not k to 1 - we need to sort by the edge column a second time to get colex(row) table)
   // Note: The output names are swapped (we want table a to be the primary table and b to be aux), because our desired
   // result is the second last iteration (<colex(node), edge>-sorted) but we still have use for the last iteration (colex(row)-sorted).
   // Hence, table_b is the output sorted from [hi-1 to lo], and table_a is the 2nd last iter sorted from (hi-1 to lo]
-  colex_partial_radix_sort<4>(table_a, table_b, num_kmers * 2, 0, k, &table_b, &table_a, get_nt_functor<kmer_t>());
+  colex_partial_radix_sort<DNA_RADIX>(table_a, table_b, num_kmers * 2, 0, k, &table_b, &table_a, get_nt_functor<kmer_t>());
 
-  // TODO:
-  // count dummies
   // outgoing dummy edges are output in correct order while merging, whereas incoming dummy edges are not in the correct
-  // position, but are sorted relatively, hence can be merged if collected in previous passes
-  // size_t num_incoming_dummies = count_incoming_dummy_edges(table_a, table_b, num_records*2, k);
-  // allocate space for dummies
+  // position, but are sorted relatively, hence can be merged if collected in a previous pass
+  // count dummies (to allocate space)
+  size_t num_incoming_dummies = count_incoming_dummy_edges(table_a, table_b, num_kmers*2, k);
+  TRACE("num_incoming_dummies: %zu\n", num_incoming_dummies);
+  // allocate space for dummies -> we need to generate all the $-prefixed dummies, so can't just use an iterator for the
+  // incoming dummies (the few that we get from the set_difference are the ones we apply $x[0:-1] to, so we need (k-1) more for each
+  // (to make $...$x[0])... times two because we need to radix sort these bitches.
+  kmer_t * incoming_dummies = (kmer_t*) calloc(num_incoming_dummies*(k-1)*2, sizeof(kmer_t));
+  // We store lengths because the prefix before the <length> symbols on the right will all be $ signs
+  // this is a cheaper way than storing all symbols in 3 bits instead (although it means we need a varlen radix sort)
+  uint8_t * incoming_dummy_lengths = (uint8_t*) calloc(num_incoming_dummies*(k-1)*2, sizeof(uint8_t));
   // extract dummies
-  // sort dummies (varlen)
-  // merge
-  // output (iterator?) -> write to file
-  // free dummies
-
-  print_kmers(cout, table_a, num_kmers * 2, k);
+  find_incoming_dummy_edges(table_a, table_b, num_kmers*2, k, incoming_dummies);
+  // add extra dummies
+  prepare_incoming_dummy_edges(incoming_dummies, incoming_dummy_lengths, num_incoming_dummies, k-1);
+  // sort dummies (varlen radix)
+  // merge (2 iterators, with condition)
+  // output (function iterator? -> write to file, accept a functor for formatting triples -> ascii, binary, etc)
+  // Fill a buffer
+  printf("DUMMIES:\n");
+  print_kmers(cout, incoming_dummies, num_incoming_dummies * (k-1), k, incoming_dummy_lengths);
+  free(incoming_dummies);
+  free(incoming_dummy_lengths);
 }
 
 int main(int argc, char * argv[]) {

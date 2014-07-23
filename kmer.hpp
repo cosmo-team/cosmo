@@ -12,8 +12,9 @@
 
 #define BLOCK_WIDTH 64
 #define NT_WIDTH 2
-#define DNA "acgt"
-#define DUMMY '$'
+#define DNA_RADIX 4
+#define DNA_ALPHA "acgt"
+#define DUMMY_SYM '$'
 
 // Swaps G (11 -> 10) and T (10 -> 11) representation so radix ordering is lexical
 // (needed because some kmer counters like DSK swap this representation, but we assume G < T
@@ -62,8 +63,13 @@ T get_range(T x, uint8_t lo = 0, uint8_t hi = -1) {
 // are around the wrong way, but remember that the kmers are stored in reverse
 // to enable integer comparison => colex ordering of the string representation
 template <typename T>
-T get_start_node(const T & x, uint8_t k) {
-  return get_range(x, 1, k);
+T get_start_node(const T & x, uint8_t) {
+  return get_start_node(x);
+}
+
+template <typename T>
+T get_start_node(const T & x) {
+  return get_range(x, 1);
 }
 
 template <typename T>
@@ -136,13 +142,13 @@ struct reverse_complement<uint128_t> : std::unary_function<uint128_t, uint128_t>
 
 template <typename T>
 std::string kmer_to_string(const T & kmer_block, uint8_t max_k, uint8_t this_k = -1) {
-  std::string buf(max_k, DUMMY);
+  std::string buf(max_k, DUMMY_SYM);
 
   // To enable not giving a this_k value -> we can print full kmers or dummy kmers
   if (this_k > max_k) this_k = max_k;
 
   for (uint32_t j = 0; j < this_k; j++) {
-    buf[max_k-j-1] = DNA[get_nt(kmer_block, j)];
+    buf[max_k-j-1] = DNA_ALPHA[get_nt(kmer_block, j)];
   }
   return buf;
 }

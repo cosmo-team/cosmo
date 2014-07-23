@@ -7,8 +7,6 @@
 // new_b will be the results of the second-last iteration.
 template <int base, typename T, typename F>
 void colex_partial_radix_sort(T * a, T * b, size_t num_records, uint32_t lo, uint32_t hi, T ** new_a, T ** new_b, F get_digit) {
-  // TODO: add optional size check -> each position that is in a > size position is a $
-  // TODO: support lo and hi swapping to reverse order
   assert(hi > lo);
   // Init counts
   size_t bases[base];
