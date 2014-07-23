@@ -56,11 +56,9 @@ void generate_dummies(kmer_t dummy_node, kmer_t * output, uint32_t k) {
   for (size_t i = 0; i < k-1; i++) {
     // shift the width of 1 nucleotide. (We are storing the kmers in reverse order, so a shift left
     // is a shift right when printed out)
-    // Yeah, this should be in kmer's code and produce an iterator instead...
-    // but who has time to write clean code when papers need publishing?
-    //dummy_node = dummy_node << NT_WIDTH;
-    dummy_node <<= NT_WIDTH;
-    output[i] = dummy_node;
+    // Yeah, maybe this should be in kmer's code and produce an iterator instead...
+    // but who has time to well-abstracted code when papers need publishing?
+    output[i] = dummy_node <<= NT_WIDTH;
   }
 }
 
@@ -76,8 +74,10 @@ void prepare_incoming_dummy_edges(kmer_t * dummy_nodes, uint8_t * k_values, size
 }
 
 /*
-void get_incoming_dummy_edges_64(uint64_t * table_a, uint64_t * table_b, size_t num_records, uint32_t k, uint64_t * incoming_dummies, size_t num_incoming_dummies);
-void prepare_incoming_dummy_edges_64(uint64_t * dummy_nodes, unsigned char * k_values, size_t num_dummies, uint32_t k);
+// Write own merging iterator (to output)
+// This should go in io.hpp, but we need a function to get regular edges and dummy-out edges iterator (with type and k)
+// and a function to provide an iterator for dummy in edges (with type and k)
+// OUTPUT must be UNIQUED to avoid COPALINDROMIC edges (i.e. rev_comp(x) maps to an element already in the set of kmers... only to itself if even k, because of our original set)
 void merge_dummies(FILE * outfile, uint64_t * table_a, uint64_t * table_b, size_t num_records, uint32_t k, uint64_t * incoming_dummies, size_t num_incoming_dummies, unsigned char * dummy_lengths);
 */
 

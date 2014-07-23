@@ -29,6 +29,7 @@ void convert(kmer_t * kmers, size_t num_kmers, uint32_t k) {
   // Append reverse complements
   transform(kmers, kmers + num_kmers, kmers + num_kmers, reverse_complement<kmer_t>(k));
 
+  // NOTE: There might be a way to do this recursively using counting (and not two tables)
   // After the sorting phase, Table A will in <colex(node), edge> order (as required for output)
   // and Table B will be in colex(row) order. Having both tables is helpful for detecting the missing dummy
   // edges with a simple O(N) merge-join algorithm.
@@ -60,6 +61,17 @@ void convert(kmer_t * kmers, size_t num_kmers, uint32_t k) {
   // add extra dummies
   prepare_incoming_dummy_edges(incoming_dummies, incoming_dummy_lengths, num_incoming_dummies, k-1);
   // sort dummies (varlen radix)
+  kmer_t * dummies_a = incoming_dummies;
+  kmer_t * dummies_b = incoming_dummies + num_incoming_dummies * (k-1);
+  uint8_t * lengths_a = incoming_dummy_lengths;
+  uint8_t * lengths_b = incoming_dummy_lengths + num_incoming_dummies * (k-1);
+  colex_partial_radix_sort<DNA_RADIX>(dummies_a, dummies_b, num_incoming_dummies*(k-1), 0, 1,
+                                      &dummies_a, &dummies_b, get_nt_functor<kmer_t>(),
+                                      lengths_a, lengths_b, &lengths_a, &lengths_b);
+  // Don't need the last iteration (i.e. dont need to go to 0) since we arent doing a set difference like above
+  colex_partial_radix_sort<DNA_RADIX>(dummies_a, dummies_b, num_incoming_dummies*(k-1), 1, k-1,
+                                      &dummies_a, &dummies_b, get_nt_functor<kmer_t>(),
+                                      lengths_a, lengths_b, &lengths_a, &lengths_b);
   // merge (2 iterators, with condition)
   // output (function iterator? -> write to file, accept a functor for formatting triples -> ascii, binary, etc)
   // Fill a buffer
@@ -129,7 +141,6 @@ int main(int argc, char * argv[]) {
   TRACE("num_records_read = %zu\n", num_records_read);
   assert (num_records_read == num_kmers);
 
-  // TODO: move this to a template or somethin...
   if (kmer_num_bits == 64) {
     typedef uint64_t kmer_t;
     convert(kmer_blocks, num_kmers, k);
