@@ -1,10 +1,10 @@
-CPP=g++
+CXX=g++
 CPP_FLAGS=-m64 -std=c++0x -pedantic-errors -W -Wall -Wextra -Wshadow -Wpointer-arith -Wcast-qual \
-					-Wstrict-prototypes -Wmissing-prototypes -Wwrite-strings -Werror
+					-Wunused -Wstrict-prototypes -Wmissing-prototypes -Wwrite-strings -Werror
 DEBUG_FLAGS=-g -O0
 RELEASE_FLAGS=-O3 -DNDEBUG
 REQS=convert_dsk.cpp lut.hpp debug.h nanotime.h io.o sort.hpp kmer.hpp dummies.hpp
-COMPILE=$(CPP) $(CPP_FLAGS)
+COMPILE=$(CXX) $(CPP_FLAGS)
 
 default: all
 

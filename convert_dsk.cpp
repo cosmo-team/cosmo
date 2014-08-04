@@ -2,7 +2,8 @@
 // STL Headers
 //#include <fstream>
 #include <iostream>
-#include <algorithm>
+//#include <algorithm>
+#include <utility>
 
 // C STDLIB Headers
 #include <cstdio>
@@ -21,6 +22,9 @@ using namespace std;
 
 static const char * USAGE = "<DSK output file>";
 
+// provide output iterator class that buffers and then writes out when buffer is full
+//template <typename kmer_t, typename OutputIterator>
+//void convert(kmer_t * kmers, size_t num_kmers, uint32_t k, OutputIterator out) {
 template <typename kmer_t>
 void convert(kmer_t * kmers, size_t num_kmers, uint32_t k) {
   // Convert the nucleotide representation to allow tricks
@@ -37,12 +41,14 @@ void convert(kmer_t * kmers, size_t num_kmers, uint32_t k) {
   kmer_t * table_a = kmers;
   kmer_t * table_b = kmers + num_kmers * 2; // x2 because of reverse complements
   // Sort by last column to do the edge-sorted part of our <colex(node), edge>-sorted table
-  colex_partial_radix_sort<DNA_RADIX>(table_a, table_b, num_kmers * 2, 0, 1, &table_a, &table_b, get_nt_functor<kmer_t>());
+  colex_partial_radix_sort<DNA_RADIX>(table_a, table_b, num_kmers * 2, 0, 1,
+                                      &table_a, &table_b, get_nt_functor<kmer_t>());
   // Sort from k to last column (not k to 1 - we need to sort by the edge column a second time to get colex(row) table)
   // Note: The output names are swapped (we want table a to be the primary table and b to be aux), because our desired
   // result is the second last iteration (<colex(node), edge>-sorted) but we still have use for the last iteration (colex(row)-sorted).
   // Hence, table_b is the output sorted from [hi-1 to lo], and table_a is the 2nd last iter sorted from (hi-1 to lo]
-  colex_partial_radix_sort<DNA_RADIX>(table_a, table_b, num_kmers * 2, 0, k, &table_b, &table_a, get_nt_functor<kmer_t>());
+  colex_partial_radix_sort<DNA_RADIX>(table_a, table_b, num_kmers * 2, 0, k,
+                                      &table_b, &table_a, get_nt_functor<kmer_t>());
 
   // outgoing dummy edges are output in correct order while merging, whereas incoming dummy edges are not in the correct
   // position, but are sorted relatively, hence can be merged if collected in a previous pass
@@ -72,11 +78,16 @@ void convert(kmer_t * kmers, size_t num_kmers, uint32_t k) {
   colex_partial_radix_sort<DNA_RADIX>(dummies_a, dummies_b, num_incoming_dummies*(k-1), 1, k-1,
                                       &dummies_a, &dummies_b, get_nt_functor<kmer_t>(),
                                       lengths_a, lengths_b, &lengths_a, &lengths_b);
-  // merge (2 iterators, with condition)
+  // merge (impl 2 iterators, with condition)
+  // NO! use old school method
+  //auto in_dummies_range = make_pair(dummies_a, dummies_a+num_incoming_dummies*(k-1)) | uniqued;
+  //auto out_dummies_range = get_inc
   // output (function iterator? -> write to file, accept a functor for formatting triples -> ascii, binary, etc)
   // Fill a buffer
   printf("DUMMIES:\n");
   print_kmers(cout, incoming_dummies, num_incoming_dummies * (k-1), k, incoming_dummy_lengths);
+  // can't return a boost range (or input iter) while using things that are freed here, so this function
+  // accepts an output iterator for now (although I'm not really fond of using those)
   free(incoming_dummies);
   free(incoming_dummy_lengths);
 }
@@ -125,7 +136,7 @@ int main(int argc, char * argv[]) {
     fprintf(stderr, "ERROR: File %s has no kmers (possibly corrupt?).\n", file_name);
     exit(EXIT_FAILURE);
   }
-  TRACE("num_kmers = %zd\n", num_kmers);
+  TRACE("num_kmers = %zu\n", num_kmers);
 
   // ALLOCATE SPACE FOR KMERS (done in one malloc call)
   // x 4 because we need to add reverse complements, and then we have two copies of the table

@@ -13,7 +13,7 @@ void colex_partial_radix_sort(T * a, T * b, size_t num_records, uint32_t lo, uin
       || (!lengths_a && !lengths_b && !new_lengths_a && !new_lengths_b));
   // MIGHT BE FASTER TO MAKE VARLEN A TEMPLATE PARAM, but this might get optimised too since it is a template
   // (and examinable on the default inputs) already.
-  bool varlen = lengths_a;
+  const bool varlen = lengths_a;
   // Init counts (+ $ if we are doing variable length sorting)
   size_t bases[base + 1];
 
