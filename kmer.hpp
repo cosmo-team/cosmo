@@ -69,7 +69,8 @@ T get_start_node(const T & x, uint8_t) {
 
 template <typename T>
 T get_start_node(const T & x) {
-  return get_range(x, 1);
+  return x << NT_WIDTH;
+  //return get_range(x, 1);
 }
 
 template <typename T>

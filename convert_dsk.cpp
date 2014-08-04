@@ -100,23 +100,31 @@ void convert(kmer_t * kmers, size_t num_kmers, const uint32_t k, OutputIterator 
   // auto out_dummies_range = find_outgoing_dummy_edges | uniqued | transformed to tuple with k;
   // TODO: map function to tag each range with which kind of edge they are (enum in dummies.hpp) needed for flags later
   typedef boost::tuple<const kmer_t &, const uint8_t &> output_type;
-  auto comp_start_node = std::function<bool(const output_type &, const output_type &)>(
+  auto comp_start_edge = std::function<bool(const output_type &, const output_type &)>(
+    [](const output_type & lhs, const output_type & rhs) -> bool {
+      kmer_t a = lhs.template get<0>();
+      kmer_t b = rhs.template get<0>();
+      uint8_t a_edge = get_edge_label(a);
+      uint8_t b_edge = get_edge_label(b);
+      a = get_start_node(a);
+      b = get_start_node(b);
+      return (a == b)? (a_edge < b_edge):(a<b);
+    });
+
+  auto comp_start_k = std::function<bool(const output_type &, const output_type &)>(
     [](const output_type & lhs, const output_type & rhs) -> bool {
       kmer_t a = get_start_node(lhs.template get<0>());
       kmer_t b = get_start_node(rhs.template get<0>());
-      if (a < b)
-        return true;
-      else if (a == b)
-        return lhs.template get<1>() < rhs.template get<1>();
-      return false;
+      uint8_t a_k = lhs.template get<1>();
+      uint8_t b_k = rhs.template get<1>();
+      return (a == b)? (a_k < b_k):(a<b);
     });
   // TODO: merge out_dummies first. Compare start node, edge
   // TODO: fix the warnings
-  auto all_merged = make_pair(make_merge_iterator(edges.begin(), edges.end(), in_dummies.begin(), in_dummies.end(), comp_start_node),
-                          make_merge_iterator(edges.end(), edges.end(), in_dummies.end(), in_dummies.end(), comp_start_node));
+  auto all_merged = make_pair(make_merge_iterator(edges.begin(), edges.end(), in_dummies.begin(), in_dummies.end(), comp_start_k),
+                          make_merge_iterator(edges.end(), edges.end(), in_dummies.end(), in_dummies.end(), comp_start_k));
   // TODO: make functor (to map to output) that: first for given kmer, k. Do same for edge flag
-  // TODO: move output iterator (ascii version) to io.hpp
-  // output (function iterator? -> write to file, accept a functor for formatting triples -> ascii, binary, etc)
+  // TODO: output (function iterator? -> write to file, accept a functor for formatting triples -> ascii, binary, etc)
 
   auto printer = [k](const output_type & x) -> string {
       kmer_t this_kmer = x.template get<0>();
