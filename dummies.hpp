@@ -1,4 +1,5 @@
-gifndef DUMMIES_HPP
+#pragma once
+#ifndef DUMMIES_HPP
 #define DUMMIES_HPP
 
 #include <boost/range/adaptor/transformed.hpp>     // Map function to inputs
@@ -332,4 +333,5 @@ void merge_dummies(kmer_t * table_a, kmer_t * table_b, size_t num_records, uint3
   return;
 }
 */
+
 #endif

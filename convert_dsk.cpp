@@ -4,6 +4,13 @@
 #include <iostream>
 //#include <algorithm>
 #include <utility>
+// BOOST
+#include <boost/range/adaptor/transformed.hpp>     // Map function to inputs
+#include <boost/range/algorithm/copy.hpp>
+#include <boost/tuple/tuple.hpp>
+#include <boost/tuple/tuple_comparison.hpp> // for uniqued over zipped iterators
+#include <boost/iterator/zip_iterator.hpp>
+#define BOOST_RESULT_OF_USE_DECLTYPE // needed to support lambdas in transformed
 
 // C STDLIB Headers
 #include <cstdio>
@@ -15,18 +22,20 @@
 #include "io.hpp"
 #include "sort.hpp"
 #include "dummies.hpp"
+#include "iterators.hpp"
 #include "debug.h"
 #include "nanotime.h"
 
+
 using namespace std;
+using namespace boost::adaptors;
 
 static const char * USAGE = "<DSK output file>";
 
-// provide output iterator class that buffers and then writes out when buffer is full
-//template <typename kmer_t, typename OutputIterator>
-//void convert(kmer_t * kmers, size_t num_kmers, uint32_t k, OutputIterator out) {
-template <typename kmer_t>
-void convert(kmer_t * kmers, size_t num_kmers, uint32_t k) {
+template <typename kmer_t, class OutputIterator>
+//template <typename kmer_t>
+void convert(kmer_t * kmers, size_t num_kmers, const uint32_t k, OutputIterator out) {
+//void convert(kmer_t * kmers, size_t num_kmers, uint32_t k) {
   // Convert the nucleotide representation to allow tricks
   convert_representation(kmers, kmers, num_kmers);
 
@@ -78,16 +87,43 @@ void convert(kmer_t * kmers, size_t num_kmers, uint32_t k) {
   colex_partial_radix_sort<DNA_RADIX>(dummies_a, dummies_b, num_incoming_dummies*(k-1), 1, k-1,
                                       &dummies_a, &dummies_b, get_nt_functor<kmer_t>(),
                                       lengths_a, lengths_b, &lengths_a, &lengths_b);
-  // merge (impl 2 iterators, with condition)
-  // NO! use old school method
-  //auto in_dummies_range = make_pair(dummies_a, dummies_a+num_incoming_dummies*(k-1)) | uniqued;
-  //auto out_dummies_range = get_inc
+  auto in_dummies_range = make_pair(dummies_a, dummies_a + num_incoming_dummies*(k-1));
+  auto in_dum_len_range = make_pair(lengths_a, lengths_a + num_incoming_dummies*(k-1));
+  // add tag in make_tuple
+  auto in_dum_len_pairs_first = boost::make_zip_iterator(boost::make_tuple(in_dummies_range.first, in_dum_len_range.first));
+  auto in_dum_len_pairs_last  = boost::make_zip_iterator(boost::make_tuple(in_dummies_range.second, in_dum_len_range.second));
+  auto in_dummies = make_pair(in_dum_len_pairs_first, in_dum_len_pairs_last) | uniqued; // transformed(lambda to add enum tag)
+  auto edges = make_pair(table_a, table_a + num_kmers*2)
+             | uniqued // if k isn't odd, it is possible we have added a reverse complement when we didnt need to
+             | transformed([k](const kmer_t & x){return boost::make_tuple(x, uint8_t(k));});
+  // TODO: implement find_outgoing_dummy_edges
+  // auto out_dummies_range = find_outgoing_dummy_edges | uniqued | transformed to tuple with k;
+  // TODO: map function to tag each range with which kind of edge they are (enum in dummies.hpp) needed for flags later
+  typedef boost::tuple<const kmer_t &, const uint8_t &> output_type;
+  auto comp_start_node = std::function<bool(const output_type &, const output_type &)>(
+    [](const output_type & lhs, const output_type & rhs) -> bool {
+      kmer_t a = get_start_node(lhs.template get<0>());
+      kmer_t b = get_start_node(rhs.template get<0>());
+      if (a < b)
+        return true;
+      else if (a == b)
+        return lhs.template get<1>() < rhs.template get<1>();
+      return false;
+    });
+  // TODO: merge out_dummies first. Compare start node, edge
+  // TODO: fix the warnings
+  auto all_merged = make_pair(make_merge_iterator(edges.begin(), edges.end(), in_dummies.begin(), in_dummies.end(), comp_start_node),
+                          make_merge_iterator(edges.end(), edges.end(), in_dummies.end(), in_dummies.end(), comp_start_node));
+  // TODO: make functor (to map to output) that: first for given kmer, k. Do same for edge flag
+  // TODO: move output iterator (ascii version) to io.hpp
   // output (function iterator? -> write to file, accept a functor for formatting triples -> ascii, binary, etc)
-  // Fill a buffer
-  printf("DUMMIES:\n");
-  print_kmers(cout, incoming_dummies, num_incoming_dummies * (k-1), k, incoming_dummy_lengths);
-  // can't return a boost range (or input iter) while using things that are freed here, so this function
-  // accepts an output iterator for now (although I'm not really fond of using those)
+
+  auto printer = [k](const output_type & x) -> string {
+      kmer_t this_kmer = x.template get<0>();
+      uint8_t this_k = x.template get<1>();
+      return kmer_to_string(this_kmer, k, this_k);
+    };
+  boost::copy(all_merged | transformed(printer), out);
   free(incoming_dummies);
   free(incoming_dummy_lengths);
 }
@@ -152,13 +188,15 @@ int main(int argc, char * argv[]) {
   TRACE("num_records_read = %zu\n", num_records_read);
   assert (num_records_read == num_kmers);
 
+  auto ascii_output = std::ostream_iterator<string>(std::cout, "\n");
+
   if (kmer_num_bits == 64) {
     typedef uint64_t kmer_t;
-    convert(kmer_blocks, num_kmers, k);
+    convert(kmer_blocks, num_kmers, k, ascii_output);
   }
   else if (kmer_num_bits == 128) {
     typedef uint128_t kmer_t;
-    convert((kmer_t*)kmer_blocks, num_kmers, k);
+    convert((kmer_t*)kmer_blocks, num_kmers, k, ascii_output);
   }
 
   free(kmer_blocks);
