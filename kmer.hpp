@@ -52,7 +52,7 @@ uint8_t get_edge_label(const T & x) {
 
 // return kmer[lo, hi) - like pythons x[lo:hi] indexing
 template <typename T>
-T get_range(T x, uint8_t lo = 0, uint8_t hi = -1) {
+T get_range(const T & x, uint8_t lo = 0, uint8_t hi = -1) {
   if (hi <= lo) return T(0);
   const size_t NUM_NTS = bitwidth<T>()/NT_WIDTH;
   uint8_t shift = (hi < NUM_NTS)? (NUM_NTS - hi) * NT_WIDTH : 0;

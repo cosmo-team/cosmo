@@ -12,7 +12,7 @@ template <class InputIterator1, class InputIterator2>
 class set_difference_iterator 
   : public boost::iterator_facade<set_difference_iterator<InputIterator1, InputIterator2>,
                                   // InputIterator1 and InputIterator2 have the same value_type
-                                  typename std::iterator_traits<InputIterator1>::value_type,
+                                  typename std::iterator_traits<InputIterator1>::value_type const,
                                   std::input_iterator_tag> {
   public:
   typedef typename std::iterator_traits<InputIterator1>::value_type value_type;
@@ -56,7 +56,7 @@ class set_difference_iterator
     ++_first1;
   }
 
-  value_type& dereference() const {
+  value_type const& dereference() const {
     return *_next;
   }
 
@@ -100,6 +100,7 @@ class merge_iterator
     else {++_first2;}
   }
 
+  // TODO: fix warnings about temporary thing
   value_type const& dereference() const {
     if (_first1 == _last1) { return *_first2; }
     else if (_first2 == _last2) { return *_first1; }
@@ -111,6 +112,13 @@ class merge_iterator
     return _first1 == other._first1 && _first2 == other._first2;
   }
 };
+
+template <class InputIterator1, class InputIterator2>
+set_difference_iterator<InputIterator1, InputIterator2>
+make_set_difference_iterator(InputIterator1 start1, InputIterator1 end1,
+                             InputIterator2 start2, InputIterator2 end2) {
+  return set_difference_iterator<InputIterator1, InputIterator2>(start1, end1, start2, end2);
+}
 
 template <class InputIterator1, class InputIterator2, class Compare>
 merge_iterator<InputIterator1, InputIterator2, Compare> make_merge_iterator(InputIterator1 start1, InputIterator1 end1,

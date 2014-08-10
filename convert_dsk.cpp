@@ -96,8 +96,10 @@ void convert(kmer_t * kmers, size_t num_kmers, const uint32_t k, OutputIterator 
   auto edges = make_pair(table_a, table_a + num_kmers*2)
              | uniqued // if k isn't odd, it is possible we have added a reverse complement when we didnt need to
              | transformed([k](const kmer_t & x){return boost::make_tuple(x, uint8_t(k));});
+
   // TODO: implement find_outgoing_dummy_edges
-  // auto out_dummies_range = find_outgoing_dummy_edges | uniqued | transformed to tuple with k;
+  auto out_dummies = find_outgoing_dummy_edges(table_a, table_b, num_kmers*2, k) | uniqued; //| uniqued | transformed to tuple with k;
+
   // TODO: map function to tag each range with which kind of edge they are (enum in dummies.hpp) needed for flags later
   typedef boost::tuple<const kmer_t &, const uint8_t &> output_type;
   auto comp_start_edge = std::function<bool(const output_type &, const output_type &)>(
@@ -120,18 +122,22 @@ void convert(kmer_t * kmers, size_t num_kmers, const uint32_t k, OutputIterator 
       return (a == b)? (a_k < b_k):(a<b);
     });
   // TODO: merge out_dummies first. Compare start node, edge
-  // TODO: fix the warnings
-  auto all_merged = make_pair(make_merge_iterator(edges.begin(), edges.end(), in_dummies.begin(), in_dummies.end(), comp_start_k),
-                          make_merge_iterator(edges.end(), edges.end(), in_dummies.end(), in_dummies.end(), comp_start_k));
+  auto non_incoming = make_pair(make_merge_iterator(edges.begin(), edges.end(), out_dummies.begin(), out_dummies.end(), comp_start_edge),
+                                make_merge_iterator(edges.end(), edges.end(), out_dummies.end(), out_dummies.end(), comp_start_edge));
+  //auto all_merged = make_pair(make_merge_iterator(non_incoming.first, non_incoming.second, in_dummies.begin(), in_dummies.end(), comp_start_k),
+  //                        make_merge_iterator(non_incoming.end(), non_incoming.end(), in_dummies.end(), in_dummies.end(), comp_start_k));
   // TODO: make functor (to map to output) that: first for given kmer, k. Do same for edge flag
   // TODO: output (function iterator? -> write to file, accept a functor for formatting triples -> ascii, binary, etc)
 
-  auto printer = [k](const output_type & x) -> string {
+  /*auto formatter = [k](const output_type & x) -> string {
       kmer_t this_kmer = x.template get<0>();
       uint8_t this_k = x.template get<1>();
       return kmer_to_string(this_kmer, k, this_k);
-    };
-  boost::copy(all_merged | transformed(printer), out);
+    };*/
+  //boost::copy(out_dummies | transformed(formatter), out);
+  boost::copy(out_dummies | transformed([k](const kmer_t & x) -> string{
+    return kmer_to_string(x, k-1) + "$";
+  }), out);
   free(incoming_dummies);
   free(incoming_dummy_lengths);
 }
