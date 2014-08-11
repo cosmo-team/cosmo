@@ -93,8 +93,8 @@ void merge_dummies(kmer_t * table_a, kmer_t * table_b, const size_t num_records,
   visit(in_dummy,  in_dummies[20], dummy_lengths[20]);
   */
 
-  #define get_a(i) (get_start_node(table_a[(i)]))
-  #define get_b(i) (get_end_node(table_b[(i)], k) >> 2) // shifting to make dummy check call consistent
+  #define get_a(i) (get_start_node(table_a[(i)]) >> 2)
+  #define get_b(i) (get_end_node(table_b[(i)], k) >> 2) // shifting to give dummy check call consistency
 
   // **Standard edges**: Table a (already sorted by colex(node), then edge).
   // Table a May not be unique (if k is odd and had "palindromic" [in DNA sense] kmer in input)
@@ -105,7 +105,7 @@ void merge_dummies(kmer_t * table_a, kmer_t * table_b, const size_t num_records,
   size_t a_idx = 0, b_idx = 0, d_idx = 0;
 
   // Ew macros, I know, I know...
-  // if out_dummy then need to shift right >> 2
+  // ****WARNING**** if s is an out_dummy then need to shift s right >> 2
   // (d<=s) because dummies should always sort before anything that is equal to them
   #define check_for_in_dummies(s) while (d_idx < num_incoming_dummies){ \
     kmer_t d = in_dummies[d_idx]; \
@@ -123,7 +123,6 @@ void merge_dummies(kmer_t * table_a, kmer_t * table_b, const size_t num_records,
     kmer_t x = table_a[a_idx];
     kmer_t a = get_a(a_idx);
     kmer_t b = get_b(b_idx);
-    //kmer_t d; // next incoming dummy?
     // B - A -> dummy out
     if (b < a) {
       check_for_in_dummies(b);
