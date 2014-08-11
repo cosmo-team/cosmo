@@ -84,7 +84,25 @@ void prepare_incoming_dummy_edges(kmer_t * dummy_nodes, uint8_t * k_values, size
 template <typename kmer_t, class Visitor>
 void merge_dummies(kmer_t * table_a, kmer_t * table_b, const size_t num_records, const uint32_t k,
                    kmer_t * in_dummies, size_t num_incoming_dummies, uint8_t * dummy_lengths,
-                   Visitor visit) {
+                   Visitor visitor_f) {
+  // runtime speed: O(num_records) (since num_records >= num_incoming_dummies)
+  bool first_iter = true;
+  edge_tag last_tag;
+  kmer_t last_kmer;
+  uint32_t last_k;
+  auto visit = [&](edge_tag tag, const kmer_t & x, const uint32_t this_k) {
+    if (first_iter) {
+      visitor_f(tag, x, this_k);
+    }
+    else if (tag != last_tag || x != last_kmer || this_k != last_k) {
+      visitor_f(tag, x, this_k);
+    }
+    first_iter = false;
+    last_tag = tag;
+    last_kmer = x;
+    last_k = this_k;
+  };
+
   // Example Visitor calls:
   /*
   visit(standard,  table_a[20],                    k);
@@ -104,9 +122,9 @@ void merge_dummies(kmer_t * table_a, kmer_t * table_b, const size_t num_records,
   // e.g. {$acgt, $ccag} -> {$$$$a, $$$$a, $$$ac, $ccag, $$$cc, $$acg, $$cca, $acgt } [note $$$$a is repeated -> not unique]
   size_t a_idx = 0, b_idx = 0, d_idx = 0;
 
-  // Ew macros, I know, I know...
-  // ****WARNING**** if s is an out_dummy then need to shift s right >> 2
+  // Ew macros! I know, I know...
   // (d<=s) because dummies should always sort before anything that is equal to them
+  // << 2 to compare node instead. Don't need to compare edge since already sorted
   #define check_for_in_dummies(s) while (d_idx < num_incoming_dummies){ \
     kmer_t d = in_dummies[d_idx]; \
     uint8_t len  = dummy_lengths[d_idx]; \
@@ -157,7 +175,7 @@ void merge_dummies(kmer_t * table_a, kmer_t * table_b, const size_t num_records,
     visit(out_dummy, b, k);
   }
 
-  // Might have in-dummies remaining (if any sorted after the above things)
+  // Might have in-dummies remaining
   while (d_idx < num_incoming_dummies) {
     visit(in_dummy, in_dummies[d_idx], dummy_lengths[d_idx]);
     ++d_idx;
