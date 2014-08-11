@@ -51,6 +51,8 @@ uint8_t get_edge_label(const T & x) {
 }
 
 // return kmer[lo, hi) - like pythons x[lo:hi] indexing
+// interface ignores the fact that these might be stored in reverse...
+// so the 0th element is still the last nucleotide
 template <typename T>
 T get_range(const T & x, uint8_t lo = 0, uint8_t hi = -1) {
   if (hi <= lo) return T(0);
@@ -70,7 +72,12 @@ T get_start_node(const T & x, uint8_t) {
 template <typename T>
 T get_start_node(const T & x) {
   return x << NT_WIDTH;
-  //return get_range(x, 1);
+  //return get_range(x, 1, k);
+}
+
+template <typename T>
+T get_start_node_suffix(const T & x, uint8_t k) {
+  return get_range(x, 1, k-1);
 }
 
 template <typename T>

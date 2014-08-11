@@ -32,10 +32,8 @@ using namespace boost::adaptors;
 
 static const char * USAGE = "<DSK output file>";
 
-template <typename kmer_t, class OutputIterator>
-//template <typename kmer_t>
-void convert(kmer_t * kmers, size_t num_kmers, const uint32_t k, OutputIterator out) {
-//void convert(kmer_t * kmers, size_t num_kmers, uint32_t k) {
+template <typename kmer_t> //, class Visitor>
+void convert(kmer_t * kmers, size_t num_kmers, const uint32_t k) { //, Visitor visit) {
   // Convert the nucleotide representation to allow tricks
   convert_representation(kmers, kmers, num_kmers);
 
@@ -87,57 +85,18 @@ void convert(kmer_t * kmers, size_t num_kmers, const uint32_t k, OutputIterator 
   colex_partial_radix_sort<DNA_RADIX>(dummies_a, dummies_b, num_incoming_dummies*(k-1), 1, k-1,
                                       &dummies_a, &dummies_b, get_nt_functor<kmer_t>(),
                                       lengths_a, lengths_b, &lengths_a, &lengths_b);
-  auto in_dummies_range = make_pair(dummies_a, dummies_a + num_incoming_dummies*(k-1));
-  auto in_dum_len_range = make_pair(lengths_a, lengths_a + num_incoming_dummies*(k-1));
-  // add tag in make_tuple
-  auto in_dum_len_pairs_first = boost::make_zip_iterator(boost::make_tuple(in_dummies_range.first, in_dum_len_range.first));
-  auto in_dum_len_pairs_last  = boost::make_zip_iterator(boost::make_tuple(in_dummies_range.second, in_dum_len_range.second));
-  auto in_dummies = make_pair(in_dum_len_pairs_first, in_dum_len_pairs_last) | uniqued; // transformed(lambda to add enum tag)
-  auto edges = make_pair(table_a, table_a + num_kmers*2)
-             | uniqued // if k isn't odd, it is possible we have added a reverse complement when we didnt need to
-             | transformed([k](const kmer_t & x){return boost::make_tuple(x, uint8_t(k));});
+  merge_dummies(table_a, table_b, num_kmers*2, k,
+                dummies_a, num_incoming_dummies*(k-1),
+                lengths_a,
+                // edge_tag needed to distinguish between dummy out edge or not. Could probably be done with polymorphism instead...
+                [=](edge_tag tag, const kmer_t & x, const uint32_t x_k){
+                  if (tag == out_dummy)
+                    cout << kmer_to_string(x<<2, k-1, k-1) << "$" << endl;
+                  else
+                    cout << kmer_to_string(x, k, x_k) << endl;
+                }
+    );
 
-  // TODO: implement find_outgoing_dummy_edges
-  auto out_dummies = find_outgoing_dummy_edges(table_a, table_b, num_kmers*2, k) | uniqued; //| uniqued | transformed to tuple with k;
-
-  // TODO: map function to tag each range with which kind of edge they are (enum in dummies.hpp) needed for flags later
-  typedef boost::tuple<const kmer_t &, const uint8_t &> output_type;
-  auto comp_start_edge = std::function<bool(const output_type &, const output_type &)>(
-    [](const output_type & lhs, const output_type & rhs) -> bool {
-      kmer_t a = lhs.template get<0>();
-      kmer_t b = rhs.template get<0>();
-      uint8_t a_edge = get_edge_label(a);
-      uint8_t b_edge = get_edge_label(b);
-      a = get_start_node(a);
-      b = get_start_node(b);
-      return (a == b)? (a_edge < b_edge):(a<b);
-    });
-
-  auto comp_start_k = std::function<bool(const output_type &, const output_type &)>(
-    [](const output_type & lhs, const output_type & rhs) -> bool {
-      kmer_t a = get_start_node(lhs.template get<0>());
-      kmer_t b = get_start_node(rhs.template get<0>());
-      uint8_t a_k = lhs.template get<1>();
-      uint8_t b_k = rhs.template get<1>();
-      return (a == b)? (a_k < b_k):(a<b);
-    });
-  // TODO: merge out_dummies first. Compare start node, edge
-  auto non_incoming = make_pair(make_merge_iterator(edges.begin(), edges.end(), out_dummies.begin(), out_dummies.end(), comp_start_edge),
-                                make_merge_iterator(edges.end(), edges.end(), out_dummies.end(), out_dummies.end(), comp_start_edge));
-  //auto all_merged = make_pair(make_merge_iterator(non_incoming.first, non_incoming.second, in_dummies.begin(), in_dummies.end(), comp_start_k),
-  //                        make_merge_iterator(non_incoming.end(), non_incoming.end(), in_dummies.end(), in_dummies.end(), comp_start_k));
-  // TODO: make functor (to map to output) that: first for given kmer, k. Do same for edge flag
-  // TODO: output (function iterator? -> write to file, accept a functor for formatting triples -> ascii, binary, etc)
-
-  /*auto formatter = [k](const output_type & x) -> string {
-      kmer_t this_kmer = x.template get<0>();
-      uint8_t this_k = x.template get<1>();
-      return kmer_to_string(this_kmer, k, this_k);
-    };*/
-  //boost::copy(out_dummies | transformed(formatter), out);
-  boost::copy(out_dummies | transformed([k](const kmer_t & x) -> string{
-    return kmer_to_string(x, k-1) + "$";
-  }), out);
   free(incoming_dummies);
   free(incoming_dummy_lengths);
 }
@@ -202,15 +161,15 @@ int main(int argc, char * argv[]) {
   TRACE("num_records_read = %zu\n", num_records_read);
   assert (num_records_read == num_kmers);
 
-  auto ascii_output = std::ostream_iterator<string>(std::cout, "\n");
+  //auto ascii_output = std::ostream_iterator<string>(std::cout, "\n");
 
   if (kmer_num_bits == 64) {
     typedef uint64_t kmer_t;
-    convert(kmer_blocks, num_kmers, k, ascii_output);
+    convert(kmer_blocks, num_kmers, k);
   }
   else if (kmer_num_bits == 128) {
     typedef uint128_t kmer_t;
-    convert((kmer_t*)kmer_blocks, num_kmers, k, ascii_output);
+    convert((kmer_t*)kmer_blocks, num_kmers, k);
   }
 
   free(kmer_blocks);

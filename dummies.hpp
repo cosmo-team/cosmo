@@ -15,6 +15,8 @@
 
 using namespace boost::adaptors;
 
+enum edge_tag { standard, in_dummy, out_dummy };
+
 template <typename kmer_t, typename OutputIterator>
 void find_incoming_dummy_edges(const kmer_t * table_a, const kmer_t * table_b, size_t num_kmers, uint32_t k, OutputIterator out) {
   auto a_range = std::make_pair(table_a, table_a + num_kmers);
@@ -88,34 +90,99 @@ void prepare_incoming_dummy_edges(kmer_t * dummy_nodes, uint8_t * k_values, size
 }
 
 // Could be done cleaner: set_difference iterator as outgoing dummies, transform to have tuple with k value, merge + merge again iterator with comp functor.
-//
-// TODO: set_difference_iterator, tested against set_difference algorithm
-// TODO: find_outgoing_dummy_edges iterator
-// TODO: merge_iterator, tested with merge algorithm
-//
 // but I think an extra set_difference indirection might make things slower (since we have to access outgoing dummies multiple times),
 // and this was already written and tested from an earlier C implementation.
 // Visitor functor takes 4 params: kmer, size, first flag, edge flag (could also just take kmer and size)
 // planned Visitor functors: ascii_full_edge, ascii_edge_only, binary (5 bits per row, x12 per 64 bit block, 4 bits waste per 12, or just per 8 bits at
 // first to make parsing easy)
-/*
-template <typename kmer_t, typename Visitor>
-void merge_dummies(kmer_t * table_a, kmer_t * table_b, size_t num_records, uint32_t k,
-                   kmer_t * incoming_dummies, kmer_t num_incoming_dummies, uint8_t * dummy_lengths,
+template <typename kmer_t, class Visitor>
+void merge_dummies(kmer_t * table_a, kmer_t * table_b, const size_t num_records, const uint32_t k,
+                   kmer_t * in_dummies, size_t num_incoming_dummies, uint8_t * dummy_lengths,
                    Visitor visit) {
-  #define get_a(i) (block_reverse_64(get_left_64(table_a[(i)])))
-  #define get_b(i) (block_reverse_64(get_right_64(table_b[(i)], k)))
-  #define get_dummy(i) (block_reverse_64(incoming_dummies[(i)]))
-  #define get_edge(x) (((x) & 0xC000000000000000) >> 62)
-  #define get_node_suffix(d) (((d)<<2) & ~(0xC000000000000000 >> (k-2)*2))
-  size_t next = 0;
+  // Example Visitor calls:
+  /*
+  visit(standard,  table_a[20],                    k);
+  visit(out_dummy, get_end_node(table_a[20], k),   k); // Note that out_dummies aren't shifted...
+  visit(in_dummy,  get_start_node(table_a[20]),  k-1);
+  visit(in_dummy,  in_dummies[20], dummy_lengths[20]);
+  */
+
+  #define get_a(i) (get_start_node(table_a[(i)]))
+  #define get_b(i) (get_end_node(table_b[(i)], k) >> 2) // shifting to make dummy check call consistent
+
+  // **Standard edges**: Table a (already sorted by colex(node), then edge).
+  // Table a May not be unique (if k is odd and had "palindromic" [in DNA sense] kmer in input)
+  // **Outgoing dummies**: {get_b} - {get_a} (the difference of the sets constructed by mapping get_a and get_b)
+  // (in the correct order, as B is sorted by last colex(row)).
+  // **Incoming Dummies**: in_dummies calculated previously {get_a} - {get_b}, sorted after adding shifts to produce all required $-prefixes
+  // e.g. {$acgt, $ccag} -> {$$$$a, $$$$a, $$$ac, $ccag, $$$cc, $$acg, $$cca, $acgt } [note $$$$a is repeated -> not unique]
   size_t a_idx = 0, b_idx = 0, d_idx = 0;
+
+  // Ew macros, I know, I know...
+  // if out_dummy then need to shift right >> 2
+  // (d<=s) because dummies should always sort before anything that is equal to them
+  #define check_for_in_dummies(s) while (d_idx < num_incoming_dummies){ \
+    kmer_t d = in_dummies[d_idx]; \
+    uint8_t len  = dummy_lengths[d_idx]; \
+    if (d<<2 <= ((s)<<2)) { visit(in_dummy, d, len); ++d_idx; }\
+    else break; \
+  }
+
+  // set_difference loop with mixed-in merge (for in_dummies)
+  // visit each a in A, otherwise B if b < a and b not in A (so A U B-A)
+  // then print all remaining if either one is depleted
+  // at each print, visit all in_dummies < this
+  // visit(standard, table_a[a_idx++], k);
+  while (a_idx < num_records && b_idx < num_records) {
+    kmer_t x = table_a[a_idx];
+    kmer_t a = get_a(a_idx);
+    kmer_t b = get_b(b_idx);
+    //kmer_t d; // next incoming dummy?
+    // B - A -> dummy out
+    if (b < a) {
+      check_for_in_dummies(b);
+      visit(out_dummy, b, k);
+      ++b_idx;
+    }
+    // incoming dummy detection, but not the correct position, so just inc a-ptr
+    else if (a < b) {
+      check_for_in_dummies(x);
+      visit(standard, x, k);
+      ++a_idx;
+    }
+    else {
+      check_for_in_dummies(x);
+      visit(standard, x, k);
+      ++a_idx;
+      ++b_idx;
+    }
+  }
+
+  // Might have entries in a even if b is depleted (e.g. if all b < a)
+  while (a_idx < num_records) {
+    kmer_t x = table_a[a_idx++];
+    check_for_in_dummies(x);
+    visit(standard, x, k);
+  }
+
+  // Might have entries in b even if a is depleted
+  while (b_idx < num_records) {
+    kmer_t b = get_b(b_idx++);
+    check_for_in_dummies(b);
+    visit(out_dummy, b, k);
+  }
+
+  // Might have in-dummies remaining (if any sorted after the above things)
+  while (d_idx < num_incoming_dummies) {
+    visit(in_dummy, in_dummies[d_idx], dummy_lengths[d_idx]);
+    ++d_idx;
+  }
+
+  /*
+  // Visitor(dummy, length) --> handle uniquifying and adding of extra stuff in visitor
+
   unsigned char d_len = 0, d_len_prev = 0, prev_out_len = 0;
-  uint64_t x = 0, y = 0, x_prev = 0, y_prev = 0, d = 0, d_prev =0, prev_out = 0;
-  char buf[k+1];
-  char edge_flags[4] = {0, 0, 0, 0};
-  int first=1;
-  int needs_edge_flag=0;
+  kmer_t x = 0, y = 0, x_prev = 0, y_prev = 0, d = 0, d_prev =0, prev_out = 0;
 
   if (num_records == 0 && num_incoming_dummies == 0) return;
 
@@ -128,7 +195,7 @@ void merge_dummies(kmer_t * table_a, kmer_t * table_b, size_t num_records, uint3
   }
 
   if (num_incoming_dummies > 0) {
-    d = get_dummy(d_idx);
+    d = in_dummies[d_idx];
     d_len = dummy_lengths[d_idx];
     d_prev = ~d;
   }
@@ -139,14 +206,14 @@ void merge_dummies(kmer_t * table_a, kmer_t * table_b, size_t num_records, uint3
       // add y to result
       if (y != y_prev) {
         // Check if we need to output an incoming dummy edge
-        while (d_idx < num_incoming_dummies && (d << 2) <= y) {
+        while (d_idx < num_incoming_dummies && get_start_node(d) <= y) {
           if (d != d_prev || d_len != d_len_prev) {
             // print d
-            first = (d<<2 != prev_out || d_len != prev_out_len);
+            first = (get_start_node(d) != prev_out || d_len != prev_out_len);
             // if the suffix is equal, the length might be different
             // but d_len = k-1
             // If change then reset flags, output 0
-            int edge = get_edge(d);
+            char edge = get_edge_label(d);
             // do we need a minus flag on our edge?
             // Is this a new node suffix group?
             if (get_node_suffix(d) != get_node_suffix(prev_out >> 2)
@@ -154,30 +221,29 @@ void merge_dummies(kmer_t * table_a, kmer_t * table_b, size_t num_records, uint3
               needs_edge_flag = 0;
               // These are incoming dummies so have outgoing edges that arent $
               // reset edge_flags
-              memset(edge_flags, 0, 4);
+              reset_flags();
               // set flag for this edge (unless $, but wont happen here)
             } else {
               needs_edge_flag = (edge_flags[edge]);
             }
             // update edge flag since we saw this edge, regardless of if we are at a new suffix group or not
             edge_flags[edge] = 1;
-            sprint_dummy_acgt(buf, block_reverse_64(d), k, d_len);
-            fprintf(outfile, "%d %s %d\n", first, buf, needs_edge_flag);
+            fprintf(outfile, "%d %s %d\n", first, kmer_to_string(d, k, d_len), needs_edge_flag);
             prev_out = d << 2;
             prev_out_len = d_len;
           }
           if (++d_idx >= num_incoming_dummies) break;
           d_prev = d;
-          d = get_dummy(d_idx);
+          d = in_dummies[d_idx];
           d_len_prev = d_len;
           d_len = dummy_lengths[d_idx];
         }
         // Should always print this after the incoming dummies
-        uint64_t temp = get_right_64(table_b[b_idx],k);
+        kmer_t temp = get_right_64(table_b[b_idx],k);
         if (get_node_suffix(block_reverse_64(temp)) != get_node_suffix(prev_out >> 2)
                 || k != prev_out_len) {
           // reset edge_flags
-          memset(edge_flags, 0, 4);
+          reset_flags();
         }
         prev_out = block_reverse_64(temp) << 2;
         prev_out_len = k;
@@ -199,13 +265,13 @@ void merge_dummies(kmer_t * table_a, kmer_t * table_b, size_t num_records, uint3
           if (d != d_prev || d_len != d_len_prev) {
             // print d
             first = (d << 2 != prev_out || d_len != prev_out_len);
-            int edge = get_edge(d);
+            int edge = get_edge_label(d);
             if (get_node_suffix(d) != get_node_suffix(prev_out >> 2)
                 || d_len != prev_out_len) {
               needs_edge_flag = 0;
               // These are incoming dummies so have outgoing edges that arent $
               // reset edge_flags
-              memset(edge_flags, 0, 4);
+              reset_flags();
               // set flag for this edge (unless $, but wont happen here)
             } else {
               needs_edge_flag = (edge_flags[edge]);
@@ -222,15 +288,15 @@ void merge_dummies(kmer_t * table_a, kmer_t * table_b, size_t num_records, uint3
           d_len_prev = d_len;
           d_len = dummy_lengths[d_idx];
         }
-        uint64_t temp = table_a[a_idx];
+        kmer_t temp = table_a[a_idx];
         first = (block_reverse_64(temp) << 2 != prev_out || k != prev_out_len);
-        int edge = get_edge(block_reverse_64(temp));
+        int edge = get_edge_label(block_reverse_64(temp));
         if (get_node_suffix(block_reverse_64(temp)) != get_node_suffix(prev_out >> 2)
           || k != prev_out_len) {
           needs_edge_flag = 0;
           // These are incoming dummies so have outgoing edges that arent $
           // reset edge_flags
-          memset(edge_flags, 0, 4);
+          reset_flags();
           // set flag for this edge (unless $, but wont happen here)
         } else {
           needs_edge_flag = (edge_flags[edge]);
@@ -241,7 +307,6 @@ void merge_dummies(kmer_t * table_a, kmer_t * table_b, size_t num_records, uint3
         prev_out_len = k;
         sprint_kmer_acgt(buf, &temp, k);
         fprintf(outfile, "%d %s %d\n", first, buf, needs_edge_flag);
-        //incoming_dummies[next++] = block_reverse_64(temp);
         if (next == num_incoming_dummies) return;
       }
       if (++a_idx >= num_records) break;
@@ -260,13 +325,13 @@ void merge_dummies(kmer_t * table_a, kmer_t * table_b, size_t num_records, uint3
           if (d != d_prev || d_len != d_len_prev) {
             // print d
             first = (d << 2 != prev_out || d_len != prev_out_len);
-            int edge = get_edge(d);
+            int edge = get_edge_label(d);
             if (get_node_suffix(d) != get_node_suffix(prev_out >> 2)
               || d_len != prev_out_len) {
               needs_edge_flag = 0;
               // These are incoming dummies so have outgoing edges that arent $
               // reset edge_flags
-              memset(edge_flags, 0, 4);
+              reset_flags();
               // set flag for this edge (unless $, but wont happen here)
             } else {
               needs_edge_flag = (edge_flags[edge]);
@@ -284,16 +349,16 @@ void merge_dummies(kmer_t * table_a, kmer_t * table_b, size_t num_records, uint3
           d_len_prev = d_len;
           d_len = dummy_lengths[d_idx];
         }
-        uint64_t temp = table_a[a_idx];
+        kmer_t temp = table_a[a_idx];
         first = (block_reverse_64(temp) << 2 != prev_out || k != prev_out_len);
-        int edge = get_edge(block_reverse_64(temp));
+        int edge = get_edge_label(block_reverse_64(temp));
         if (get_node_suffix(block_reverse_64(temp)) != get_node_suffix(prev_out >> 2)
           || k != prev_out_len) {
           //TRACE("k, prev_out_len = %d, %d..... ", k, prev_out_len)
           needs_edge_flag = 0;
           // These are incoming dummies so have outgoing edges that arent $
           // reset edge_flags
-          memset(edge_flags, 0, 4);
+          reset_flags();
           // set flag for this edge (unless $, but wont happen here)
         } else {
           needs_edge_flag = (edge_flags[edge]);
@@ -321,13 +386,13 @@ void merge_dummies(kmer_t * table_a, kmer_t * table_b, size_t num_records, uint3
     if (d != d_prev || d_len != d_len_prev) {
       // print d
       first = (d << 2 != prev_out || d_len != prev_out_len);
-      int edge = get_edge(d);
+      int edge = get_edge_label(d);
       if (get_node_suffix(d) != get_node_suffix(prev_out >> 2)
         || d_len != prev_out_len) {
         needs_edge_flag = 0;
         // These are incoming dummies so have outgoing edges that arent $
         // reset edge_flags
-        memset(edge_flags, 0, 4);
+        reset_flags();
         // set flag for this edge (unless $, but wont happen here)
       } else {
         needs_edge_flag = (edge_flags[edge]);
@@ -345,8 +410,7 @@ void merge_dummies(kmer_t * table_a, kmer_t * table_b, size_t num_records, uint3
     d_len_prev = d_len;
     d_len = dummy_lengths[d_idx];
   }
-  return;
+  */
 }
-*/
 
 #endif
