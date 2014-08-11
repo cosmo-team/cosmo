@@ -100,17 +100,12 @@ class Unique {
 };
 
 template <class Visitor>
-auto uniquify(Visitor v) -> Unique<decltype(v)> {
-  return Unique<decltype(v)>(v);
-}
-
-template <class Visitor>
-class FirstFlagger {
+class FirstStartNodeFlagger {
   Visitor _v;
   bool first_iter = true;
 
   public:
-    FirstFlagger(Visitor v) : _v(v) {}
+    FirstStartNodeFlagger(Visitor v) : _v(v) {}
     template <typename kmer_t>
     void operator()(edge_tag tag, const kmer_t & x, const uint32_t k) {
       static kmer_t last_start_node;
@@ -127,8 +122,54 @@ class FirstFlagger {
 };
 
 template <class Visitor>
-auto add_first_flag(Visitor v) -> FirstFlagger<decltype(v)> {
-  return FirstFlagger<decltype(v)>(v);
+class FirstEndNodeFlagger {
+  Visitor _v;
+  bool first_iter = true;
+
+  public:
+    FirstEndNodeFlagger(Visitor v) : _v(v) {}
+    template <typename kmer_t>
+    void operator()(edge_tag tag, const kmer_t & x, const uint32_t k, bool last) {
+      static kmer_t last_suffix;
+      static uint32_t last_k;
+      static bool edge_seen[DNA_RADIX];
+      #define reset_flags() memset(edge_seen, 0, DNA_RADIX)
+
+      bool edge_flag = true;
+      kmer_t this_suffix = get_start_node_suffix(x, k);
+
+      // reset "edge seen" flags
+      if (tag == out_dummy || first_iter || this_suffix != last_suffix || k != last_k) {
+        first_iter = false;
+        reset_flags();
+        edge_flag = true;
+      }
+      if (tag != out_dummy){
+        uint8_t edge = get_edge_label(x);
+        edge_flag = !edge_seen[edge];
+        edge_seen[edge] = true;
+      }
+
+      _v(tag, x, k, last, edge_flag);
+
+      last_suffix = this_suffix;
+      last_k      = k;
+    }
+};
+
+template <class Visitor>
+auto uniquify(Visitor v) -> Unique<decltype(v)> {
+  return Unique<decltype(v)>(v);
+}
+
+template <class Visitor>
+auto add_first_start_node_flag(Visitor v) -> FirstStartNodeFlagger<decltype(v)> {
+  return FirstStartNodeFlagger<decltype(v)>(v);
+}
+
+template <class Visitor>
+auto add_first_end_node_flag(Visitor v) -> FirstEndNodeFlagger<decltype(v)> {
+  return FirstEndNodeFlagger<decltype(v)>(v);
 }
 
 // Could be done cleaner: set_difference iterator as outgoing dummies, transform to have tuple with k value, merge + merge again iterator with comp functor.
@@ -142,9 +183,7 @@ void merge_dummies(kmer_t * table_a, kmer_t * table_b, const size_t num_records,
                    kmer_t * in_dummies, size_t num_incoming_dummies, uint8_t * dummy_lengths,
                    Visitor visitor_f) {
   // runtime speed: O(num_records) (since num_records >= num_incoming_dummies)
-  auto visit = uniquify(add_first_flag(visitor_f));
-
-  // TODO: add check for first (if node_suffix != last_node_suffix)
+  auto visit = uniquify(add_first_start_node_flag(add_first_end_node_flag(visitor_f)));
 
   // Example Visitor calls:
   /*

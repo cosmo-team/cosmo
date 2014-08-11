@@ -88,12 +88,12 @@ void convert(kmer_t * kmers, size_t num_kmers, const uint32_t k) { //, Visitor v
                 dummies_a, num_incoming_dummies*(k-1),
                 lengths_a,
                 // edge_tag needed to distinguish between dummy out edge or not. Could probably be done with polymorphism instead...
-                [=](edge_tag tag, const kmer_t & x, const uint32_t x_k, bool first){
+                [=](edge_tag tag, const kmer_t & x, const uint32_t x_k, bool first, bool shared_suffix) {
                   if (tag == out_dummy)
-                    cout << kmer_to_string(x<<2, k-1, k-1) << "$";
+                    cout << kmer_to_string(get_start_node(x), k-1, k-1) << "$";
                   else
                     cout << kmer_to_string(x, k, x_k);
-                  cout << " " << first << endl;
+                  cout << " " << first << " " << shared_suffix << endl;
                 }
     );
 
