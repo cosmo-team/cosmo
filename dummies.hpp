@@ -75,6 +75,62 @@ void prepare_incoming_dummy_edges(kmer_t * dummy_nodes, uint8_t * k_values, size
   prepare_k_values(k_values, num_dummies, k);
 }
 
+template <class Visitor>
+class Unique {
+  Visitor _v;
+  bool first_iter = true;
+  edge_tag last_tag;
+  uint32_t last_k;
+
+  public:
+    Unique(Visitor v) : _v(v) {}
+
+    template <typename kmer_t>
+    void operator()(edge_tag tag, const kmer_t & x, uint32_t k) {
+      static kmer_t last_kmer;
+
+      if (first_iter || tag != last_tag || x != last_kmer || k != last_k) {
+        _v(tag, x, k);
+      }
+      first_iter = false;
+      last_tag = tag;
+      last_kmer = x;
+      last_k = k;
+    };
+};
+
+template <class Visitor>
+auto uniquify(Visitor v) -> Unique<decltype(v)> {
+  return Unique<decltype(v)>(v);
+}
+
+template <class Visitor>
+class FirstFlagger {
+  Visitor _v;
+  bool first_iter = true;
+
+  public:
+    FirstFlagger(Visitor v) : _v(v) {}
+    template <typename kmer_t>
+    void operator()(edge_tag tag, const kmer_t & x, const uint32_t k) {
+      static kmer_t last_start_node;
+      static uint32_t last_k;
+      bool first_flag = true;
+
+      kmer_t this_start_node = get_start_node(x);
+      first_flag = (first_iter || this_start_node != last_start_node || k != last_k);
+      _v(tag, x, k, first_flag);
+      first_iter = false;
+      last_start_node  = this_start_node;
+      last_k     = k;
+    }
+};
+
+template <class Visitor>
+auto add_first_flag(Visitor v) -> FirstFlagger<decltype(v)> {
+  return FirstFlagger<decltype(v)>(v);
+}
+
 // Could be done cleaner: set_difference iterator as outgoing dummies, transform to have tuple with k value, merge + merge again iterator with comp functor.
 // but I think an extra set_difference indirection might make things slower (since we have to access outgoing dummies multiple times),
 // and this was already written and tested from an earlier C implementation.
@@ -86,22 +142,9 @@ void merge_dummies(kmer_t * table_a, kmer_t * table_b, const size_t num_records,
                    kmer_t * in_dummies, size_t num_incoming_dummies, uint8_t * dummy_lengths,
                    Visitor visitor_f) {
   // runtime speed: O(num_records) (since num_records >= num_incoming_dummies)
-  bool first_iter = true;
-  edge_tag last_tag;
-  kmer_t last_kmer;
-  uint32_t last_k;
-  auto visit = [&](edge_tag tag, const kmer_t & x, const uint32_t this_k) {
-    if (first_iter) {
-      visitor_f(tag, x, this_k);
-    }
-    else if (tag != last_tag || x != last_kmer || this_k != last_k) {
-      visitor_f(tag, x, this_k);
-    }
-    first_iter = false;
-    last_tag = tag;
-    last_kmer = x;
-    last_k = this_k;
-  };
+  auto visit = uniquify(add_first_flag(visitor_f));
+
+  // TODO: add check for first (if node_suffix != last_node_suffix)
 
   // Example Visitor calls:
   /*
@@ -113,6 +156,7 @@ void merge_dummies(kmer_t * table_a, kmer_t * table_b, const size_t num_records,
 
   #define get_a(i) (get_start_node(table_a[(i)]) >> 2)
   #define get_b(i) (get_end_node(table_b[(i)], k) >> 2) // shifting to give dummy check call consistency
+  #define inc_b() while (b_idx < num_records && get_b(++b_idx) == b) {}
 
   // **Standard edges**: Table a (already sorted by colex(node), then edge).
   // Table a May not be unique (if k is odd and had "palindromic" [in DNA sense] kmer in input)
@@ -145,7 +189,7 @@ void merge_dummies(kmer_t * table_a, kmer_t * table_b, const size_t num_records,
     if (b < a) {
       check_for_in_dummies(b);
       visit(out_dummy, b, k);
-      ++b_idx;
+      inc_b();
     }
     // incoming dummy detection, but not the correct position, so just inc a-ptr
     else if (a < b) {
@@ -157,7 +201,7 @@ void merge_dummies(kmer_t * table_a, kmer_t * table_b, const size_t num_records,
       check_for_in_dummies(x);
       visit(standard, x, k);
       ++a_idx;
-      ++b_idx;
+      inc_b();
     }
   }
 
