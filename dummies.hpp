@@ -11,7 +11,7 @@
 #include <cstring>                                 // memset
 
 #include "kmer.hpp"
-#include "iterators.hpp"
+//#include "iterators.hpp"
 
 using namespace boost::adaptors;
 
@@ -41,20 +41,6 @@ size_t count_incoming_dummy_edges(kmer_t * table_a, kmer_t * table_b, size_t num
   auto out_count = boost::make_function_output_iterator(inc_count);
   find_incoming_dummy_edges(table_a, table_b, num_kmers, k, out_count);
   return count;
-}
-
-template <typename kmer_t>
-std::pair< set_difference_iterator<const kmer_t*, const kmer_t*>, set_difference_iterator<const kmer_t *, const kmer_t *> >
-find_outgoing_dummy_edges(const kmer_t * table_a, const kmer_t * table_b, size_t num_kmers, uint32_t k) {
-  auto a_range = std::make_pair(table_a, table_a + num_kmers);
-  auto b_range = std::make_pair(table_b, table_b + num_kmers);
-  auto a_lam   = std::function<kmer_t(const kmer_t &)>([](const kmer_t & x) -> kmer_t {return get_start_node(x);});
-  auto b_lam   = std::function<kmer_t(const kmer_t &)>([k](const kmer_t & x) -> kmer_t {return get_end_node(x,k);});
-  auto a = a_range | transformed(a_lam) | uniqued;
-  auto b = b_range | transformed(b_lam) | uniqued;
-
-  return std::make_pair(make_set_difference_iterator(b.begin(), b.end(), a.begin(), a.end()),
-                        make_set_difference_iterator(b.end(), b.end(), a.end(), a.end()));
 }
 
 inline void prepare_k_values(uint8_t * k_values, size_t num_dummies, uint32_t k) {
