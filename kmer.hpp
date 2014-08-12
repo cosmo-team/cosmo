@@ -20,7 +20,7 @@
 // (needed because some kmer counters like DSK swap this representation, but we assume G < T
 // in our de bruijn graph implementation)
 
-struct swap_gt_f : std::unary_function<uint64_t, uint64_t> {
+static struct swap_gt_f : std::unary_function<uint64_t, uint64_t> {
   inline uint64_t operator() (const uint64_t & x) const { return (x ^ ((x & 0xAAAAAAAAAAAAAAAA) >> 1)); }
 } swap_gt;
 
@@ -54,8 +54,7 @@ uint8_t get_edge_label(const T & x) {
 // interface ignores the fact that these might be stored in reverse...
 // so the 0th element is still the last nucleotide
 template <typename T>
-T get_range(const T & x, uint8_t lo = 0, uint8_t hi = -1) {
-  if (hi <= lo) return T(0);
+T get_range(const T & x, uint8_t lo, uint8_t hi) {
   const size_t NUM_NTS = bitwidth<T>()/NT_WIDTH;
   uint8_t shift = (hi < NUM_NTS)? (NUM_NTS - hi) * NT_WIDTH : 0;
   return (x >> shift) << (shift + lo * NT_WIDTH);

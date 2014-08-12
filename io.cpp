@@ -20,6 +20,8 @@ int dsk_num_records(int handle, uint32_t kmer_num_bits, size_t * num_records) {
   return 0;
 }
 
+// Only doing this complicated stuff to hopefully get rid of the counts in an efficient way
+// (that is, read a large chunk of the file including the counts, then discard them)
 size_t dsk_read_kmers(int handle, uint32_t kmer_num_bits, uint64_t * kmers_output) {
   // TODO: Add a parameter to specify a limit to how many records we read (eventually multipass merge-sort?)
   // THIS IS ALSO A SECURITY CONCERN if we don't trust the DSK input (i.e. e.g. accept DSK files in a web service)

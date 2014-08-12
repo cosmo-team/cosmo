@@ -31,8 +31,8 @@ using namespace boost::adaptors;
 
 static const char * USAGE = "<DSK output file>";
 
-template <typename kmer_t> //, class Visitor>
-void convert(kmer_t * kmers, size_t num_kmers, const uint32_t k) { //, Visitor visit) {
+template <typename kmer_t, class Visitor>
+void convert(kmer_t * kmers, size_t num_kmers, const uint32_t k, Visitor visit) {
   // Convert the nucleotide representation to allow tricks
   convert_representation(kmers, kmers, num_kmers);
 
@@ -87,15 +87,28 @@ void convert(kmer_t * kmers, size_t num_kmers, const uint32_t k) { //, Visitor v
   merge_dummies(table_a, table_b, num_kmers*2, k,
                 dummies_a, num_incoming_dummies*(k-1),
                 lengths_a,
-                // edge_tag needed to distinguish between dummy out edge or not. Could probably be done with polymorphism instead...
-                [=](edge_tag tag, const kmer_t & x, const uint32_t x_k, bool first, bool shared_suffix) {
+                // edge_tag needed to distinguish between dummy out edge or not...
+                [=](edge_tag tag, const kmer_t & x, const uint32_t x_k, bool first_start_node, bool first_end_node) {
+                  visit(tag, x, x_k, first_start_node, first_end_node);
+                  #ifdef DEBUG // print each kmer to stderr if debug on
+                  static string tagstrings[] = {"standard", "in_dummy", "out_dummy"};
                   if (tag == out_dummy)
-                    cout << kmer_to_string(get_start_node(x), k-1, k-1) << "$";
+                    cerr << kmer_to_string(get_start_node(x), k-1, k-1) << "$";
                   else
-                    cout << kmer_to_string(x, k, x_k);
-                  cout << " " << first << " " << shared_suffix << endl;
-                }
-    );
+                    cerr << kmer_to_string(x, k, x_k);
+                  fprintf(stderr, " %02d", x_k);
+                  uint8_t s = map_symbol(tag, x, x_k);
+                  fprintf(stderr, " %c", "$acgt"[s]);
+                  cerr << " " << first_start_node << " " << first_end_node;
+                  cerr << " " << tagstrings[tag] << endl;
+                  #endif
+                });
+
+  // TODO: cumulative alphabet in last column and output (last 4 * sizeof(int64_t) bytes, last byte is num_rows_total)
+  // TODO: run python tests
+  // TODO: output binary file (pack(sym, start, end) syms: { 100, 101, 110, 111, $ = 4 = 000 }
+  // TODO: make external and merge (for large input. Read in chunk, sort, write temp, ext merge + add dummies to temp, 3-way-merge)
+  // TODO: use SSE instructions or CUDA if available (very far horizon)
 
   free(incoming_dummies);
   free(incoming_dummy_lengths);
@@ -163,15 +176,28 @@ int main(int argc, char * argv[]) {
 
   //auto ascii_output = std::ostream_iterator<string>(std::cout, "\n");
 
+  PackedEdgeOutputer out;
+  // TODO: checking here (or take output file)
+  out.open(string(file_name) + ".packed_edges");
+
   if (kmer_num_bits == 64) {
     typedef uint64_t kmer_t;
-    convert(kmer_blocks, num_kmers, k);
+    convert(kmer_blocks, num_kmers, k,
+        [&](edge_tag tag, const kmer_t & x, const uint32_t this_k, bool first_start_node, bool first_end_node) {
+          uint8_t s = map_symbol(tag, x, this_k);
+          out.write(s, first_start_node, first_end_node);
+        });
   }
   else if (kmer_num_bits == 128) {
     typedef uint128_t kmer_t;
-    convert((kmer_t*)kmer_blocks, num_kmers, k);
+    convert(kmer_blocks, num_kmers, k,
+        [&](edge_tag tag, const kmer_t & x, const uint32_t this_k, bool first_start_node, bool first_end_node) {
+          uint8_t s = map_symbol(tag, x, this_k);
+          out.write(s, first_start_node, first_end_node);
+        });
   }
 
+  out.close();
   free(kmer_blocks);
   return 0;
 }
