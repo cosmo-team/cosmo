@@ -184,18 +184,17 @@ int main(int argc, char * argv[]) {
     typedef uint64_t kmer_t;
     convert(kmer_blocks, num_kmers, k,
         [&](edge_tag tag, const kmer_t & x, const uint32_t this_k, bool first_start_node, bool first_end_node) {
-          uint8_t s = map_symbol(tag, x, this_k);
-          out.write(s, first_start_node, first_end_node);
+          out.write(tag, x, this_k, first_start_node, first_end_node);
         });
   }
   else if (kmer_num_bits == 128) {
     typedef uint128_t kmer_t;
     convert(kmer_blocks, num_kmers, k,
         [&](edge_tag tag, const kmer_t & x, const uint32_t this_k, bool first_start_node, bool first_end_node) {
-          uint8_t s = map_symbol(tag, x, this_k);
-          out.write(s, first_start_node, first_end_node);
+          out.write(tag, x, this_k, first_start_node, first_end_node);
         });
   }
+
 
   out.close();
   free(kmer_blocks);

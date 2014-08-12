@@ -94,20 +94,30 @@ class PackedEdgeOutputer {
     _ofs.close();
   }
 
-  void write(uint8_t symbol, bool start, bool end) {
-    printf("counts[%c]: %zu -> ", "$acgt"[symbol], _counts[symbol]);
-    _counts[symbol]++;
-    printf("%zu\n", _counts[symbol]);
+  template <typename kmer_t>
+  // Might be nicer if this was a Functor with operator() instead
+  void write(edge_tag tag, const kmer_t & x, const uint32_t k, bool first_start_node, bool first_end_node) {
+    uint8_t f_sym = get_f(tag, x, k);
+    uint8_t w_sym = get_w(tag, x);
+    //printf("counts[%c]: %zu -> ", "$acgt"[symbol], _counts[symbol]);
+    _counts[f_sym]++;
+    //printf("%zu\n", _counts[symbol]);
 
-    packed_edge x = pack_edge(symbol, start, end);
-    append_packed_edge(_buf, x);
+    packed_edge edge = pack_edge(w_sym, first_start_node, first_end_node);
+    append_packed_edge(_buf, edge);
 
     if (++_len == capacity) flush();
   }
 };
 
 template <typename kmer_t>
-uint8_t map_symbol(edge_tag tag, const kmer_t & x, const uint32_t k) {
+uint8_t get_w(edge_tag tag, const kmer_t & x) {
+  if (tag == out_dummy) return 0;
+  else return get_edge_label(x) + 1;
+}
+
+template <typename kmer_t>
+uint8_t get_f(edge_tag tag, const kmer_t & x, const uint32_t k) {
   uint8_t sym;
   if (tag == in_dummy && k == 1) {
     return 0; // in_dummies might have $ if only an edge label
