@@ -125,7 +125,7 @@ typedef struct p
 void parse_arguments(int argc, char **argv, parameters_t & params);
 void parse_arguments(int argc, char **argv, parameters_t & params)
 {
-  TCLAP::CmdLine cmd("KMER PACKER by Alex Bowe (alexbowe.com)", ' ', VERSION);
+  TCLAP::CmdLine cmd("Kramer Copyright (c) Alex Bowe (alexbowe.com) 2014", ' ', VERSION);
   /* // Add this option after refactoring the visitors (for now just compile with DEBUG if you want printed edges)
   TCLAP::SwitchArg ascii_arg("a", "ascii",
             "Outputs *full* edges (instead of just last nucleotide) as ASCII.",
