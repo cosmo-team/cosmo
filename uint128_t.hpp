@@ -10,8 +10,6 @@ size_t bitwidth() {
   return sizeof(T) * CHAR_BIT;
 }
 
-// TODO: reimplement this as wide_uint_t<pwr_two> in a general form - with assertions that it is indeed a pwr of two
-
 /* UINT128_T
  * Useful for wider blocks (e.g. when 32 < k <= 64 in a DNA kmer program)
  * Based off https://github.com/calccrypto/uint128_t/ but with fewer functions (not all operations are required:

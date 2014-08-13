@@ -161,11 +161,11 @@ std::string kmer_to_string(const T & kmer_block, uint8_t max_k, uint8_t this_k =
 }
 
 template <typename kmer_t>
-void convert_representation(kmer_t * kmers_in, kmer_t * kmers_out, size_t num_kmers) {
+void convert_representation(const kmer_t * kmers_in, kmer_t * kmers_out, size_t num_kmers) {
   // Swap G and T and reverses the nucleotides so that they can
   // be compared and sorted as integers to give colexicographical ordering
   std::transform((uint64_t*)kmers_in, (uint64_t*)(kmers_in + num_kmers), (uint64_t*)kmers_out, swap_gt);
-  std::transform(kmers_in, kmers_out + num_kmers, kmers_in, reverse_nt<kmer_t>());
+  std::transform(kmers_in, kmers_in + num_kmers, kmers_out, reverse_nt<kmer_t>());
 }
 
 // Convenience function to print array of kmers

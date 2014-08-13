@@ -99,9 +99,9 @@ class PackedEdgeOutputer {
   void write(edge_tag tag, const kmer_t & x, const uint32_t k, bool first_start_node, bool first_end_node) {
     uint8_t f_sym = get_f(tag, x, k);
     uint8_t w_sym = get_w(tag, x);
-    //printf("counts[%c]: %zu -> ", "$acgt"[symbol], _counts[symbol]);
+    //printf("counts[%c]: %zu -> ", "$acgt"[f_sym], _counts[f_sym]);
     _counts[f_sym]++;
-    //printf("%zu\n", _counts[symbol]);
+    //printf("%zu\n", _counts[f_sym]);
 
     packed_edge edge = pack_edge(w_sym, first_start_node, first_end_node);
     append_packed_edge(_buf, edge);

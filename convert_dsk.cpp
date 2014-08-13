@@ -72,6 +72,7 @@ void convert(kmer_t * kmers, size_t num_kmers, const uint32_t k, Visitor visit) 
   find_incoming_dummy_edges(table_a, table_b, num_kmers*2, k, incoming_dummies);
   // add extra dummies
   prepare_incoming_dummy_edges(incoming_dummies, incoming_dummy_lengths, num_incoming_dummies, k-1);
+
   // sort dummies (varlen radix)
   kmer_t * dummies_a = incoming_dummies;
   kmer_t * dummies_b = incoming_dummies + num_incoming_dummies * (k-1);
@@ -90,24 +91,17 @@ void convert(kmer_t * kmers, size_t num_kmers, const uint32_t k, Visitor visit) 
                 // edge_tag needed to distinguish between dummy out edge or not...
                 [=](edge_tag tag, const kmer_t & x, const uint32_t x_k, bool first_start_node, bool first_end_node) {
                   visit(tag, x, x_k, first_start_node, first_end_node);
+                  // TODO: this should be factored into a class that prints full kmers in ascii
+                  // then add a --full option
                   #ifdef DEBUG // print each kmer to stderr if debug on
-                  static string tagstrings[] = {"standard", "in_dummy", "out_dummy"};
                   if (tag == out_dummy)
                     cerr << kmer_to_string(get_start_node(x), k-1, k-1) << "$";
                   else
                     cerr << kmer_to_string(x, k, x_k);
-                  fprintf(stderr, " %02d", x_k);
-                  uint8_t s = map_symbol(tag, x, x_k);
-                  fprintf(stderr, " %c", "$acgt"[s]);
-                  cerr << " " << first_start_node << " " << first_end_node;
-                  cerr << " " << tagstrings[tag] << endl;
+                  cerr << " " << first_start_node << " " << first_end_node << endl;
                   #endif
                 });
-
-  // TODO: cumulative alphabet in last column and output (last 4 * sizeof(int64_t) bytes, last byte is num_rows_total)
-  // TODO: run python tests
-  // TODO: output binary file (pack(sym, start, end) syms: { 100, 101, 110, 111, $ = 4 = 000 }
-  // TODO: make external and merge (for large input. Read in chunk, sort, write temp, ext merge + add dummies to temp, 3-way-merge)
+  // TODO: impl external-merge (for large input. Read in chunk, sort, write temp, ext merge + add dummies to temp, 3-way-merge)
   // TODO: use SSE instructions or CUDA if available (very far horizon)
 
   free(incoming_dummies);
@@ -144,7 +138,7 @@ int main(int argc, char * argv[]) {
   if (kmer_num_bits > MAX_BITS_PER_KMER) {
     fprintf(stderr, "ERROR: Kmers larger than %zu bits are not currently supported."
                     " %s uses %d bits per kmer (possibly corrupt?).\n",
-        MAX_BITS_PER_KMER, file_name, kmer_num_bits);
+            MAX_BITS_PER_KMER, file_name, kmer_num_bits);
     exit(EXIT_FAILURE);
   }
 
@@ -189,7 +183,8 @@ int main(int argc, char * argv[]) {
   }
   else if (kmer_num_bits == 128) {
     typedef uint128_t kmer_t;
-    convert(kmer_blocks, num_kmers, k,
+    kmer_t * kmer_blocks_128 = (kmer_t*)kmer_blocks;
+    convert(kmer_blocks_128, num_kmers, k,
         [&](edge_tag tag, const kmer_t & x, const uint32_t this_k, bool first_start_node, bool first_end_node) {
           out.write(tag, x, this_k, first_start_node, first_end_node);
         });
