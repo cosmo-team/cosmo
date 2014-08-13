@@ -209,10 +209,10 @@ int main(int argc, char * argv[]) {
   //auto ascii_output = std::ostream_iterator<string>(std::cout, "\n");
 
   string outfilename = (params.output_prefix == "")? base_name : params.output_prefix;
-  //ofstream ofs;
-  PackedEdgeOutputer out;
-  out.open(outfilename + extension);
+  ofstream ofs;
   // TODO: Should probably do checking here when opening the file...
+  ofs.open(outfilename + extension, ios::out | ios::binary);
+  PackedEdgeOutputer out(ofs);
 
   if (kmer_num_bits == 64) {
     typedef uint64_t kmer_t;
@@ -231,7 +231,11 @@ int main(int argc, char * argv[]) {
   }
 
   out.close();
-  //ofs.close();
+  uint64_t t_k(k); // make uint64_t just to make parsing easier
+  // (can read them all at once and take the last 6 values)
+  ofs.write((char*)&t_k, sizeof(uint64_t));
+  ofs.flush();
+  ofs.close();
 
   free(kmer_blocks);
   return 0;

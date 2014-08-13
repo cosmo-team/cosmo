@@ -45,33 +45,27 @@ void append_packed_edge(uint64_t & block, packed_edge edge) {
 class PackedEdgeOutputer {
   static const size_t capacity = 64/PACKED_WIDTH;
 
-  ofstream _ofs;
+  ostream & _os;
 
   uint64_t _buf = 0;
   size_t _len   = 0;
   vector<size_t> _counts = vector<size_t>(DNA_RADIX + 1, 0);
-  bool closed = true;
+  bool closed = false;
 
   public:
-  PackedEdgeOutputer() {}
-
-  void open(string filename) {
-    _ofs.open(filename, ios::out | ios::binary);
-    closed = false;
-  }
+  PackedEdgeOutputer(ostream & os) : _os(os) {}
 
   ~PackedEdgeOutputer() {
-    if (!closed) close();
-    closed = true;
+    close();
   }
 
   void flush() {
     if (_len > 0) {
       // Make it so its easy to access the ith member in a block uniformly
       _buf <<= ((capacity - _len) * PACKED_WIDTH);
-      _ofs.write((char*)&_buf, sizeof(uint64_t));
+      _os.write((char*)&_buf, sizeof(uint64_t));
     }
-    //_ofs.flush(); // let _ofs handle this
+    //_os.flush(); // let _os handle this
     _buf = 0;
     _len = 0;
   }
@@ -83,20 +77,21 @@ class PackedEdgeOutputer {
       accum[i] += accum[i-1]; // accumulate
     }
     // write out counts
-    _ofs.write((char*)&accum[0], (DNA_RADIX+1) * sizeof(size_t));
+    _os.write((char*)&accum[0], (DNA_RADIX+1) * sizeof(size_t));
   }
 
   public:
   void close() {
     if (closed) return;
-    closed = true;
     flush();
     write_counts();
-    _ofs.close();
+    closed = true;
+    //_os.close();
   }
 
   template <typename kmer_t>
   // Might be nicer if this was a Functor with operator() instead
+  // but then need copy ctor etc
   void write(edge_tag tag, const kmer_t & x, const uint32_t k, bool first_start_node, bool first_end_node) {
     uint8_t f_sym = get_f(tag, x, k);
     uint8_t w_sym = get_w(tag, x);
