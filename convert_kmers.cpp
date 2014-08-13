@@ -4,6 +4,10 @@
 #include <iostream>
 //#include <algorithm>
 #include <utility>
+
+// TCLAP
+#include "tclap/CmdLine.h"
+
 // BOOST
 #include <boost/range/adaptor/transformed.hpp>     // Map function to inputs
 #include <boost/range/algorithm/copy.hpp>
@@ -108,7 +112,32 @@ void convert(kmer_t * kmers, size_t num_kmers, const uint32_t k, Visitor visit) 
   free(incoming_dummy_lengths);
 }
 
+typedef struct p
+{
+    bool ascii_fmt = false;
+    std::string filename = "";
+} parameters_t;
+
+#define VERSION "1.0" // Move this to some external file and inject readme with it, etc...
+void parse_arguments(int argc, char **argv, parameters_t & params)
+{
+  TCLAP::CmdLine cmd("KMER CONVERTER by Alex Bowe (alexbowe.com)", ' ', VERSION);
+  TCLAP::SwitchArg intSwitchArg("a", "ascii",
+            "Outputs *full* edges (instead of just last nucleotide) as ASCII.",
+            cmd, false);
+  TCLAP::ValueArg<std::string> filenameArg("i", "input",
+            "Input file. Currently only supports DSK's format.", false, "", "filename", cmd);
+  TCLAP::ValueArg<std::string> filenameArg("o", "output",
+            "Output file. Defaults to standard out.", false, "", "filename", cmd);
+  cmd.parse( argc, argv );
+  params.filename = filenameArg.getValue();
+  params.intSwitch = intSwitchArg.getValue();
+}
+
 int main(int argc, char * argv[]) {
+  parameters_t params;
+  parse_arguments(argc, argv, params);
+
   // Parse argv
   if (argc != 2) {
     fprintf(stderr, "Usage: %s\n", USAGE);
