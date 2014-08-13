@@ -33,8 +33,6 @@
 using namespace std;
 using namespace boost::adaptors;
 
-static const char * USAGE = "<DSK output file>";
-
 template <typename kmer_t, class Visitor>
 void convert(kmer_t * kmers, size_t num_kmers, const uint32_t k, Visitor visit) {
   // Convert the nucleotide representation to allow tricks
@@ -114,36 +112,36 @@ void convert(kmer_t * kmers, size_t num_kmers, const uint32_t k, Visitor visit) 
 
 typedef struct p
 {
-    bool ascii_fmt = false;
-    std::string filename = "";
+    //bool ascii = false;
+    std::string input_filename = "";
+    std::string output_filename = "";
 } parameters_t;
 
 #define VERSION "1.0" // Move this to some external file and inject readme with it, etc...
+void parse_arguments(int argc, char **argv, parameters_t & params);
 void parse_arguments(int argc, char **argv, parameters_t & params)
 {
   TCLAP::CmdLine cmd("KMER CONVERTER by Alex Bowe (alexbowe.com)", ' ', VERSION);
-  TCLAP::SwitchArg intSwitchArg("a", "ascii",
+  /* // Add this option after refactoring the visitors (for now just compile with DEBUG if you want printed edges)
+  TCLAP::SwitchArg ascii_arg("a", "ascii",
             "Outputs *full* edges (instead of just last nucleotide) as ASCII.",
             cmd, false);
-  TCLAP::ValueArg<std::string> filenameArg("i", "input",
-            "Input file. Currently only supports DSK's format.", false, "", "filename", cmd);
-  TCLAP::ValueArg<std::string> filenameArg("o", "output",
-            "Output file. Defaults to standard out.", false, "", "filename", cmd);
+  */
+  TCLAP::ValueArg<std::string> input_filename_arg("i", "input",
+            "Input file. Currently only supports DSK's format.", true, "", "input", cmd);
+  TCLAP::ValueArg<std::string> output_filename_arg("o", "output",
+            "Output file. Defaults to standard out.", true , "", "output", cmd);
   cmd.parse( argc, argv );
-  params.filename = filenameArg.getValue();
-  params.intSwitch = intSwitchArg.getValue();
+  //params.ascii           = ascii_arg.getValue();
+  params.input_filename  = input_filename_arg.getValue();
+  params.output_filename = output_filename_arg.getValue();
 }
 
 int main(int argc, char * argv[]) {
   parameters_t params;
   parse_arguments(argc, argv, params);
 
-  // Parse argv
-  if (argc != 2) {
-    fprintf(stderr, "Usage: %s\n", USAGE);
-    exit(EXIT_FAILURE);
-  }
-  const char * file_name = argv[1];
+  const char * file_name = params.input_filename.c_str();
 
   // Open File
   int handle = -1;
@@ -200,12 +198,12 @@ int main(int argc, char * argv[]) {
   //auto ascii_output = std::ostream_iterator<string>(std::cout, "\n");
 
   PackedEdgeOutputer out;
-  // TODO: checking here (or take output file)
-  out.open(string(file_name) + ".packed_edges");
+  // TODO: Should probably do checking here when opening the file...
+  out.open(params.output_filename);
 
   if (kmer_num_bits == 64) {
     typedef uint64_t kmer_t;
-    convert(kmer_blocks, num_kmers, k,
+      convert(kmer_blocks, num_kmers, k,
         [&](edge_tag tag, const kmer_t & x, const uint32_t this_k, bool first_start_node, bool first_end_node) {
           out.write(tag, x, this_k, first_start_node, first_end_node);
         });
@@ -218,7 +216,6 @@ int main(int argc, char * argv[]) {
           out.write(tag, x, this_k, first_start_node, first_end_node);
         });
   }
-
 
   out.close();
   free(kmer_blocks);

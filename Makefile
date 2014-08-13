@@ -1,8 +1,8 @@
 CXX=g++
 CPP_FLAGS=-m64 -std=c++0x -pedantic-errors -W -Wall -Wextra -Wshadow -Wpointer-arith -Wcast-qual \
-					-Wunused -Wstrict-prototypes -Wmissing-prototypes -Wwrite-strings #-Werror
+					-Wunused -Wstrict-prototypes -Wmissing-prototypes -Wwrite-strings -Werror -march=native
 DEBUG_FLAGS=-g -O0
-RELEASE_FLAGS=-O3 -DNDEBUG
+RELEASE_FLAGS=-O3 -DNDEBUG -msse -msse2 -msse3 -msse4
 REQS=convert_kmers.cpp lut.hpp debug.h nanotime.h io.o sort.hpp kmer.hpp dummies.hpp
 COMPILE=$(CXX) $(CPP_FLAGS)
 
