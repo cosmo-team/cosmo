@@ -46,6 +46,7 @@ class PackedEdgeOutputer {
   static const size_t capacity = 64/PACKED_WIDTH;
 
   ofstream _ofs;
+
   uint64_t _buf = 0;
   size_t _len   = 0;
   vector<size_t> _counts = vector<size_t>(DNA_RADIX + 1, 0);
@@ -109,26 +110,5 @@ class PackedEdgeOutputer {
     if (++_len == capacity) flush();
   }
 };
-
-template <typename kmer_t>
-uint8_t get_w(edge_tag tag, const kmer_t & x) {
-  if (tag == out_dummy) return 0;
-  else return get_edge_label(x) + 1;
-}
-
-template <typename kmer_t>
-uint8_t get_f(edge_tag tag, const kmer_t & x, const uint32_t k) {
-  uint8_t sym;
-  if (tag == in_dummy && k == 1) {
-    return 0; // in_dummies might have $ if only an edge label
-  }
-  else if (tag == out_dummy) {
-    sym = get_nt(x, 1); // since out_dummies are shifted
-  }
-  else {
-    sym = get_nt(x, 1); // 2nd last symbol
-  }
-  return sym+1;
-}
 
 #endif

@@ -10,15 +10,17 @@
 
 // BOOST
 #include <boost/range/adaptor/transformed.hpp>     // Map function to inputs
-#include <boost/range/algorithm/copy.hpp>
-#include <boost/tuple/tuple.hpp>
-#include <boost/tuple/tuple_comparison.hpp> // for uniqued over zipped iterators
-#include <boost/iterator/zip_iterator.hpp>
+//#include <boost/range/algorithm/copy.hpp>
+//#include <boost/tuple/tuple.hpp>
+//#include <boost/tuple/tuple_comparison.hpp> // for uniqued over zipped iterators
+//#include <boost/iterator/zip_iterator.hpp>
 #define BOOST_RESULT_OF_USE_DECLTYPE // needed to support lambdas in transformed
 
 // C STDLIB Headers
 #include <cstdio>
 #include <cstdlib>
+
+#include <libgen.h>
 
 // Custom Headers
 #include "uint128_t.hpp"
@@ -32,6 +34,8 @@
 
 using namespace std;
 using namespace boost::adaptors;
+
+const static string extension = ".packed";
 
 template <typename kmer_t, class Visitor>
 void convert(kmer_t * kmers, size_t num_kmers, const uint32_t k, Visitor visit) {
@@ -114,27 +118,29 @@ typedef struct p
 {
     //bool ascii = false;
     std::string input_filename = "";
-    std::string output_filename = "";
+    std::string output_prefix = "";
 } parameters_t;
 
 #define VERSION "1.0" // Move this to some external file and inject readme with it, etc...
 void parse_arguments(int argc, char **argv, parameters_t & params);
 void parse_arguments(int argc, char **argv, parameters_t & params)
 {
-  TCLAP::CmdLine cmd("KMER CONVERTER by Alex Bowe (alexbowe.com)", ' ', VERSION);
+  TCLAP::CmdLine cmd("KMER PACKER by Alex Bowe (alexbowe.com)", ' ', VERSION);
   /* // Add this option after refactoring the visitors (for now just compile with DEBUG if you want printed edges)
   TCLAP::SwitchArg ascii_arg("a", "ascii",
             "Outputs *full* edges (instead of just last nucleotide) as ASCII.",
             cmd, false);
   */
-  TCLAP::ValueArg<std::string> input_filename_arg("i", "input",
-            "Input file. Currently only supports DSK's format.", true, "", "input", cmd);
-  TCLAP::ValueArg<std::string> output_filename_arg("o", "output",
-            "Output file. Defaults to standard out.", true , "", "output", cmd);
+  TCLAP::UnlabeledValueArg<std::string> input_filename_arg("input",
+            "Input file. Currently only supports DSK's binary format (for k<=64).", true, "", "input_file", cmd);
+  string output_short_form = "output_prefix";
+  TCLAP::ValueArg<std::string> output_prefix_arg("o", "output_prefix",
+            "Output prefix. Results will be written to [" + output_short_form + "]" + extension + ". " +
+            "Default prefix: basename(input_file).", false, "", output_short_form, cmd);
   cmd.parse( argc, argv );
-  //params.ascii           = ascii_arg.getValue();
+  //params.ascii         = ascii_arg.getValue();
   params.input_filename  = input_filename_arg.getValue();
-  params.output_filename = output_filename_arg.getValue();
+  params.output_prefix   = output_prefix_arg.getValue();
 }
 
 int main(int argc, char * argv[]) {
@@ -149,6 +155,11 @@ int main(int argc, char * argv[]) {
     fprintf(stderr, "ERROR: Can't open file: %s\n", file_name);
     exit(EXIT_FAILURE);
   }
+
+  // The parameter should be const... On my computer the parameter
+  // isn't const though, yet it doesn't modify the string...
+  // This is still done AFTER loading the file just in case
+  char * base_name = basename(const_cast<char*>(file_name));
 
   // Read Header
   uint32_t kmer_num_bits = 0;
@@ -197,9 +208,11 @@ int main(int argc, char * argv[]) {
 
   //auto ascii_output = std::ostream_iterator<string>(std::cout, "\n");
 
+  string outfilename = (params.output_prefix == "")? base_name : params.output_prefix;
+  //ofstream ofs;
   PackedEdgeOutputer out;
+  out.open(outfilename + extension);
   // TODO: Should probably do checking here when opening the file...
-  out.open(params.output_filename);
 
   if (kmer_num_bits == 64) {
     typedef uint64_t kmer_t;
@@ -218,6 +231,8 @@ int main(int argc, char * argv[]) {
   }
 
   out.close();
+  //ofs.close();
+
   free(kmer_blocks);
   return 0;
 }
