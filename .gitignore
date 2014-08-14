@@ -1,0 +1,9 @@
+# Project Executable
+kramer
+
+# Generated files
+lut.c
+
+# C stuff
+*.o
+*.dSYM
