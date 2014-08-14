@@ -1,6 +1,6 @@
 # Kramer
 
-Kramer version 1.0
+version 1.0
 
 
 ## Description
@@ -16,7 +16,7 @@ counters.
 
 ## Usage
 
-After building, you can Kramer as simply as:
+After building, you can run Kramer as simply as:
 
     $ kramer <input_file>
 
@@ -24,8 +24,8 @@ Where `input_file` is the binary output of a [DSK][dsk] run (more kmer counters 
 Kramer will detect the k value, and outputs to `<input_file>.packed` by default (which can be altered
 with the `-o` option).
 
-*Note that if you want to construct a [Succinct de Bruijn Graph][succ] where the nodes are k-mers, you
-will need to set DSK's k to k+1. I overload the word "k-mer" a bit in this document... sorry! Hopefully it's
+Note that if you want to construct a [Succinct de Bruijn Graph][succ] where the nodes are k-mers, you
+will need to set DSK's k to k+1. *I might abuse the word "k-mer" in this document... Hopefully it's
 clear from context.*
 
 **Example:**
@@ -75,8 +75,8 @@ Finally we 3-way-merge the dummies with the edges sorted on start node, adding t
 Since usually d << m, the total run time is O(mk), in 4*m*2k = O(mk) space.
 
 Due to the linear nature of this approach, we can easily break it into mergable chunks or multiple passes, which will allow us to
-support files larger than memory at a later date. This also means it should be easy to distribute across multiple computers, or do
-on a GPU.
+support files larger than memory at a later date. This also means it should be easy to distribute across multiple computers, or utilise
+a GPU, Intel TBB, etc...
 
 
 ## Compilation
