@@ -18,7 +18,7 @@ counters.
 
 After building, you can Kramer as simply as:
 
-  kramer <input_file>
+    $ kramer <input_file>
 
 Where `input_file` is the binary output of a [DSK][dsk] run (more kmer counters at a later date).
 Kramer will detect the k value, and outputs to `<input_file>.packed` by default (which can be altered
@@ -30,8 +30,8 @@ clear from context.*
 
 **Example:**
 
-  dsk readfile.fq 35 -t 3
-  kramer readfile.solid_kmers_binary
+    $ dsk readfile.fq 35 -t 3
+    $ kramer readfile.solid_kmers_binary
 
 Will result in a file `readfile.solid_kmers_binary.packed` in the working directory.
 
