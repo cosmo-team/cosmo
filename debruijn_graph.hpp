@@ -110,10 +110,20 @@ class debruijn_graph {
   // incoming
   // successors
   // predecessors
-  /*
+
   label_type node_label(size_t v) {
+    size_t i = m_node_select(v+1);
+    label_type label = label_type(k-1, _map_symbol(symbol_type{}));
+    return _node_label_from_edge(i, label);
   }
-  */
+
+  label_type edge_label(size_t i) {
+    label_type label = label_type(k, _map_symbol(symbol_type{}));
+    _node_label_from_edge(i, label);
+    label[k-1] = _map_symbol(_strip_edge_flag(m_edges[i]));
+    return label;
+  }
+
   // edge_label <- index
   // node <- string
   size_t num_edges() const { return m_symbol_ends[sigma]; /*_node_flags.size();*/ }
@@ -139,6 +149,18 @@ class debruijn_graph {
     return upper_bound(m_symbol_ends.begin(), m_symbol_ends.end(), i) - m_symbol_ends.begin();
   }
 
+  label_type _node_label_from_edge(size_t i, label_type & label) {
+    // Calculate backward k times and fill a buffer with symbol_access(edge)
+    //label_type label = label_type(k-1, _map_symbol(symbol_type{}));
+    for (size_t pos = 1; pos <= k-1; pos++) {
+      label[k-pos-1] = _map_symbol(_symbol_access(i));
+      i = _backward(i);
+    }
+    return label;
+  }
+
+
+
   /*
   size_t _succ(size_t i) {
     // TODO: bounds checkS (return value shouldn't be too far out either)
@@ -151,8 +173,6 @@ class debruijn_graph {
   */
 
   size_t _rank_distance(size_t a, size_t b) {
-    TRACE("l[%zu] = %llu, r[%zu] = %llu\n", b, m_node_flags[b], b, m_node_rank(b));
-    TRACE("l[%zu] = %llu, r[%zu] = %llu\n", a, m_node_flags[a], a, m_node_rank(a));
     return m_node_rank(b) - m_node_rank(a);
   }
 
@@ -174,7 +194,6 @@ class debruijn_graph {
     // This handles x = $ so that we have the all-$ edge at position 0
     // but probably shouldn't be called this way in the normal case
     size_t x_start = _symbol_start(x);
-    TRACE("x_start  = %zu\n", x_start);
     // rank is over [0,i) and select is 1-based
     size_t nth = _rank_distance(x_start+1, i+1);
     if (x == 0) return 0;
