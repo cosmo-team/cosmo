@@ -55,7 +55,7 @@ uint8_t get_edge_label(const T & x) {
 // so the 0th element is still the last nucleotide
 template <typename T>
 T get_range(const T & x, uint8_t lo, uint8_t hi) {
-  const size_t NUM_NTS = bitwidth<T>()/NT_WIDTH;
+  const size_t NUM_NTS = bitwidth<T>::width/NT_WIDTH;
   uint8_t shift = (hi < NUM_NTS)? (NUM_NTS - hi) * NT_WIDTH : 0;
   return (x >> shift) << (shift + lo * NT_WIDTH);
 }
