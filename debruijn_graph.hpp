@@ -85,7 +85,7 @@ class debruijn_graph {
       first[i] = 1-get<1>(x); // convert 0s to 1s so we can have a sparse bit vector
       // For branchy graphs it might be better to change this and use RRR
       edges[i] = (get<0>(x) << 1) | !get<2>(x);
-    }
+}
 
     t_bit_vector_type bv(first);
     t_edge_vector_type wt;
@@ -97,22 +97,33 @@ class debruijn_graph {
   // size_in_bytes:
 
   // API
-  /*
   size_t outdegree(size_t v) {
+    assert(v < num_nodes());
     auto range = _node_range(v);
     size_t first = get<0>(range);
     size_t last  = get<1>(range);
     return last - first + 1;
   }
-  */
+
   // outgoing
-  // indegree
+  size_t indegree(size_t v) {
+    // find first predecessor edge i->j
+    size_t j = _node_to_edge(v);
+    // edge label has to be the last node symbol of v
+    symbol_type x = _symbol_access(j);
+    if (x == 0) return 0;
+    size_t i_first = _backward(j);
+    size_t i_last = _next_edge(i_first, x);
+    return m_edges.rank(i_last, _with_edge_flag(x, true)) -
+           m_edges.rank(i_first, _with_edge_flag(x, true)) + 1;
+  }
+
   // incoming
   // successors
   // predecessors
 
   label_type node_label(size_t v) {
-    size_t i = m_node_select(v+1);
+    size_t i = _node_to_edge(v);
     label_type label = label_type(k-1, _map_symbol(symbol_type{}));
     return _node_label_from_edge(i, label);
   }
@@ -135,11 +146,24 @@ class debruijn_graph {
     return (x==0)? 0 : m_symbol_ends[x - 1];
   }
 
+  public:
+  size_t _node_to_edge(size_t v) {
+    assert(v < num_nodes());
+    return m_node_select(v+1);
+  }
+
+  size_t _edge_to_node(size_t i) {
+    assert(i < num_edges());
+    return m_node_rank(i);
+  }
+
   symbol_type _strip_edge_flag(symbol_type x) {
     return x >> 1;
   }
 
-  symbol_type _with_edge_flag(symbol_type x, bool edge_flag = true) {
+  // False -> normal edge (but still shifted to fit in the edge alphabet)
+  // True -> minus flag
+  symbol_type _with_edge_flag(symbol_type x, bool edge_flag) {
     return (x << 1) | edge_flag;
   }
 
@@ -159,7 +183,10 @@ class debruijn_graph {
     return label;
   }
 
-
+  size_t _next_edge(size_t i, symbol_type x) {
+    if (i >= num_edges() - 1) return i;
+    return m_edges.select(1+m_edges.rank(1+i,_with_edge_flag(x, false)), _with_edge_flag(x, false));
+  }
 
   /*
   size_t _succ(size_t i) {
