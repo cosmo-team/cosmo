@@ -3,6 +3,9 @@ pack-edges
 cosmo-build
 cosmo-assemble
 
+# Other project stuff
+test_data/*
+
 # Generated files
 # lut.hpp # actually want this since it removes python dependency
 
