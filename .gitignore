@@ -4,7 +4,7 @@ cosmo-build
 cosmo-assemble
 
 # Generated files
-lut.hpp
+# lut.hpp # actually want this since it removes python dependency
 
 # C stuff
 *.o
