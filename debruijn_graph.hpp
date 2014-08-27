@@ -269,7 +269,8 @@ class debruijn_graph {
     if (i >= num_edges() - 1) return i;
     // Might not actually occur if out of rank bounds?
     size_t next_rank = 1 + m_edges.rank(1+i, _with_edge_flag(x, false));
-    if (next_rank > m_edge_max_ranks[x]) return i;
+    // Used to return i, but realized there might be some - flags after
+    if (next_rank > m_edge_max_ranks[x]) return num_edges();
     return m_edges.select(next_rank, _with_edge_flag(x, false));
   }
 
