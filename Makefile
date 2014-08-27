@@ -17,7 +17,7 @@ CPP_FLAGS+=$(RELEASE_FLAGS)
 endif
 
 DBG_REQS=debruijn_graph.hpp utility.hpp io.hpp io.o debug.h
-PACK_REQS=lut.hpp debug.h nanotime.h io.hpp io.o sort.hpp kmer.hpp dummies.hpp
+PACK_REQS=lut.hpp debug.h io.hpp io.o sort.hpp kmer.hpp dummies.hpp
 BINARIES=pack-edges cosmo-build
 
 default: all
