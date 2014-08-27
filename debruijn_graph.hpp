@@ -7,6 +7,7 @@
 #include <vector>
 #include <array>
 #include <string>
+#include <iostream>
 
 #include <sdsl/bit_vectors.hpp>
 #include <sdsl/wavelet_trees.hpp>
@@ -27,12 +28,13 @@ template <size_t t_sigma            = 4, // default: DNA, TODO: change to 0 and 
           class  t_symbol_type      = typename t_edge_vector_type::value_type,
           class  t_label_type       = string> // can define basic_string<t_symbol_type>, but need to use correct print func
 class debruijn_graph {
-  static_assert(t_sigma == 4, "Alphabet sizes other than 4 are not yet supported.");
+  //static_assert(t_sigma == 4, "Alphabet sizes other than 4 are not yet supported.");
 
   public:
   const static size_t sigma = t_sigma;
   typedef t_symbol_type symbol_type;
   typedef t_label_type  label_type;
+  typedef typename t_bit_vector_type::size_type size_type;
 
   const size_t           k{};
 
@@ -48,6 +50,9 @@ class debruijn_graph {
   const array<size_t, 1+sigma> m_edge_max_ranks{};
   const label_type             m_alphabet{};
   const size_t                 m_num_nodes{};
+
+  public:
+  debruijn_graph() {}
 
   private:
   debruijn_graph(size_t k, const t_bit_vector_type & node_flags, const t_edge_vector_type & edges, const array<size_t, 1+sigma>& symbol_ends, const label_type& alphabet)
@@ -320,8 +325,48 @@ class debruijn_graph {
   pair<size_t, size_t> _node_range(size_t v) const {
     return make_pair(_first_edge(v), _last_edge(v));
   }
+
+  size_type serialize(ostream& out, structure_tree_node* v=NULL, string name="") const {
+    structure_tree_node* child = structure_tree::add_child(v, name, util::class_name(*this));
+    size_type written_bytes = 0;
+    written_bytes += write_member(k, out, child, "k");
+    written_bytes += m_node_flags.serialize(out, child, "node_flags");
+    written_bytes += m_node_rank.serialize(out, child, "node_rank");
+    written_bytes += m_node_select.serialize(out, child, "node_select");
+    written_bytes += m_edges.serialize(out, child, "edges");
+    written_bytes += write_member(m_symbol_ends, out, child, "symbol_ends");
+    written_bytes += write_member(m_edge_max_ranks, out, child, "edge_max_ranks");
+    written_bytes += write_member(m_alphabet, out, child, "alphabet");
+    written_bytes += write_member(m_num_nodes, out, child, "num_nodes");
+    // helper bitvector m_doc_rmin_marked and m_doc_rmax_marked are not serialize
+    structure_tree::add_size(child, written_bytes);
+    return written_bytes;
+  }
+
+  //! Loads the data structure from the given istream.
+  void load(std::istream& in) {
+    // DANGER WILL ROBINSON!
+    // Yeah, don't normally const_cast!
+    // but in this case the alternative is to leave them non-const,
+    // thus sacrificing any gain...
+    // plus I know what I'm doing here...
+    read_member(deconst(k), in);
+    deconst(m_node_flags).load(in);
+    deconst(m_node_rank).load(in);
+    deconst(m_node_select).load(in);
+    deconst(m_edges).load(in);
+    read_member(deconst(m_symbol_ends), in);
+    read_member(deconst(m_edge_max_ranks), in);
+    read_member(deconst(m_alphabet), in);
+    read_member(deconst(m_num_nodes), in);
+  }
+
+  size_type size() const { return num_edges(); }
 };
 
-
+template <typename Container>
+double bits_per_element(const Container & c) {
+  return size_in_bytes(c) * 8.0 / c.size();
+}
 
 #endif

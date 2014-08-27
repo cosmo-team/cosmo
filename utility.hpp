@@ -16,4 +16,9 @@ ssize_t function_binary_search(size_t lo, size_t hi, value_type key, IndexFuncti
   return -1;
 }
 
+template <typename T>
+T & deconst(const T & x) {
+  return const_cast<T&>(x);
+}
+
 #endif
