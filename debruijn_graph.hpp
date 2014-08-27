@@ -11,6 +11,7 @@
 #include <sdsl/bit_vectors.hpp>
 #include <sdsl/wavelet_trees.hpp>
 
+#include "utility.hpp"
 #include "io.hpp"
 #include "debug.h"
 
@@ -22,7 +23,7 @@ template <size_t t_sigma            = 4, // default: DNA, TODO: change to 0 and 
           class  t_bit_vector_type  = sd_vector<>,
           class  t_bv_rank_type     = typename t_bit_vector_type::rank_0_type, // We invert the bits so it is 0 instead
           class  t_bv_select_type   = typename t_bit_vector_type::select_0_type,
-          class  t_edge_vector_type = wt_huff<rrr_vector<67>>,
+          class  t_edge_vector_type = wt_huff<rrr_vector<63>>,
           class  t_symbol_type      = typename t_edge_vector_type::value_type,
           class  t_label_type       = string> // can define basic_string<t_symbol_type>, but need to use correct print func
 class debruijn_graph {
@@ -36,19 +37,21 @@ class debruijn_graph {
   const size_t           k{};
 
   private:
-  const t_bit_vector_type        m_node_flags{};
-  const t_bv_rank_type           m_node_rank{};
-  const t_bv_select_type         m_node_select{};
-  const t_edge_vector_type       m_edges{};
+  const t_bit_vector_type      m_node_flags{};
+  const t_bv_rank_type         m_node_rank{};
+  const t_bv_select_type       m_node_select{};
+  const t_edge_vector_type     m_edges{};
   // This is the "F table" in the blog/paper. It stores the starting positions of the sorted runs
   // of the k-1th symbol of the edge (or, last symbol of the node)
   // Could be implemented as the start positions, but here we store the cumulative sum (i.e. run ends)
   const array<size_t, 1+sigma> m_symbol_ends{};
   const label_type             m_alphabet{};
+  const size_t                 m_num_nodes{};
 
   private:
   debruijn_graph(size_t k, const t_bit_vector_type & node_flags, const t_edge_vector_type & edges, const array<size_t, 1+sigma>& symbol_ends, const label_type& alphabet)
-    : k(k), m_node_flags(node_flags), m_node_rank(&m_node_flags), m_node_select(&m_node_flags), m_edges(edges), m_symbol_ends(symbol_ends), m_alphabet(alphabet){
+    : k(k), m_node_flags(node_flags), m_node_rank(&m_node_flags), m_node_select(&m_node_flags), m_edges(edges), m_symbol_ends(symbol_ends), m_alphabet(alphabet),
+      m_num_nodes(m_node_rank(m_symbol_ends[sigma])) {
   }
 
   public:
@@ -97,125 +100,181 @@ class debruijn_graph {
   // size_in_bytes:
 
   // API
-  size_t outdegree(size_t v) {
+  size_t outdegree(size_t v) const {
     assert(v < num_nodes());
     auto range = _node_range(v);
     size_t first = get<0>(range);
     size_t last  = get<1>(range);
-    return last - first + 1;
+    size_t count = last - first + 1;
+    // This edge access is kinda annoying, but if the ONE edge is $, we don't really have an outgoing edge
+    return count - (count == 1 && _strip_edge_flag(m_edges[first]) == 0);
   }
 
-  // outgoing
-  size_t indegree(size_t v) {
+  size_t indegree(size_t v) const {
     // find first predecessor edge i->j
     size_t j = _node_to_edge(v);
     // edge label has to be the last node symbol of v
     symbol_type x = _symbol_access(j);
     if (x == 0) return 0;
     size_t i_first = _backward(j);
-    size_t i_last = _next_edge(i_first, x);
+    size_t i_last = _next_edge(i_first, x); // << SELECT BOUNDS ERROR HERE
     return m_edges.rank(i_last, _with_edge_flag(x, true)) -
            m_edges.rank(i_first, _with_edge_flag(x, true)) + 1;
   }
 
-  // incoming
-  // successors
-  // predecessors
+  // The signed return type is worrying, since it halves the possible answers...
+  // but it will only face problems with graphs that have over 2^63 ~= 4^31 edges,
+  // which is a saturated debruijn graph of k=31. Which is unlikely.
+  // Hopefully an iterator-based API (like BGL) will fix this issue
+  ssize_t outgoing(size_t u, symbol_type x) const {
+    assert(u < num_nodes());
+    assert(x < sigma + 1);
+    if (x == 0) return -1;
+    auto range = _node_range(u);
+    size_t first = get<0>(range);
+    size_t last  = get<1>(range);
+    // Try both with and without a flag
+    for (symbol_type c = _with_edge_flag(x,false); c <= _with_edge_flag(x, true); c++) {
+      size_t most_recent = m_edges.select(m_edges.rank(last+1, c), c);
+      // if within range, follow forward
+      if (first <= most_recent && most_recent <= last) {
+        // Don't have to check fwd for -1 since we checked for $ above
+        return _edge_to_node(_forward(most_recent));
+      }
+    }
+    return -1;
+  }
 
-  label_type node_label(size_t v) {
+  // incoming
+  ssize_t incoming(size_t v, symbol_type x) const {
+    // This is very similar to indegree, so should maybe be refactored
+    assert(v < num_nodes());
+    assert(x < sigma + 1);
+    // node u -> v : edge i -> j
+    size_t j = _node_to_edge(v);
+    symbol_type y = _symbol_access(j);
+    if (y == 0) return -1;
+    size_t i_first = _backward(j);
+    size_t i_last  = _next_edge(i_first, y);
+    size_t base_rank = m_edges.rank(i_first, _with_edge_flag(y, true));
+    size_t last_rank = m_edges.rank(i_last, _with_edge_flag(y, true));
+    size_t num_predecessors = last_rank - base_rank + 1;
+    // binary search over first -> first + count;
+    auto selector = [&](size_t i) -> size_t {
+      return (i == 0)? i_first : m_edges.select(base_rank+i, _with_edge_flag(y,true));
+    };
+    auto accessor = [&](size_t i) -> symbol_type { return _first_symbol(selector(i)); };
+    ssize_t sub_idx = function_binary_search(0, num_predecessors-1, x, accessor);
+    if (sub_idx == -1) return -1;
+    return _edge_to_node(selector(sub_idx));
+  }
+
+  // string -> node, edge
+  // BGL style API
+
+  label_type node_label(size_t v) const {
     size_t i = _node_to_edge(v);
     label_type label = label_type(k-1, _map_symbol(symbol_type{}));
     return _node_label_from_edge(i, label);
   }
 
-  label_type edge_label(size_t i) {
+  label_type edge_label(size_t i) const {
     label_type label = label_type(k, _map_symbol(symbol_type{}));
     _node_label_from_edge(i, label);
     label[k-1] = _map_symbol(_strip_edge_flag(m_edges[i]));
     return label;
   }
 
-  // edge_label <- index
-  // node <- string
   size_t num_edges() const { return m_symbol_ends[sigma]; /*_node_flags.size();*/ }
-  size_t num_nodes() const { return m_node_rank(num_edges()); }
+  size_t num_nodes() const { return m_num_nodes; /*m_node_rank(num_edges());*/ }
 
   private:
-  size_t _symbol_start(symbol_type x) {
+  size_t _symbol_start(symbol_type x) const {
     assert(x < sigma + 1);
     return (x==0)? 0 : m_symbol_ends[x - 1];
   }
 
   public:
-  size_t _node_to_edge(size_t v) {
+  size_t _node_to_edge(size_t v) const {
     assert(v < num_nodes());
     return m_node_select(v+1);
   }
 
-  size_t _edge_to_node(size_t i) {
+  size_t _edge_to_node(size_t i) const {
     assert(i < num_edges());
     return m_node_rank(i);
   }
 
-  symbol_type _strip_edge_flag(symbol_type x) {
+  symbol_type _strip_edge_flag(symbol_type x) const {
     return x >> 1;
   }
 
   // False -> normal edge (but still shifted to fit in the edge alphabet)
   // True -> minus flag
-  symbol_type _with_edge_flag(symbol_type x, bool edge_flag) {
+  symbol_type _with_edge_flag(symbol_type x, bool edge_flag) const {
     return (x << 1) | edge_flag;
   }
 
-  symbol_type _symbol_access(size_t i) {
+  symbol_type _symbol_access(size_t i) const {
     assert(i < num_edges());
     // I assume std binary search is optimised for small ranges (if sigma is small, e.g. DNA)
     return upper_bound(m_symbol_ends.begin(), m_symbol_ends.end(), i) - m_symbol_ends.begin();
   }
 
-  label_type _node_label_from_edge(size_t i, label_type & label) {
+  // more efficient than generating full label for incoming()
+  symbol_type _first_symbol(size_t i) const {
+    symbol_type x = 0;
+    for (size_t pos = 1; pos <= k-1; pos++) {
+      // Don't need to map it to the alphabet in this case
+      x = _symbol_access(i);
+      // All are $ before the last $
+      if (x == 0) return x;
+      i = _backward(i);
+    }
+    return x;
+  }
+
+  label_type _node_label_from_edge(size_t i, label_type & label) const {
     // Calculate backward k times and fill a buffer with symbol_access(edge)
     //label_type label = label_type(k-1, _map_symbol(symbol_type{}));
     for (size_t pos = 1; pos <= k-1; pos++) {
-      label[k-pos-1] = _map_symbol(_symbol_access(i));
+      symbol_type x = _symbol_access(i);
+      label[k-pos-1] = _map_symbol(x);
+      // All are $ before the last $
+      if (x == 0) return label;
       i = _backward(i);
     }
     return label;
   }
 
-  size_t _next_edge(size_t i, symbol_type x) {
+  size_t _next_edge(size_t i, symbol_type x) const {
     if (i >= num_edges() - 1) return i;
-    return m_edges.select(1+m_edges.rank(1+i,_with_edge_flag(x, false)), _with_edge_flag(x, false));
+    // Might not actually occur if out of rank bounds?
+    size_t next_rank = 1 + m_edges.rank(1+i, _with_edge_flag(x, false));
+    size_t bound     = m_edges.rank(num_edges(), _with_edge_flag(x, false));
+    if (next_rank > bound) return i;
+    return m_edges.select(next_rank, _with_edge_flag(x, false));
   }
 
-  /*
-  size_t _succ(size_t i) {
-    // TODO: bounds checkS (return value shouldn't be too far out either)
-    return _node_select(_node_rank(i) + 1);
-  }
-
-  size_t _pred(size_t i) {
-    return _node_select(_node_rank(i) - 1);
-  }
-  */
-
-  size_t _rank_distance(size_t a, size_t b) {
+  size_t _rank_distance(size_t a, size_t b) const {
     return m_node_rank(b) - m_node_rank(a);
   }
 
-  /*
   // Return index of first possible edge obtained by following edge i
-  size_t _forward(size_t i) {
-    assert(i < num_edges());
-    symbol_t x = _edges[i] >> 1; // shift to remove flag
-    // TODO: if x == 0 ($) then we can't follow the edge, so exception?
-    size_t start = _symbol_start(x);
-    return _succ(start);
-  }
-  */
-
   public:
-  size_t _backward(size_t i) {
+  ssize_t _forward(size_t i) const {
+    assert(i < num_edges());
+    symbol_type x = _strip_edge_flag(m_edges[i]);
+    // if x == 0 ($) then we can't follow the edge
+    // (should maybe make backward consistent with this, but using the edge 0 loop for node label generation).
+    if (x == 0) return -1;
+    size_t start = _symbol_start(x);
+    size_t nth   = m_edges.rank(i, _with_edge_flag(x, false));
+    size_t next  = m_node_select(m_node_rank(start+1) + nth);
+    return next;
+  }
+
+  size_t _backward(size_t i) const {
     assert(i < num_edges());
     symbol_type x  = _symbol_access(i);
     // This handles x = $ so that we have the all-$ edge at position 0
@@ -228,17 +287,17 @@ class debruijn_graph {
     return m_edges.select(nth+1, _with_edge_flag(x, false));
   }
 
-  symbol_type _map_symbol(symbol_type x) {
+  symbol_type _map_symbol(symbol_type x) const {
     return (m_alphabet.size() > 0)? m_alphabet[x] : x;
   }
 
-  size_t _first_edge(size_t v) {
+  size_t _first_edge(size_t v) const {
     assert(v < num_nodes());
     // select is 1-based, but nodes are 0-based
     return m_node_select(v+1);
   }
 
-  size_t _last_edge(size_t v) {
+  size_t _last_edge(size_t v) const {
     // find the *next* node's first edge and decrement
     // as long as a next node exists!
     assert(v + 1 <= num_nodes());
@@ -246,7 +305,7 @@ class debruijn_graph {
     else return _first_edge(v+1) - 1;
   }
 
-  pair<size_t, size_t> _node_range(size_t v) {
+  pair<size_t, size_t> _node_range(size_t v) const {
     return make_pair(_first_edge(v), _last_edge(v));
   }
 };
