@@ -45,13 +45,26 @@ class debruijn_graph {
   // of the k-1th symbol of the edge (or, last symbol of the node)
   // Could be implemented as the start positions, but here we store the cumulative sum (i.e. run ends)
   const array<size_t, 1+sigma> m_symbol_ends{};
+  const array<size_t, 1+sigma> m_edge_max_ranks{};
   const label_type             m_alphabet{};
   const size_t                 m_num_nodes{};
 
   private:
   debruijn_graph(size_t k, const t_bit_vector_type & node_flags, const t_edge_vector_type & edges, const array<size_t, 1+sigma>& symbol_ends, const label_type& alphabet)
-    : k(k), m_node_flags(node_flags), m_node_rank(&m_node_flags), m_node_select(&m_node_flags), m_edges(edges), m_symbol_ends(symbol_ends), m_alphabet(alphabet),
+    : k(k), m_node_flags(node_flags), m_node_rank(&m_node_flags), m_node_select(&m_node_flags), m_edges(edges),
+      m_symbol_ends(symbol_ends),
+      m_edge_max_ranks(_init_max_ranks(edges)),
+      m_alphabet(alphabet),
       m_num_nodes(m_node_rank(m_symbol_ends[sigma])) {
+  }
+
+  array<size_t, 1+sigma> _init_max_ranks(const t_edge_vector_type & edges) {
+    array<size_t, 1+sigma> max_ranks;
+    size_t num_edges = edges.size();
+    for (symbol_type x = 0; x<sigma+1;x++) {
+      max_ranks[x] = edges.rank(num_edges, _with_edge_flag(x, false));
+    }
+    return max_ranks;
   }
 
   public:
@@ -251,8 +264,7 @@ class debruijn_graph {
     if (i >= num_edges() - 1) return i;
     // Might not actually occur if out of rank bounds?
     size_t next_rank = 1 + m_edges.rank(1+i, _with_edge_flag(x, false));
-    size_t bound     = m_edges.rank(num_edges(), _with_edge_flag(x, false));
-    if (next_rank > bound) return i;
+    if (next_rank > m_edge_max_ranks[x]) return i;
     return m_edges.select(next_rank, _with_edge_flag(x, false));
   }
 
