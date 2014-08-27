@@ -55,8 +55,8 @@ class debruijn_graph {
   debruijn_graph() {}
 
   private:
-  debruijn_graph(size_t k, const t_bit_vector_type & node_flags, const t_edge_vector_type & edges, const array<size_t, 1+sigma>& symbol_ends, const label_type& alphabet)
-    : k(k), m_node_flags(node_flags), m_node_rank(&m_node_flags), m_node_select(&m_node_flags), m_edges(edges),
+  debruijn_graph(size_t in_k, const t_bit_vector_type & node_flags, const t_edge_vector_type & edges, const array<size_t, 1+sigma>& symbol_ends, const label_type& alphabet)
+    : k(in_k), m_node_flags(node_flags), m_node_rank(&m_node_flags), m_node_select(&m_node_flags), m_edges(edges),
       m_symbol_ends(symbol_ends),
       m_edge_max_ranks(_init_max_ranks(edges)),
       m_alphabet(alphabet),
