@@ -29,7 +29,6 @@
 #include "sort.hpp"
 #include "dummies.hpp"
 #include "debug.h"
-#include "nanotime.h"
 
 
 using namespace std;
@@ -125,7 +124,7 @@ typedef struct p
 void parse_arguments(int argc, char **argv, parameters_t & params);
 void parse_arguments(int argc, char **argv, parameters_t & params)
 {
-  TCLAP::CmdLine cmd("Kramer Copyright (c) Alex Bowe (alexbowe.com) 2014", ' ', VERSION);
+  TCLAP::CmdLine cmd("Cosmo Copyright (c) Alex Bowe (alexbowe.com) 2014", ' ', VERSION);
   /* // Add this option after refactoring the visitors (for now just compile with DEBUG if you want printed edges)
   TCLAP::SwitchArg ascii_arg("a", "ascii",
             "Outputs *full* edges (instead of just last nucleotide) as ASCII.",

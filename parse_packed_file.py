@@ -14,7 +14,7 @@ def get_element(blocks, i, r=E):
     return get_element_from_block(blocks[block_idx], i%(W/r))
 
 get_sym   = lambda x: "$acgt"[x >> 2]
-get_flags = lambda x: (x & 2 >> 1, x & 1)
+get_flags = lambda x: ((x & 2) >> 1, x & 1)
 
 if len(sys.argv) != 2:
     print "Please provide an input file!"
@@ -29,7 +29,6 @@ blocks = data[:-6]
 k = data[-1]
 total = counts[-1]
 
-last = 1
 for i in xrange(total):
     edge = get_element(blocks, i)
     sym = get_sym(edge)
