@@ -41,4 +41,4 @@ cosmo-build: cosmo-build.cpp $(DBG_REQS)
 all: $(BINARIES)
 
 clean:
-		rm -rf $(BINARIES) *.o *.dSYM lut.hpp
+		rm -rf $(BINARIES) *.o *.dSYM
