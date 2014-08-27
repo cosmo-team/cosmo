@@ -1,9 +1,19 @@
 # Project Executable
-kramer
+pack-edges
+cosmo-build
+cosmo-assemble
 
 # Generated files
-lut.c
+lut.hpp
 
 # C stuff
 *.o
 *.dSYM
+
+# Python stuff
+.ipynb_checkpoints/*
+*.ipynb
+
+# Output files
+*.packed
+*.dbg
