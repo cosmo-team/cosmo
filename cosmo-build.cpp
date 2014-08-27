@@ -26,7 +26,7 @@ struct parameters_t {
 void parse_arguments(int argc, char **argv, parameters_t & params);
 void parse_arguments(int argc, char **argv, parameters_t & params)
 {
-  TCLAP::CmdLine cmd("SDBG-Lite Copyright (c) Alex Bowe (alexbowe.com) 2014", ' ', VERSION);
+  TCLAP::CmdLine cmd("Cosmo Copyright (c) Alex Bowe (alexbowe.com) 2014", ' ', VERSION);
   TCLAP::UnlabeledValueArg<std::string> input_filename_arg("input",
             ".packed edge file (output from kramer).", true, "", "input_file", cmd);
   cmd.parse( argc, argv );
