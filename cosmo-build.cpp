@@ -10,6 +10,7 @@
 
 #include "io.hpp"
 #include "debruijn_graph.hpp"
+#include "algorithm.hpp"
 
 using namespace std;
 using namespace sdsl;
@@ -44,8 +45,12 @@ int main(int argc, char* argv[]) {
   parse_arguments(argc, argv, p);
 
   ifstream input(p.input_filename, ios::in|ios::binary|ios::ate);
-  debruijn_graph<> dbg = debruijn_graph<>::load_from_packed_edges(input, "$acgt");
+  //vector<size_t> minus_positions;
+  debruijn_graph<> dbg = debruijn_graph<>::load_from_packed_edges(input, "$acgt"/*, &minus_positions*/);
   input.close();
+
+  //sd_vector<> b = make_branch_vector<0>(dbg);
+  //rrr_vector<63> b = make_branch_vector<1,rrr_vector<63>>(dbg);
 
   // The parameter should be const... On my computer the parameter
   // isn't const though, yet it doesn't modify the string...
@@ -59,9 +64,11 @@ int main(int argc, char* argv[]) {
   cerr << "num_edges()   : " << dbg.num_edges() << endl;
   cerr << "Total size    : " << size_in_mega_bytes(dbg) << " MB" << endl;
   cerr << "Bits per edge : " << bits_per_element(dbg) << " Bits" << endl;
+  //cout << "Branch size   : " << size_in_mega_bytes(b) << " MB" << endl;
 
   // TO LOAD:
   // debruijn_graph<> dbg;
   // load_from_file(dbg, filename);
   // optional: write_structure<JSON_FORMAT (or R_FORMAT)>(dbg2, cout);
+  // visit_unipaths(dbg, [](char x) { cout << x << endl; });
 }
