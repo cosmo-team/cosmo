@@ -141,7 +141,7 @@ class debruijn_graph {
     symbol_type x = _symbol_access(j);
     if (x == 0) return 0;
     size_t i_first = _backward(j);
-    size_t i_last = _next_edge(i_first, x); // << SELECT BOUNDS ERROR HERE
+    size_t i_last = _next_edge(i_first, x);
     return m_edges.rank(i_last, _with_edge_flag(x, true)) -
            m_edges.rank(i_first, _with_edge_flag(x, true)) + 1;
   }
