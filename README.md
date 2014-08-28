@@ -1,24 +1,35 @@
-# Kramer
+
+                .ooooo.   .ooooo.   .oooo.o ooo. .oo.  .oo.    .ooooo.  
+               d88' `"Y8 d88' `88b d88(  "8 `888P"Y88bP"Y88b  d88' `88b 
+               888       888   888 `"Y88b.   888   888   888  888   888 
+               888   .o8 888   888 o.  )88b  888   888   888  888   888 
+               `Y8bod8P' `Y8bod8P' 8""888P' o888o o888o o888o `Y8bod8P' 
+
+
+
+# Cosmo
 
 version 1.0
 
 
 ## Description
 
-Kramer is a tool to convert kmer counter outputs into the packed form suitable for constructing a
+Cosmo is a tool to convert kmer counter outputs into the packed form suitable for constructing a
 [Succinct de Bruijn Graph][succ]. This includes sorting in the required order, and finding and
 adding necessary dummy edges.
 
-Currently Kramer only supports [DSK][dsk] files with k <= 64 (so, 128 bit or less blocks).
+Currently Cosmo only supports [DSK][dsk] files with k <= 64 (so, 128 bit or less blocks).
 Support is planned for [DSK][dsk] files with larger k, and possibly output from other kmer
 counters.
 
 
 ## Usage
 
-After building, you can run Kramer as simply as:
+After building, you can run Cosmo as simply as:
 
-    $ kramer <input_file>
+    $ pack_edges <input_file>
+    $ cosmo-build <input_file>.packed
+    $ cosmo-assemble <input_file>.packed.dbg
 
 Where `input_file` is the binary output of a [DSK][dsk] run (more kmer counters at a later date).
 Kramer will detect the k value, and outputs to `<input_file>.packed` by default (which can be altered
