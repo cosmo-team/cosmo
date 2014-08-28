@@ -10,6 +10,7 @@
 
 #include "io.hpp"
 #include "debruijn_graph.hpp"
+#include "algorithm.hpp"
 
 using namespace std;
 using namespace sdsl;
@@ -44,24 +45,50 @@ int main(int argc, char* argv[]) {
   parse_arguments(argc, argv, p);
 
   ifstream input(p.input_filename, ios::in|ios::binary|ios::ate);
-  debruijn_graph<> dbg = debruijn_graph<>::load_from_packed_edges(input, "$acgt");
+  //vector<size_t> minus_positions;
+  debruijn_graph<> dbg = debruijn_graph<>::load_from_packed_edges(input, "$ACGT"/*, &minus_positions*/);
   input.close();
+
+  sd_vector<> b = make_branch_vector(dbg);
+  //rrr_vector<63> b = make_branch_vector<1,rrr_vector<63>>(dbg);
 
   // The parameter should be const... On my computer the parameter
   // isn't const though, yet it doesn't modify the string...
   // This is still done AFTER loading the file just in case
   char * base_name = basename(const_cast<char*>(p.input_filename.c_str()));
-  string outfilename = ((p.output_prefix == "")? base_name : p.output_prefix) + extension;
-  store_to_file(dbg, outfilename);
+  string outfilename = ((p.output_prefix == "")? base_name : p.output_prefix);
+  store_to_file(dbg, outfilename + extension);
 
   cerr << "k             : " << dbg.k << endl;
   cerr << "num_nodes()   : " << dbg.num_nodes() << endl;
   cerr << "num_edges()   : " << dbg.num_edges() << endl;
   cerr << "Total size    : " << size_in_mega_bytes(dbg) << " MB" << endl;
   cerr << "Bits per edge : " << bits_per_element(dbg) << " Bits" << endl;
+  cerr << "Branch size   : " << size_in_mega_bytes(b) << " MB" << endl;
 
   // TO LOAD:
   // debruijn_graph<> dbg;
   // load_from_file(dbg, filename);
   // optional: write_structure<JSON_FORMAT (or R_FORMAT)>(dbg2, cout);
+  /*
+  for (auto x : b) {
+    cout << x << endl;
+  }*/
+  ofstream out;
+  out.open(outfilename + ".fasta", ios::out);
+  debruijn_graph<>::label_type s{};
+  size_t threshold = 100;
+  size_t id = 1;
+  visit_unipaths(dbg, b, [&](char x) {
+    if (x == '$') {
+      if(s.length() >= threshold) {
+        out << ">cosmo_" << id++ << endl;
+        out << s << endl;
+      }
+      s = debruijn_graph<>::label_type{};
+    }
+    else s.push_back(x);
+  });
+  out.flush();
+  out.close();
 }

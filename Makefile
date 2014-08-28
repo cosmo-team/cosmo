@@ -32,7 +32,7 @@ io.o: io.hpp io.cpp debug.h dummies.hpp kmer.hpp
 pack-edges: pack-edges.cpp $(PACK_REQS)
 		$(CXX) $(CPP_FLAGS) -o $@ $< io.o
 
-cosmo-build: cosmo-build.cpp $(DBG_REQS)
+cosmo-build: cosmo-build.cpp $(DBG_REQS) algorithm.hpp
 		$(CXX) $(CPP_FLAGS) $(DEP_FLAGS) -o $@ $< io.o
 
 #cosmo-assemble: cosmo-assemble.cpp $(DBG_REQS)

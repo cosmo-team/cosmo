@@ -12,6 +12,7 @@
 #include <sdsl/bit_vectors.hpp>
 #include <sdsl/wavelet_trees.hpp>
 
+#include "algorithm.hpp"
 #include "utility.hpp"
 #include "io.hpp"
 #include "debug.h"
@@ -38,7 +39,6 @@ class debruijn_graph {
 
   const size_t           k{};
 
-  private:
   const t_bit_vector_type      m_node_flags{};
   const t_bv_rank_type         m_node_rank{};
   const t_bv_select_type       m_node_select{};
@@ -73,7 +73,7 @@ class debruijn_graph {
   }
 
   public:
-  static debruijn_graph load_from_packed_edges(istream & input, label_type alphabet=label_type{}) {
+  static debruijn_graph load_from_packed_edges(istream & input, label_type alphabet=label_type{}, vector<size_t> * v=nullptr) {
     // ifstream input(filename, ios::in|ios::binary|ios::ate);
     // check length
     streampos size = input.tellg();
@@ -101,12 +101,18 @@ class debruijn_graph {
     // can accept a int_vector<4> instead (which is all we need for DNA)
     int_vector<8> edges(num_edges);
 
+    bool prev_was_minus = false;
     for (size_t i = 0; i < num_edges; i++) {
       auto x = get_edge(blocks.begin(), i);
       first[i] = 1-get<1>(x); // convert 0s to 1s so we can have a sparse bit vector
       // For branchy graphs it might be better to change this and use RRR
       edges[i] = (get<0>(x) << 1) | !get<2>(x);
-}
+      if (v && get<0>(x) && !get<2>(x) && !prev_was_minus) {
+        v->push_back(i);
+        prev_was_minus = true;
+      }
+      else if (v && get<0>(x) && get<2>(x)) prev_was_minus = false;
+    }
 
     t_bit_vector_type bv(first);
     t_edge_vector_type wt;
@@ -135,7 +141,7 @@ class debruijn_graph {
     symbol_type x = _symbol_access(j);
     if (x == 0) return 0;
     size_t i_first = _backward(j);
-    size_t i_last = _next_edge(i_first, x); // << SELECT BOUNDS ERROR HERE
+    size_t i_last = _next_edge(i_first, x);
     return m_edges.rank(i_last, _with_edge_flag(x, true)) -
            m_edges.rank(i_first, _with_edge_flag(x, true)) + 1;
   }
@@ -269,7 +275,6 @@ class debruijn_graph {
     if (i >= num_edges() - 1) return i;
     // Might not actually occur if out of rank bounds?
     size_t next_rank = 1 + m_edges.rank(1+i, _with_edge_flag(x, false));
-    // Used to return i, but realized there might be some - flags after
     if (next_rank > m_edge_max_ranks[x]) return num_edges();
     return m_edges.select(next_rank, _with_edge_flag(x, false));
   }
