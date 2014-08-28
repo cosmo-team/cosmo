@@ -1,10 +1,9 @@
 
-                .ooooo.   .ooooo.   .oooo.o ooo. .oo.  .oo.    .ooooo.  
-               d88' `"Y8 d88' `88b d88(  "8 `888P"Y88bP"Y88b  d88' `88b 
-               888       888   888 `"Y88b.   888   888   888  888   888 
-               888   .o8 888   888 o.  )88b  888   888   888  888   888 
-               `Y8bod8P' `Y8bod8P' 8""888P' o888o o888o o888o `Y8bod8P' 
-
+                   .ooooo.   .ooooo.   .oooo.o ooo. .oo.  .oo.    .ooooo.  
+                  d88' `"Y8 d88' `88b d88(  "8 `888P"Y88bP"Y88b  d88' `88b 
+                  888       888   888 `"Y88b.   888   888   888  888   888 
+                  888   .o8 888   888 o.  )88b  888   888   888  888   888 
+                  `Y8bod8P' `Y8bod8P' 8""888P' o888o o888o o888o `Y8bod8P' 
 
 
 # Cosmo
