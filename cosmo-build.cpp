@@ -35,7 +35,6 @@ void parse_arguments(int argc, char **argv, parameters_t & params)
             "Default prefix: basename(input_file).", false, "", output_short_form, cmd);
   cmd.parse( argc, argv );
 
-  // -d flag for decompression to original kmer biz
   params.input_filename  = input_filename_arg.getValue();
   params.output_prefix   = output_prefix_arg.getValue();
 }
