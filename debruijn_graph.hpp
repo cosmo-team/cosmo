@@ -359,7 +359,9 @@ class debruijn_graph {
     read_member(deconst(k), in);
     deconst(m_node_flags).load(in);
     deconst(m_node_rank).load(in);
+    deconst(m_node_rank).set_vector(&m_node_flags);
     deconst(m_node_select).load(in);
+    deconst(m_node_select).set_vector(&m_node_flags);
     deconst(m_edges).load(in);
     read_member(deconst(m_symbol_ends), in);
     read_member(deconst(m_edge_max_ranks), in);
