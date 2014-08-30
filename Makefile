@@ -18,7 +18,7 @@ endif
 
 DBG_REQS=debruijn_graph.hpp utility.hpp io.hpp io.o debug.h
 PACK_REQS=lut.hpp debug.h io.hpp io.o sort.hpp kmer.hpp dummies.hpp
-BINARIES=pack-edges cosmo-build
+BINARIES=pack-edges cosmo-build cosmo-assemble
 
 default: all
 
@@ -32,11 +32,11 @@ io.o: io.hpp io.cpp debug.h dummies.hpp kmer.hpp
 pack-edges: pack-edges.cpp $(PACK_REQS)
 		$(CXX) $(CPP_FLAGS) -o $@ $< io.o
 
-cosmo-build: cosmo-build.cpp $(DBG_REQS) algorithm.hpp
+cosmo-build: cosmo-build.cpp $(DBG_REQS)
 		$(CXX) $(CPP_FLAGS) $(DEP_FLAGS) -o $@ $< io.o
 
-#cosmo-assemble: cosmo-assemble.cpp $(DBG_REQS)
-
+cosmo-assemble: cosmo-assemble.cpp $(DBG_REQS) algorithm.hpp
+		$(CXX) $(CPP_FLAGS) $(DEP_FLAGS) -o $@ $<
 
 all: $(BINARIES)
 
