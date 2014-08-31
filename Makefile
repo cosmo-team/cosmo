@@ -16,8 +16,8 @@ else
 CPP_FLAGS+=$(RELEASE_FLAGS)
 endif
 
-ifneq ($(revcomp),0)
-CPP_FLAGS+=-DADD_REVCOMP
+ifneq ($(revcomps),0)
+CPP_FLAGS+=-DADD_REVCOMPS
 endif
 
 ifneq ($(dummies),0)

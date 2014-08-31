@@ -42,7 +42,12 @@ void convert(kmer_t * kmers, size_t num_kmers, const uint32_t k, Visitor visit) 
   convert_representation(kmers, kmers, num_kmers);
 
   // Append reverse complements
+  #ifdef ADD_REVCOMPS
+  size_t revcomp_factor = 2;
   transform(kmers, kmers + num_kmers, kmers + num_kmers, reverse_complement<kmer_t>(k));
+  #else
+  size_t revcomp_factor = 1;
+  #endif
 
   // NOTE: There might be a way to do this recursively using counting (and not two tables)
   // After the sorting phase, Table A will in <colex(node), edge> order (as required for output)
@@ -50,21 +55,21 @@ void convert(kmer_t * kmers, size_t num_kmers, const uint32_t k, Visitor visit) 
   // edges with a simple O(N) merge-join algorithm.
   // NOTE: THESE SHOULD NOT BE FREED (the kmers array is freed by the caller)
   kmer_t * table_a = kmers;
-  kmer_t * table_b = kmers + num_kmers * 2; // x2 because of reverse complements
+  kmer_t * table_b = kmers + num_kmers * revcomp_factor; // x2 because of reverse complements
   // Sort by last column to do the edge-sorted part of our <colex(node), edge>-sorted table
-  colex_partial_radix_sort<DNA_RADIX>(table_a, table_b, num_kmers * 2, 0, 1,
+  colex_partial_radix_sort<DNA_RADIX>(table_a, table_b, num_kmers * revcomp_factor, 0, 1,
                                       &table_a, &table_b, get_nt_functor<kmer_t>());
   // Sort from k to last column (not k to 1 - we need to sort by the edge column a second time to get colex(row) table)
   // Note: The output names are swapped (we want table a to be the primary table and b to be aux), because our desired
   // result is the second last iteration (<colex(node), edge>-sorted) but we still have use for the last iteration (colex(row)-sorted).
   // Hence, table_b is the output sorted from [hi-1 to lo], and table_a is the 2nd last iter sorted from (hi-1 to lo]
-  colex_partial_radix_sort<DNA_RADIX>(table_a, table_b, num_kmers * 2, 0, k,
+  colex_partial_radix_sort<DNA_RADIX>(table_a, table_b, num_kmers * revcomp_factor, 0, k,
                                       &table_b, &table_a, get_nt_functor<kmer_t>());
 
   // outgoing dummy edges are output in correct order while merging, whereas incoming dummy edges are not in the correct
   // position, but are sorted relatively, hence can be merged if collected in a previous pass
   // count dummies (to allocate space)
-  size_t num_incoming_dummies = count_incoming_dummy_edges(table_a, table_b, num_kmers*2, k);
+  size_t num_incoming_dummies = count_incoming_dummy_edges(table_a, table_b, num_kmers*revcomp_factor, k);
   TRACE("num_incoming_dummies: %zu\n", num_incoming_dummies);
   // allocate space for dummies -> we need to generate all the $-prefixed dummies, so can't just use an iterator for the
   // incoming dummies (the few that we get from the set_difference are the ones we apply $x[0:-1] to, so we need (k-1) more for each
@@ -82,7 +87,7 @@ void convert(kmer_t * kmers, size_t num_kmers, const uint32_t k, Visitor visit) 
   // this is a cheaper way than storing all symbols in 3 bits instead (although it means we need a varlen radix sort)
   uint8_t * incoming_dummy_lengths = (uint8_t*) calloc(num_incoming_dummies*all_dummies_factor*dummy_table_factor, sizeof(uint8_t));
   // extract dummies
-  find_incoming_dummy_edges(table_a, table_b, num_kmers*2, k, incoming_dummies);
+  find_incoming_dummy_edges(table_a, table_b, num_kmers*revcomp_factor, k, incoming_dummies);
   // add extra dummies
   #ifdef ALL_DUMMIES
   prepare_incoming_dummy_edges(incoming_dummies, incoming_dummy_lengths, num_incoming_dummies, k-1);
@@ -106,7 +111,7 @@ void convert(kmer_t * kmers, size_t num_kmers, const uint32_t k, Visitor visit) 
                                       &dummies_a, &dummies_b, get_nt_functor<kmer_t>(),
                                       lengths_a, lengths_b, &lengths_a, &lengths_b);
   #endif
-  merge_dummies(table_a, table_b, num_kmers*2, k,
+  merge_dummies(table_a, table_b, num_kmers*revcomp_factor, k,
                 dummies_a, num_incoming_dummies*all_dummies_factor,
                 lengths_a,
                 // edge_tag needed to distinguish between dummy out edge or not...
@@ -209,7 +214,12 @@ int main(int argc, char * argv[]) {
 
   // ALLOCATE SPACE FOR KMERS (done in one malloc call)
   // x 4 because we need to add reverse complements, and then we have two copies of the table
-  uint64_t * kmer_blocks = (uint64_t*)calloc(num_kmers * 4, sizeof(uint64_t) * kmer_num_blocks);
+  #ifdef ADD_REVCOMPS
+  size_t revcomp_factor = 2;
+  #else
+  size_t revcomp_factor = 1;
+  #endif
+  uint64_t * kmer_blocks = (uint64_t*)calloc(num_kmers * 2 * revcomp_factor, sizeof(uint64_t) * kmer_num_blocks);
 
   // READ KMERS FROM DISK INTO ARRAY
   size_t num_records_read = dsk_read_kmers(handle, kmer_num_bits, kmer_blocks);
