@@ -49,8 +49,7 @@ int main(int argc, char* argv[]) {
   // isn't const though, yet it doesn't modify the string...
   // This is still done AFTER loading the file just in case
   char * base_name = basename(const_cast<char*>(p.input_filename.c_str()));
-  string outfilename = ((p.output_prefix == "")? base_name : p.output_prefix) + graph_extension;
-  cout << outfilename << endl;
+  string outfilename = ((p.output_prefix == "")? base_name : p.output_prefix);
 
   // TO LOAD:
   debruijn_graph<> dbg;
