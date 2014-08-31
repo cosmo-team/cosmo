@@ -96,6 +96,8 @@ class debruijn_graph {
     vector<uint64_t> blocks(num_blocks,0);
     input.read((char*)&blocks[0], sizeof(uint64_t) * num_blocks);
 
+    // TODO: sanity check the inputs (e.g. tally things, convert the above asserts)
+    // So we avoid a huge malloc if someone gives us a bad file
     int_vector<1> first(num_edges,0);
     // would be nice to fix wavelet trees so the constructor
     // can accept a int_vector<4> instead (which is all we need for DNA)

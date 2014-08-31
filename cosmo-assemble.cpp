@@ -61,6 +61,11 @@ int main(int argc, char* argv[]) {
   cerr << "Total size    : " << size_in_mega_bytes(dbg) << " MB" << endl;
   cerr << "Bits per edge : " << bits_per_element(dbg) << " Bits" << endl;
 
+  // This actually does take a little while (10 sec) to build. Should maybe add flags to
+  // pre-build it during graph construction and pass it in (faster)
+  // TODO: TIME it on ch14
+  // e.g. cosmo-build -u (unipaths)
+  // cosmo-assemble -u unipaths-file
   sd_vector<> b = make_branch_vector(dbg);
   cerr << "Branch size   : " << size_in_mega_bytes(b) << " MB" << endl;
 
