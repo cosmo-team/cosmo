@@ -16,6 +16,14 @@ else
 CPP_FLAGS+=$(RELEASE_FLAGS)
 endif
 
+ifneq ($(revcomp),0)
+CPP_FLAGS+=-DADD_REVCOMP
+endif
+
+ifneq ($(dummies),0)
+CPP_FLAGS+=-DALL_DUMMIES
+endif
+
 DBG_REQS=debruijn_graph.hpp utility.hpp io.hpp io.o debug.h
 PACK_REQS=lut.hpp debug.h io.hpp io.o sort.hpp kmer.hpp dummies.hpp
 BINARIES=pack-edges cosmo-build cosmo-assemble
