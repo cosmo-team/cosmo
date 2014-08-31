@@ -69,19 +69,34 @@ void convert(kmer_t * kmers, size_t num_kmers, const uint32_t k, Visitor visit) 
   // allocate space for dummies -> we need to generate all the $-prefixed dummies, so can't just use an iterator for the
   // incoming dummies (the few that we get from the set_difference are the ones we apply $x[0:-1] to, so we need (k-1) more for each
   // (to make $...$x[0])... times two because we need to radix sort these bitches.
-  kmer_t * incoming_dummies = (kmer_t*) calloc(num_incoming_dummies*(k-1)*2, sizeof(kmer_t));
+  #ifdef ALL_DUMMIES
+  size_t all_dummies_factor = (k-1);
+  size_t dummy_table_factor = 2;
+  #else
+  size_t all_dummies_factor = 1;
+  size_t dummy_table_factor = 1;
+  #endif
+  // Don't have to alloc if we aren't preparing all dummies, but this option is only used for testing. Usually we want them
+  kmer_t * incoming_dummies = (kmer_t*) calloc(num_incoming_dummies*all_dummies_factor*dummy_table_factor, sizeof(kmer_t));
   // We store lengths because the prefix before the <length> symbols on the right will all be $ signs
   // this is a cheaper way than storing all symbols in 3 bits instead (although it means we need a varlen radix sort)
-  uint8_t * incoming_dummy_lengths = (uint8_t*) calloc(num_incoming_dummies*(k-1)*2, sizeof(uint8_t));
+  uint8_t * incoming_dummy_lengths = (uint8_t*) calloc(num_incoming_dummies*all_dummies_factor*dummy_table_factor, sizeof(uint8_t));
   // extract dummies
   find_incoming_dummy_edges(table_a, table_b, num_kmers*2, k, incoming_dummies);
   // add extra dummies
+  #ifdef ALL_DUMMIES
   prepare_incoming_dummy_edges(incoming_dummies, incoming_dummy_lengths, num_incoming_dummies, k-1);
+  #else
+  // Just set the lengths for merging
+  memset(incoming_dummy_lengths, k-1, num_incoming_dummies);
+  #endif
 
-  // sort dummies (varlen radix)
   kmer_t * dummies_a = incoming_dummies;
-  kmer_t * dummies_b = incoming_dummies + num_incoming_dummies * (k-1);
   uint8_t * lengths_a = incoming_dummy_lengths;
+  // sort dummies (varlen radix)
+  // dont need to sort if not adding the extras, since already sorted
+  #ifdef ALL_DUMMIES
+  kmer_t * dummies_b = incoming_dummies + num_incoming_dummies * (k-1);
   uint8_t * lengths_b = incoming_dummy_lengths + num_incoming_dummies * (k-1);
   colex_partial_radix_sort<DNA_RADIX>(dummies_a, dummies_b, num_incoming_dummies*(k-1), 0, 1,
                                       &dummies_a, &dummies_b, get_nt_functor<kmer_t>(),
@@ -90,8 +105,9 @@ void convert(kmer_t * kmers, size_t num_kmers, const uint32_t k, Visitor visit) 
   colex_partial_radix_sort<DNA_RADIX>(dummies_a, dummies_b, num_incoming_dummies*(k-1), 1, k-1,
                                       &dummies_a, &dummies_b, get_nt_functor<kmer_t>(),
                                       lengths_a, lengths_b, &lengths_a, &lengths_b);
+  #endif
   merge_dummies(table_a, table_b, num_kmers*2, k,
-                dummies_a, num_incoming_dummies*(k-1),
+                dummies_a, num_incoming_dummies*all_dummies_factor,
                 lengths_a,
                 // edge_tag needed to distinguish between dummy out edge or not...
                 [=](edge_tag tag, const kmer_t & x, const uint32_t x_k, bool first_start_node, bool first_end_node) {
