@@ -25,7 +25,7 @@ After compiling, you can run Cosmo as simply as:
     $ cosmo-assemble <input_file>.packed.dbg # output: <input_file>.packed.dbg.fasta
 
 Where `input_file` is the binary output of a [DSK][dsk] run. Each program has a `--help` option for a more
-detailed description.
+detailed description of how to use them.
 
 
 ## Things to be aware of
@@ -70,7 +70,7 @@ Here is a general overview of each program (details in the upcoming paper):
 - Since in the worst case `d = m`, total is `O(mk^2)`, but since usually `d << m`, `O(mk)` in practice;
 - If this was all implemented in memory, the space requirement would be `m * k * 2 * 2` (we add reverse complements and use a copy-based radix sort)
 `+ d * k * 2 = 4mk + 2dk` nucleotides, so `8mk + 4dk` bits (wait...);
-- Using the copy-based radix sort is actually a speed optimization, since it lets us save the second last iteration which we need for the set difference calculations (how we find the required dummies);
+- Using the copy-based radix sort is actually a speed optimisation, since it lets us save the second last iteration which we need for the set difference calculations (how we find the required dummies);
 - The sort, merge, set difference, map and reduce design of this means it is easy to distribute or make external. Besides, [DSK][dsk] reduces the memory requirement drastically as it is;
 - In the output `.packed` file, each edge is represented as `5` bits (edge symbol + flags) in `64`-bit blocks (with `4` bits wasted per block).
 
@@ -98,7 +98,7 @@ Implemented by Alex Bowe. Original concept and prototype by Kunihiko Sadakane.
 
 These people also proved incredibly helpful:
 
-- Simon Puglisi - Fruitful discussions regarding optimimisation
+- Simon Puglisi - Fruitful discussions regarding optimisation
 - Dominik Kempa - Help with STXXL
 - Rayan Chikhi - Endless advice regarding de Bruijn graphs and assembly in general
 - Simon Gog - support with SDSL
