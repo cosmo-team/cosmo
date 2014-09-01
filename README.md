@@ -1,5 +1,5 @@
 
-                    .ooooo.   .ooooo.   .oooo.o ooo. .oo.  .oo.    .ooooo.  
+                    .ooooo.   .ooooo.   .oooo.o ooo. .oo.  .oo.    .ooooo.  v1.0
                    d88' `"Y8 d88' `88b d88(  "8 `888P"Y88bP"Y88b  d88' `88b 
                    888       888   888 `"Y88b.   888   888   888  888   888 
                    888   .o8 888   888 o.  )88b  888   888   888  888   888 
@@ -7,11 +7,6 @@
 
 
 # Cosmo
-
-version 1.0
-
-
-## Description
 
 Cosmo is a fast, low-memory DNA assembler using a [Succinct de Bruijn Graph][succ].
 
@@ -90,6 +85,17 @@ You will need a compiler that supports C++11, the `Boost` (ranges and range algo
 and optionally `Python` and `numpy` (to rebuild the lookup tables).
 
 These are all installable with any good package manager (e.g. `apt-get`, `yum` or `brew`), except for `sdsl-lite`, which you should [download][sdsl] and build manually.
+
+
+## Plan
+
+In no particular order, these are features that I'd like to add on the horizon:
+
+- Add Boost Graph Library style API,
+- Add support for indirect sorting (to let people attach kmer counts or colours or whatever people want...) accessible like node/edge properties in Boost Graph Library,
+- Improve assembly and add error correction,
+- Implement dynamic version (necessary for online construction),
+- Remove alphabet limitation (currently only supports DNA).
 
 
 ## Authors
