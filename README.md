@@ -1,4 +1,5 @@
 
+
                     .ooooo.   .ooooo.   .oooo.o ooo. .oo.  .oo.    .ooooo.  
                    d88' `"Y8 d88' `88b d88(  "8 `888P"Y88bP"Y88b  d88' `88b 
                    888       888   888 `"Y88b.   888   888   888  888   888 
@@ -44,15 +45,17 @@ Note that since our graph is edge-based, k defines the length of our edges, henc
 If you want to construct a [Succinct de Bruijn Graph][succ] where the nodes are k-mers, you will need to run [DSK][dsk]
 with k set to k+1. E.g. using output from `$ dsk <input_file> 27` will actually build a 26-dimension de Bruijn graph.
 
-Furthermore, most de Bruijn graph based assemblers add edges between *all* nodes that overlap. We are taking k-mer counter
-output for our edges, so we only have edges that were directly represented in the read set (this makes more sense to us, though).
-I may add support for the standard way in the future.
+*Note: Both even and odd k values should work with this assembler due to our loop-immune traversal.*
+
+Furthermore, most de Bruijn graph based assemblers add edges between *all* nodes that overlap. Instead, we are taking the
+k-mers as our edges (of two k-1-length nodes), so we only have edges that were *directly represented in the read set*
+(this makes more sense to us, though, as it reduces unnecessary branching). I may add support for the standard way in the
+future if anyone wants it (it would be similar to the dummy edge adding code).
+
 
 ### Graph Traversal
 
-The traversal strategy is currently fairly primitive. We only output the unitigs (paths between branches).
-Unlike [Minia][minia] (for example), we don't treat each node as equal to its reverse complement (each way
-has their pros and cons). In fact, this is actually wrong :/ we need to fix the way it handles reverse complements.
+We currently only output the unitigs (paths between branching nodes).
 
 
 ## Compilation
@@ -101,13 +104,12 @@ nucleotides, so 8mk + 4dk bits (which might sound like a lot, but...),
 
 ### Upcoming Release
 
-- [ ] Work out how to traverse correctly
-  - [ ] At least address the reverse complement corner cases discussed by [Pall Melsted](https://twitter.com/pmelsted) in blog posts [here](http://pmelsted.wordpress.com/2014/01/17/edge-cases-in-de-bruijn-graphs/),
-  and [here](http://pmelsted.wordpress.com/2014/02/24/debugging-de-bruijn-graphs/).
-  - [ ] Handle the first k symbols of incoming tips (backtrack until $).
-  - [ ] Add traditional node overlap detection
-- [ ] Rewrite edge vector so it is faster (currently a wavelet tree)
+- [ ] Handle the first k symbols of incoming tips (backtrack until $ or k-1 - we want the first edge to make a kmer)
+- [ ] Handle palindromic edges (detect palindrome in last k edges followed and exit)
+- [ ] Write contig postprocessing system (store only one of the pairs of contigs - compare start to twin(end), store min)
+- [ ] Rewrite edge vector so it is faster (currently a wavelet tree - fine for general case)
   - [ ] Vector with four bits for each node, with rank/select only on the non-minus flagged edges? (potential problem with sampling)
+  - [ ] Canonical Huffman coding (2^4 ints for frequencies, map the prefix code)
 - [ ] Add support for external sorting (for large data sets)
 
 ### Future Releases
@@ -120,7 +122,7 @@ nucleotides, so 8mk + 4dk bits (which might sound like a lot, but...),
 - Improve assembly and add error correction (iterative construction),
 - Implement dynamic version (necessary for online construction and dynamic error correction),
 - Remove alphabet limitation (currently only supports DNA),
-- Write unit tests (I have some IPython notebooks that have tests in them, so wasn't completely duct-taped together),
+- Write unit tests and refactor (I have some IPython notebooks that have tests in them, so this wasn't completely duct-taped together),
 - Set up continuous integration for [Travis CI][tci],
 - Add Python wrapper (for learning purposes and Python pipelines) with [NetworkX][networkx] style API.
 
@@ -145,8 +147,7 @@ Your help is more than welcome! Please fork and send a pull request, or contact 
 ## Why "Cosmo"?
 
 It is a reference to the Seinfeld character Cosmo Kramer (whose name I'm often reminded of while working on
-this stuff). It is also a nod to the [ABySS][abyss] assembler, since most of the cosmos is
-an abyss. Yeah...
+this stuff). It is also a nod to the [ABySS][abyss] assembler, since most of the cosmos is abyss.
 
 
 ## License
