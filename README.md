@@ -4,20 +4,19 @@
                    888       888   888 `"Y88b.   888   888   888  888   888 
                    888   .o8 888   888 o.  )88b  888   888   888  888   888 
                    `Y8bod8P' `Y8bod8P' 8""888P' o888o o888o o888o `Y8bod8P' 
-                                                                  ver 0.4.2
+                                                                  ver 0.4.3
 
 
 # Cosmo
 
-**Description**: Cosmo is a fast, low-memory DNA assembler using a [Succinct de Bruijn Graph][succ].
+[**Version**][semver]: 0.4.3
 
-**Version**: 0.4.2[^ver]
+Cosmo is a fast, low-memory DNA assembler that uses a [succinct de Bruijn graph][succ].
 
-[^ver]: We use [Semantic Versioning][semver] so you can easily understand our version numbers.
 
 ## Usage
 
-After compiling, you can run Cosmo as simply as:
+After compiling, you can run Cosmo like so:
 
 ```sh
 $ pack-edges <input_file> # this adds reverse complements and dummy edges, and packs them
@@ -36,28 +35,24 @@ Here are some things that you don't want to let surprise you:
 ### DSK Only
 
 Currently Cosmo only supports [DSK][dsk] files with k <= 64 (so, 128 bit or less blocks).
-Support is planned for [DSK][dsk] files with larger k, and possibly output from other kmer
+Support is planned for [DSK][dsk] files with larger k, and possibly output from other k-mer
 counters.
 
 ### Definition of "k-mer"
 
-Note that since our graph is edge-based, `k` defines the length of our edges, hence our nodes are only `k-1` symbols long.
-If you want to construct a [Succinct de Bruijn Graph][succ] where the nodes are `k`-mers, you will need to run [DSK][dsk]
-with k set to k+1. E.g. using output from `$ dsk <input_file> 27` will actually build a `26`-dimension de Bruijn graph.
-
-At the time of writing, [DSK][dsk] doesn't support even `k` values though... so I had better hurry up and support different
-k-mer counters.
+Note that since our graph is edge-based, k defines the length of our edges, hence our nodes are only k-1 symbols long.
+If you want to construct a [Succinct de Bruijn Graph][succ] where the nodes are k-mers, you will need to run [DSK][dsk]
+with k set to k+1. E.g. using output from `$ dsk <input_file> 27` will actually build a 26-dimension de Bruijn graph.
 
 Furthermore, most de Bruijn graph based assemblers add edges between *all* nodes that overlap. We are taking k-mer counter
-output for our edges, so we only have edges that were directly represented in the read set (this makes more sense to us, though -
-why add information that wasn't there, in a non-controlled way? Yes, we are *slightly* more dependent on read quality, but adding all
-possible edges isn't a sensible way to error correct).
+output for our edges, so we only have edges that were directly represented in the read set (this makes more sense to us, though).
+I may add support for the standard way in the future.
 
 ### Graph Traversal
 
 The traversal strategy is currently fairly primitive. We only output the unitigs (paths between branches).
 Unlike [Minia][minia] (for example), we don't treat each node as equal to its reverse complement (each way
-has their pros and cons).
+has their pros and cons). In fact, this is actually wrong :/ we need to fix the way it handles reverse complements.
 
 
 ## Overview and Performance
@@ -73,7 +68,7 @@ Here is a general overview of each program (details in the upcoming paper):
 `+ d * k * 2 = 4mk + 2dk` nucleotides, so `8mk + 4dk` bits (wait...);
 - Using the copy-based radix sort is actually a speed optimisation, since it lets us save the second last iteration which we need for the set difference calculations (how we find the required dummies);
 - The sort, merge, set difference, map and reduce design of this means it is easy to distribute or make external. Besides, [DSK][dsk] reduces the memory requirement drastically as it is;
-- In the output `.packed` file, each edge is represented as `5` bits (edge symbol + flags) in `64`-bit blocks (with `4` bits wasted per block).
+- In the output `.packed` file, each edge is represented as five bits (edge symbol + flags) in 64-bit blocks (with four bits wasted per block).
 
 ### cosmo-build  
 - Constructs the de Bruijn graph *in memory* using succinct data structures that each have linear time construction algorithms - `O(m)`.
@@ -84,13 +79,21 @@ Here is a general overview of each program (details in the upcoming paper):
 
 ## Compilation
 
-There is an included Makefile - just type `make` to build it.
+There is an included Makefile - just type `make` to build it (assuming you have the dependencies listed below).
 
-You will need a compiler that supports C++11, the `Boost` (ranges and range algorithms, zip iterator, and tuple comparison) `libstxxl` (external merging), 
-`sdsl-lite` (low level succinct data structures), and `TClap` (command line parsing) libraries installed,
-and optionally `python` (tested with 2.7.5) and `numpy` (to rebuild the lookup tables).
+*Note: it has only been tested on Mac OS X. Changes to work on any *NIX should be minor.*
 
-These are all installable with any good package manager (e.g. `apt-get`, `yum` or `brew`), except for `sdsl-lite`, which you should [download][sdsl] and build manually.
+### Dependencies  
+- a compiler that supports C++11,
+- [Boost][boost] - ranges and range algorithms, zip iterator, and tuple comparison),
+- [STXXL][stxxl] - external merging,
+- [SDSL-lite][sdsl-lite] - low level succinct data structures,
+- [TClap][tclap] - (command line parsing) libraries installed,
+- [DSK][dsk] - we use its output...
+- Optionally (for developers): [Python][python] and [NumPy][nympy] - rebuilding the lookup tables.
+
+Many of these are all installable with a package manager (e.g. `(apt-get | yum | brew) boost libstxxl tclap`).
+However, you will have to download and build these manually: [DSK][dsk] and [SDSL-lite][sdsl-lite].
 
 
 ## Plan
@@ -98,26 +101,26 @@ These are all installable with any good package manager (e.g. `apt-get`, `yum` o
 In no particular order, these are features that I'd like to add:
 
 - Set up Docker image for [nucleotid.es][nucleotides],
-- Add Boost Graph Library style API,
-- Add support for indirect sorting (to let people attach kmer counts or colours or whatever people want...) accessible like node/edge properties in Boost Graph Library,
+- Add [Boost Graph Library][bgl] style API,
+- Add support for indirect sorting (to let people attach k-mer counts or colours or whatever people want...) accessible like node/edge properties in [Boost Graph Library][bgl],
 - Improve assembly and add error correction (iterative construction),
 - Implement dynamic version (necessary for online construction and dynamic error correction),
 - Remove alphabet limitation (currently only supports DNA),
 - Write unit tests (I have some IPython notebooks that have tests in them, so wasn't completely duct-taped together),
 - Set up continuous integration for [Travis CI][tci],
-- Add Python wrapper (for learning purposes and Python pipelines) with NetworkX style API.
+- Add Python wrapper (for learning purposes and Python pipelines) with [NetworkX][networkx] style API.
 
 
 ## Authors
 
-Implemented by Alex Bowe. Original concept and prototype by Kunihiko Sadakane.
+Implemented by [Alex Bowe][abowe]. Original concept and prototype by [Kunihiko Sadakane][ksadakane].
 
 These people also proved incredibly helpful:
 
-- Simon Puglisi - Fruitful discussions regarding optimisation,
-- Dominik Kempa - Help with STXXL,
-- Rayan Chikhi - Endless advice regarding de Bruijn graphs and assembly in general,
-- Simon Gog - support with SDSL.
+- [Rayan Chikhi][rchikhi] - endless advice regarding de Bruijn graphs and assembly in general,
+- [Simon Puglisi][spuglisi] - fruitful discussions regarding optimisation,
+- [Simon Gog][sgog] - help with [SDSL-lite][sdsl-lite],
+- [Dominik Kempa] - help with [STXXL].
 
 
 ## Contributing
@@ -146,7 +149,23 @@ It is released under the GNU General Public License (GPL) version 3.
 [minia]: http://minia.genouest.org/
 [succ]: http://alexbowe.com/succinct-debruijn-graphs
 [debby]: http://github.com/alexbowe/debby
-[sdsl]: https://github.com/simongog/sdsl-lite
+
+[boost]: http://www.boost.org
+[bgl]: http://www.boost.org/doc/libs/1_56_0/libs/graph/doc/
+[sdsl-lite]: https://github.com/simongog/sdsl-lite
+[networkx]: https://networkx.github.io/
+[stxxl]: http://stxxl.sourceforge.net/
+[python]: https://www.python.org/
+[numpy]: http://www.numpy.org/
+[tclap]: http://tclap.sourceforge.net/
+
+[semver]: http://semver.org/
 [nucleotides]: http://nucleotid.es/
 [tci]: https://travis-ci.org
-[semver]: http://semver.org/
+
+[abowe]: https://github.com/alexbowe
+[ksadakane]: http://researchmap.jp/sada/
+[spuglisi]: http://www.cs.helsinki.fi/u/puglisi/
+[dkempa]: http://www.cs.helsinki.fi/u/dkempa/
+[rchikhi]: https://github.com/rchikhi
+[sgog]: https://github.com/simongog/
