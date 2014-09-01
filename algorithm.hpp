@@ -95,6 +95,7 @@ void visit_unipaths(const G& g, const V& v, const F & f) {
     // Due to the definition of our branch vector
     // so it will be selected to... so we just follow _forward
     do {
+      // TODO: change back to int repr and do mapping at caller level
       typename G::symbol_type x = g._strip_edge_flag(g.m_edges[edge]);
       f(g._map_symbol(x));
       if (x == 0) break;
