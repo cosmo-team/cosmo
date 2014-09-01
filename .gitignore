@@ -1,9 +1,22 @@
 # Project Executable
-kramer
+pack-edges
+cosmo-build
+cosmo-assemble
+
+# Other project stuff
+test_data/*
 
 # Generated files
-lut.c
+# lut.hpp # actually want this since it removes python dependency
 
 # C stuff
 *.o
 *.dSYM
+
+# Python stuff
+.ipynb_checkpoints/*
+*.ipynb
+
+# Output files
+*.packed
+*.dbg

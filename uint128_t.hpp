@@ -6,9 +6,9 @@
 
 // Possibly handy function for users of this type
 template <typename T>
-size_t bitwidth() {
-  return sizeof(T) * CHAR_BIT;
-}
+struct bitwidth {
+  const static size_t width = sizeof(T) * CHAR_BIT;
+};
 
 /* UINT128_T
  * Useful for wider blocks (e.g. when 32 < k <= 64 in a DNA kmer program)

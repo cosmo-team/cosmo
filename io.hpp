@@ -8,6 +8,7 @@
 #include <iostream>
 #include <fstream>
 #include <vector>
+#include <tuple>
 
 #include "dummies.hpp"
 #include "kmer.hpp"
@@ -30,7 +31,8 @@ size_t dsk_read_kmers(int handle, uint32_t kmer_num_bits, uint64_t * kmers_outpu
 
 typedef uint8_t packed_edge;
 
-#define PACKED_WIDTH 5
+#define PACKED_WIDTH (5)
+#define PACKED_CAPACITY (bitwidth<uint64_t>::width/PACKED_WIDTH)
 
 inline
 packed_edge pack_edge(uint8_t symbol, bool start_flag, bool end_flag) {
@@ -43,7 +45,7 @@ void append_packed_edge(uint64_t & block, packed_edge edge) {
 }
 
 class PackedEdgeOutputer {
-  static const size_t capacity = 64/PACKED_WIDTH;
+  static const size_t capacity = PACKED_CAPACITY;
 
   ostream & _os;
 
@@ -100,10 +102,37 @@ class PackedEdgeOutputer {
     //printf("%zu\n", _counts[f_sym]);
 
     packed_edge edge = pack_edge(w_sym, first_start_node, first_end_node);
+    //cout << ((edge & 2) >> 1) << endl;
     append_packed_edge(_buf, edge);
 
     if (++_len == capacity) flush();
   }
 };
+
+inline packed_edge get_packed_edge_from_block(uint64_t block, size_t i) {
+  return (block >> (PACKED_WIDTH * (PACKED_CAPACITY-i-1))) & 31;
+}
+
+template <typename BlockIterator>
+inline packed_edge get_packed_edge(BlockIterator blocks, size_t i) {
+  size_t block_idx = i/PACKED_CAPACITY;
+  size_t local_idx = i%PACKED_CAPACITY;
+  return get_packed_edge_from_block(blocks[block_idx], local_idx);
+}
+
+typedef std::tuple<uint8_t, bool, bool> edge_tuple;
+
+static inline uint8_t unpack_symbol(packed_edge x) { return x >> 2; }
+static inline bool    unpack_node_flag(packed_edge x) { return ((x & 2) >> 1); }
+static inline bool    unpack_edge_flag(packed_edge x) { return (x & 1); }
+
+inline edge_tuple unpack_to_tuple(packed_edge x) {
+  return edge_tuple(unpack_symbol(x), unpack_node_flag(x), unpack_edge_flag(x));
+}
+
+template <typename BlockIterator>
+inline edge_tuple get_edge(BlockIterator blocks, size_t i) {
+  return unpack_to_tuple(get_packed_edge(blocks, i));
+}
 
 #endif

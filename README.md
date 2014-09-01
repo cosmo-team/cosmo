@@ -1,90 +1,140 @@
-# Kramer
 
-version 1.0
+                    .ooooo.   .ooooo.   .oooo.o ooo. .oo.  .oo.    .ooooo.  
+                   d88' `"Y8 d88' `88b d88(  "8 `888P"Y88bP"Y88b  d88' `88b 
+                   888       888   888 `"Y88b.   888   888   888  888   888 
+                   888   .o8 888   888 o.  )88b  888   888   888  888   888 
+                   `Y8bod8P' `Y8bod8P' 8""888P' o888o o888o o888o `Y8bod8P' 
+                                                                  ver 0.4.3
 
 
-## Description
+# Cosmo
 
-Kramer is a tool to convert kmer counter outputs into the packed form suitable for constructing a
-[Succinct de Bruijn Graph][succ]. This includes sorting in the required order, and finding and
-adding necessary dummy edges.
+[**Version**][semver]: 0.4.3
 
-Currently Kramer only supports [DSK][dsk] files with k <= 64 (so, 128 bit or less blocks).
-Support is planned for [DSK][dsk] files with larger k, and possibly output from other kmer
-counters.
+Cosmo is a fast, low-memory DNA assembler that uses a [succinct de Bruijn graph][succ].
 
 
 ## Usage
 
-After building, you can run Kramer as simply as:
+After [compiling](#compilation), you can run Cosmo like so:
 
-    $ kramer <input_file>
+```sh
+$ pack-edges <input_file> # this adds reverse complements and dummy edges, and packs them
+$ cosmo-build <input_file>.packed # compresses and builds indices
+$ cosmo-assemble <input_file>.packed.dbg # output: <input_file>.packed.dbg.fasta
+```
 
-Where `input_file` is the binary output of a [DSK][dsk] run (more kmer counters at a later date).
-Kramer will detect the k value, and outputs to `<input_file>.packed` by default (which can be altered
-with the `-o` option).
-
-Note that if you want to construct a [Succinct de Bruijn Graph][succ] where the nodes are k-mers, you
-will need to set DSK's k to k+1. *I might abuse the word "k-mer" in this document... Hopefully it's
-clear from context.*
-
-**Example:**
-
-    $ dsk readfile.fq 35 -t 3
-    $ kramer readfile.solid_kmers_binary
-
-Will result in a file `readfile.solid_kmers_binary.packed` in the working directory.
+Where `input_file` is the binary output of a [DSK][dsk] run. Each program has a `--help` option for a more
+detailed description of how to use them.
 
 
-## Format
+## Caveats
 
-For each edge (a k+1-mer), we need to output the outgoing edge label (one symbol in "$acgt"), a bit flag
-which indicate whether this edge's start node (the first k bases) is the first occurence as a start node,
-and a bit flag which indicates whether this edge's end node (the last k bases) is the first occurence as an
-end node. In total, five bits per edge, packed into 64 bit blocks (12 edges each, with four bits wasted).
+Here are some things that you don't want to let surprise you:
 
-The four wasted bits will be at left half of the MSB, and the 12th edge will be in the LSB. The ith edge for a 
-block will always be in the same position, even if we dont fill the block up completely.
+### DSK Only
 
-The edges are followed by five 64 bit integers to store the cumulative counts (which serve as start/end pointers to
-the *sorted* second-last symbol in each kmer), and a 64 bit integer representing k (64 bits was chosen to make it
-extra easy to parse the file).
+Currently Cosmo only supports [DSK][dsk] files with k <= 64 (so, 128 bit or less blocks).
+Support is planned for [DSK][dsk] files with larger k, and possibly output from other k-mer
+counters.
 
-A Python script (`parse_kramer.py`) has been provided to demonstrate how to use the output. This can be loaded into
-[Debby][debby] (to simulate a [Succinct de Bruijn graph][succ] and recover your full-length kmers if desired).
-When we release our fast de Bruijn graph library you will be able to use it with that too.
+### Definition of "k-mer"
 
+Note that since our graph is edge-based, k defines the length of our edges, hence our nodes are only k-1 symbols long.
+If you want to construct a [Succinct de Bruijn Graph][succ] where the nodes are k-mers, you will need to run [DSK][dsk]
+with k set to k+1. E.g. using output from `$ dsk <input_file> 27` will actually build a 26-dimension de Bruijn graph.
 
-## Details
+Furthermore, most de Bruijn graph based assemblers add edges between *all* nodes that overlap. We are taking k-mer counter
+output for our edges, so we only have edges that were directly represented in the read set (this makes more sense to us, though).
+I may add support for the standard way in the future.
 
-Currently Kramer allocates enough space to store all kmers in memory (an external version will be completed later).
-All reverse complements are added (as is required for [our graph][succ]'s representation), and then radix sorted into the
-correct order - O(mk^2) for m edges - keeping the last and second last iteration - the kmers sorted on start node (say, A),
-and the kmers sorted on end node (B) respectively. This may seem wasteful but it let's us very quickly discover the required dummy edges.
+### Graph Traversal
 
-Using the two resulting tables, we can detect required incoming dummy edges from the set difference A - B (nodes which appear as start nodes
-of edges, but *not* end nodes). Likewise, we can detect required outgoing dummy edges from B - A (nodes which appear as end nodes, but not start nodes).
-Both set differences are completed in O(m) time (since the two tables are sorted, and we store kmers in such a way that they can be compared
-as integers). We then add all right-shifts of the incoming dummy edges (e.g. $acgt, $$acg, $$$ac, $$$$a) - O(dk) - and sort them - O(dk^2) for d dummies.
-
-In the worst case, there are as many dummy edges as there are edges, which makes our complexity O(mk + mk^2) = O(mk^2), but in reality
-there are usually *very few* dummies (especially after outputting only the "solid" kmers, having frequency >= 3, for example).
-
-Finally we 3-way-merge the dummies with the edges sorted on start node, adding the bit flags as we output - O(m).
-
-Since usually d << m, the total run time is O(mk), in 4*m*2k = O(mk) space.
-
-Due to the linear nature of this approach, we can easily break it into mergable chunks or multiple passes, which will allow us to
-support files larger than memory at a later date. This also means it should be easy to distribute across multiple computers, or utilise
-a GPU, Intel TBB, etc...
+The traversal strategy is currently fairly primitive. We only output the unitigs (paths between branches).
+Unlike [Minia][minia] (for example), we don't treat each node as equal to its reverse complement (each way
+has their pros and cons). In fact, this is actually wrong :/ we need to fix the way it handles reverse complements.
 
 
 ## Compilation
 
-There is an included Makefile, so just type `make` to build it.
+There is an included Makefile - just type `make` to build it (assuming you have the dependencies listed below).
 
-You will need a compiler that supports C++11, the `Boost` and `TClap` libraries installed, and optionally `Python` (if you want to rebuild the lookup tables)
-and `numpy`. These are all installable with any good package manager (e.g. `apt-get`, `yum` or `brew`).
+*Note: it has only been tested on Mac OS X. Changes to work on any *NIX should be minor.*
+
+### Dependencies  
+- A compiler that supports C++11,
+- [Boost][boost] - ranges and range algorithms, zip iterator, and tuple comparison),
+- [STXXL][stxxl] - external merging,
+- [SDSL-lite][sdsl-lite] - low level succinct data structures,
+- [TClap][tclap] - command line parsing,
+- [DSK][dsk] - k-mer counting (we need this for input),
+- Optionally (for developers): [Python][python] and [NumPy][numpy] - rebuilding the lookup tables.
+
+Many of these are all installable with a package manager (e.g. `(apt-get | yum | brew ) install boost libstxxl tclap`).
+However, you will have to download and build these manually: [DSK][dsk] and [SDSL-lite][sdsl-lite].
+
+
+## Overview and Performance
+
+Here is a general overview of each program (details in the upcoming paper):
+
+### pack-edges  
+- Ignoring memory requirements, main operations are map - O(m), reduce - O(m), radix sort - O(mk), set difference - O(m), and merging - O(m), for m edges.
+- Generating all incoming dummies (e.g. {$ACG} -> {$ACG, $$AC, $$$A}, so we don't lose any node label data from storing only the last two symbols) - O(dk) for d dummies.
+- Adding each dummy shift means that incoming dummies have to be sorted again: O(dk * k) = O(dk^2).
+- Since in the worst case d = m, total is O(mk^2), but since usually d << m, O(mk) in practice.
+- If this was all implemented in memory, the space requirement would be m * k * 2 * 2 (we add reverse complements and use a copy-based radix sort) + d * k * 2 = 4mk + 2dk
+nucleotides, so 8mk + 4dk bits (which might sound like a lot, but...),
+- Using the copy-based radix sort is actually a speed optimisation, since it lets us save the second last iteration which we need for the set difference calculations (how we find the required dummies).
+- The sort, merge, set difference, map and reduce design of this means it is easy to distribute or make external. Besides, [DSK][dsk] reduces the memory requirement drastically as it is.
+- In the output `.packed` file, each edge is represented as five bits (edge symbol + flags) in 64-bit blocks (with four bits wasted per block).
+
+### cosmo-build  
+- Constructs the de Bruijn graph *in memory* using succinct data structures that each have linear time construction algorithms - O(m).
+
+### cosmo-assemble  
+- Iterates over every edge to build a compressed bit-vector that marks nodes that branch in or out - O(m), since indegree and outdegree are O(1);
+- Selects to each branching edge, and follows subsequent edges until it reaches another branch node - O(m).
+
+
+## .plan
+
+### Upcoming Release
+
+- [ ] Work out how to traverse correctly
+  - [ ] At least address the reverse complement corner cases discussed by [Pall Melsted](https://twitter.com/pmelsted) in blog posts [here](http://pmelsted.wordpress.com/2014/01/17/edge-cases-in-de-bruijn-graphs/),
+  and [here](http://pmelsted.wordpress.com/2014/02/24/debugging-de-bruijn-graphs/).
+  - [ ] Handle the first k symbols of incoming tips (backtrack until $).
+  - [ ] Add traditional node overlap detection
+- [ ] Rewrite edge vector so it is faster (currently a wavelet tree)
+  - [ ] Vector with four bits for each node, with rank/select only on the non-minus flagged edges? (potential problem with sampling)
+- [ ] Add support for external sorting (for large data sets)
+
+### Future Releases
+
+- Set up Docker image for [nucleotid.es][nucleotides],
+- Add [Boost Graph Library][bgl] style API (to get merged into a heavyweight assembler),
+- Prepare documentation for said API,
+- Improve memory use for dummy edge generation (many of the shifted dummies are repeated... could build a trie instead),
+- Add support for indirect sorting (to let people attach k-mer counts or colours or whatever people want...) accessible like node/edge properties in [Boost Graph Library][bgl],
+- Improve assembly and add error correction (iterative construction),
+- Implement dynamic version (necessary for online construction and dynamic error correction),
+- Remove alphabet limitation (currently only supports DNA),
+- Write unit tests (I have some IPython notebooks that have tests in them, so wasn't completely duct-taped together),
+- Set up continuous integration for [Travis CI][tci],
+- Add Python wrapper (for learning purposes and Python pipelines) with [NetworkX][networkx] style API.
+
+
+## Authors
+
+Implemented by [Alex Bowe][abowe]. Original concept and prototype by [Kunihiko Sadakane][ksadakane].
+
+These people also proved incredibly helpful:
+
+- [Rayan Chikhi][rchikhi] - endless advice regarding de Bruijn graphs and assembly in general,
+- [Simon Puglisi][spuglisi] - fruitful discussions regarding optimisation,
+- [Simon Gog][sgog] - help with [SDSL-lite][sdsl-lite],
+- [Dominik Kempa][dkempa] - help with [STXXL].
 
 
 ## Contributing
@@ -92,13 +142,41 @@ and `numpy`. These are all installable with any good package manager (e.g. `apt-
 Your help is more than welcome! Please fork and send a pull request, or contact me directly :)
 
 
+## Why "Cosmo"?
+
+It is a reference to the Seinfeld character Cosmo Kramer (whose name I'm often reminded of while working on
+this stuff). It is also a nod to the [ABySS][abyss] assembler, since most of the cosmos is
+an abyss. Yeah...
+
+
 ## License
 
-This software is copyright (c) Alex Bowe 2014, bowe.alexander at gmail dot com.
+This software is copyright (c) Alex Bowe 2014 (bowe dot alexander at gmail dot com).
 It is released under the GNU General Public License (GPL) version 3.
 
 
 [dsk]: http://minia.genouest.org/dsk/
+[minia]: http://minia.genouest.org/
+[abyss]: https://github.com/bcgsc/abyss
 [succ]: http://alexbowe.com/succinct-debruijn-graphs
 [debby]: http://github.com/alexbowe/debby
 
+[boost]: http://www.boost.org
+[bgl]: http://www.boost.org/doc/libs/1_56_0/libs/graph/doc/
+[sdsl-lite]: https://github.com/simongog/sdsl-lite
+[networkx]: https://networkx.github.io/
+[stxxl]: http://stxxl.sourceforge.net/
+[python]: https://www.python.org/
+[numpy]: http://www.numpy.org/
+[tclap]: http://tclap.sourceforge.net/
+
+[semver]: http://semver.org/
+[nucleotides]: http://nucleotid.es/
+[tci]: https://travis-ci.org
+
+[abowe]: https://github.com/alexbowe
+[ksadakane]: http://researchmap.jp/sada/
+[spuglisi]: http://www.cs.helsinki.fi/u/puglisi/
+[dkempa]: http://www.cs.helsinki.fi/u/dkempa/
+[rchikhi]: https://github.com/rchikhi
+[sgog]: https://github.com/simongog/
