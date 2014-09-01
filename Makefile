@@ -10,6 +10,11 @@ DEBUG_FLAGS=-g -O0
 # The MMX and SSE flags can be safely disabled
 RELEASE_FLAGS=-O3 -DNDEBUG -mmmx -msse -msse2 -msse3 -msse4 -march=native
 
+# DEFINITIONS
+# Using Semantic Versioning: http://semver.org/
+VERSION=0.4.2
+CPP_FLAGS+=-DVERSION=\"$(VERSION)\"
+
 ifeq ($(debug),1)
 CPP_FLAGS+=$(DEBUG_FLAGS)
 else

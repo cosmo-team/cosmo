@@ -1,23 +1,29 @@
 
-                    .ooooo.   .ooooo.   .oooo.o ooo. .oo.  .oo.    .ooooo.  v1.0
+                    .ooooo.   .ooooo.   .oooo.o ooo. .oo.  .oo.    .ooooo.  
                    d88' `"Y8 d88' `88b d88(  "8 `888P"Y88bP"Y88b  d88' `88b 
                    888       888   888 `"Y88b.   888   888   888  888   888 
                    888   .o8 888   888 o.  )88b  888   888   888  888   888 
                    `Y8bod8P' `Y8bod8P' 8""888P' o888o o888o o888o `Y8bod8P' 
+                                                                  ver 0.4.2
 
 
 # Cosmo
 
-Cosmo is a fast, low-memory DNA assembler using a [Succinct de Bruijn Graph][succ].
+**Description**: Cosmo is a fast, low-memory DNA assembler using a [Succinct de Bruijn Graph][succ].
 
+**Version**: 0.4.2[^ver]
+
+[^ver]: We use [Semantic Versioning][semver] so you can easily understand our version numbers.
 
 ## Usage
 
 After compiling, you can run Cosmo as simply as:
 
-    $ pack-edges <input_file> # this adds reverse complements and dummy edges, and packs them
-    $ cosmo-build <input_file>.packed # compresses and builds indices
-    $ cosmo-assemble <input_file>.packed.dbg # output: <input_file>.packed.dbg.fasta
+```sh
+$ pack-edges <input_file> # this adds reverse complements and dummy edges, and packs them
+$ cosmo-build <input_file>.packed # compresses and builds indices
+$ cosmo-assemble <input_file>.packed.dbg # output: <input_file>.packed.dbg.fasta
+```
 
 Where `input_file` is the binary output of a [DSK][dsk] run. Each program has a `--help` option for a more
 detailed description of how to use them.
@@ -33,7 +39,7 @@ Currently Cosmo only supports [DSK][dsk] files with k <= 64 (so, 128 bit or less
 Support is planned for [DSK][dsk] files with larger k, and possibly output from other kmer
 counters.
 
-### Definition of "K-mer"
+### Definition of "k-mer"
 
 Note that since our graph is edge-based, `k` defines the length of our edges, hence our nodes are only `k-1` symbols long.
 If you want to construct a [Succinct de Bruijn Graph][succ] where the nodes are `k`-mers, you will need to run [DSK][dsk]
@@ -124,8 +130,8 @@ Your help is more than welcome! Please fork and send a pull request, or contact 
 I called an earlier version of this Kramer because of its focus on k-mers, and
 because I was a fan of the Kramer character on Seinfeld. Kramer's first name happens to be
 Cosmo, which sounded cooler to me. It is also a nod to Cosmos (the show that makes science/maths accessible to
-regular peeps), and ABySS (which to me sounds spacey as well) - I feel that people exploring genomes are contemporary
-cosmonauts.
+regular peeps), and ABySS (which to me sounds spacey as well) - I feel that people exploring genomes are like
+small-scale cosmonauts.
 
 You have permission to scoff ;)
 
@@ -143,3 +149,4 @@ It is released under the GNU General Public License (GPL) version 3.
 [sdsl]: https://github.com/simongog/sdsl-lite
 [nucleotides]: http://nucleotid.es/
 [tci]: https://travis-ci.org
+[semver]: http://semver.org/

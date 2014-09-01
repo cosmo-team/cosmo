@@ -141,7 +141,6 @@ typedef struct p
     std::string output_prefix = "";
 } parameters_t;
 
-#define VERSION "1.0" // Move this to some external file and inject readme with it, etc...
 void parse_arguments(int argc, char **argv, parameters_t & params);
 void parse_arguments(int argc, char **argv, parameters_t & params)
 {

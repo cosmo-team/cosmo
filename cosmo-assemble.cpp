@@ -23,7 +23,6 @@ struct parameters_t {
   std::string output_prefix = "";
 };
 
-#define VERSION "1.0"
 void parse_arguments(int argc, char **argv, parameters_t & params);
 void parse_arguments(int argc, char **argv, parameters_t & params)
 {
