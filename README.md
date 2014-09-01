@@ -82,20 +82,24 @@ There is an included Makefile - just type `make` to build it.
 
 You will need a compiler that supports C++11, the `Boost` (ranges and range algorithms, zip iterator, and tuple comparison) `libstxxl` (external merging), 
 `sdsl-lite` (low level succinct data structures), and `TClap` (command line parsing) libraries installed,
-and optionally `Python` and `numpy` (to rebuild the lookup tables).
+and optionally `python` (tested with 2.7.5) and `numpy` (to rebuild the lookup tables).
 
 These are all installable with any good package manager (e.g. `apt-get`, `yum` or `brew`), except for `sdsl-lite`, which you should [download][sdsl] and build manually.
 
 
 ## Plan
 
-In no particular order, these are features that I'd like to add on the horizon:
+In no particular order, these are features that I'd like to add:
 
+- Set up Docker image for [nucleotid.es][nucleotides],
 - Add Boost Graph Library style API,
 - Add support for indirect sorting (to let people attach kmer counts or colours or whatever people want...) accessible like node/edge properties in Boost Graph Library,
-- Improve assembly and add error correction,
-- Implement dynamic version (necessary for online construction),
-- Remove alphabet limitation (currently only supports DNA).
+- Improve assembly and add error correction (iterative construction),
+- Implement dynamic version (necessary for online construction and dynamic error correction),
+- Remove alphabet limitation (currently only supports DNA),
+- Write unit tests (I have some IPython notebooks that have tests in them, so wasn't completely duct-taped together),
+- Set up continuous integration for [Travis CI][tci],
+- Add Python wrapper (for learning purposes and Python pipelines) with NetworkX style API.
 
 
 ## Authors
@@ -104,10 +108,10 @@ Implemented by Alex Bowe. Original concept and prototype by Kunihiko Sadakane.
 
 These people also proved incredibly helpful:
 
-- Simon Puglisi - Fruitful discussions regarding optimisation
-- Dominik Kempa - Help with STXXL
-- Rayan Chikhi - Endless advice regarding de Bruijn graphs and assembly in general
-- Simon Gog - support with SDSL
+- Simon Puglisi - Fruitful discussions regarding optimisation,
+- Dominik Kempa - Help with STXXL,
+- Rayan Chikhi - Endless advice regarding de Bruijn graphs and assembly in general,
+- Simon Gog - support with SDSL.
 
 
 ## Contributing
@@ -137,4 +141,5 @@ It is released under the GNU General Public License (GPL) version 3.
 [succ]: http://alexbowe.com/succinct-debruijn-graphs
 [debby]: http://github.com/alexbowe/debby
 [sdsl]: https://github.com/simongog/sdsl-lite
-
+[nucleotides]: http://nucleotid.es/
+[tci]: https://travis-ci.org
