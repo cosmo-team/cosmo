@@ -16,7 +16,7 @@ Cosmo is a fast, low-memory DNA assembler that uses a [succinct de Bruijn graph]
 
 ## Usage
 
-After compiling, you can run Cosmo like so:
+After [compiling](#compilation), you can run Cosmo like so:
 
 ```sh
 $ pack-edges <input_file> # this adds reverse complements and dummy edges, and packs them
@@ -77,6 +77,7 @@ Here is a general overview of each program (details in the upcoming paper):
 - Iterates over every edge to build a compressed bit-vector that marks nodes that branch in or out - `O(m)`, since indegree and outdegree are `O(1)`;
 - Selects to each branching edge, and follows subsequent edges until it reaches another branch node - `O(m)`.
 
+
 ## Compilation
 
 There is an included Makefile - just type `make` to build it (assuming you have the dependencies listed below).
@@ -84,24 +85,36 @@ There is an included Makefile - just type `make` to build it (assuming you have 
 *Note: it has only been tested on Mac OS X. Changes to work on any *NIX should be minor.*
 
 ### Dependencies  
-- a compiler that supports C++11,
+- A compiler that supports C++11,
 - [Boost][boost] - ranges and range algorithms, zip iterator, and tuple comparison),
 - [STXXL][stxxl] - external merging,
 - [SDSL-lite][sdsl-lite] - low level succinct data structures,
-- [TClap][tclap] - (command line parsing) libraries installed,
-- [DSK][dsk] - we use its output...
+- [TClap][tclap] - command line parsing,
+- [DSK][dsk] - k-mer counting (we need this for input),
 - Optionally (for developers): [Python][python] and [NumPy][nympy] - rebuilding the lookup tables.
 
-Many of these are all installable with a package manager (e.g. `(apt-get | yum | brew) boost libstxxl tclap`).
+Many of these are all installable with a package manager (e.g. `(apt-get | yum install | brew install) boost libstxxl tclap`).
 However, you will have to download and build these manually: [DSK][dsk] and [SDSL-lite][sdsl-lite].
 
 
-## Plan
+## .plan
 
-In no particular order, these are features that I'd like to add:
+### Pressing Issues
+
+- [ ] Work out how to traverse correctly
+  - [ ] At least address the reverse complement corner cases discussed by [Pall Melsted](https://twitter.com/pmelsted) [here](http://pmelsted.wordpress.com/2014/01/17/edge-cases-in-de-bruijn-graphs/),
+  and [here](http://pmelsted.wordpress.com/2014/02/24/debugging-de-bruijn-graphs/).
+  - [ ] Handle the first k symbols of incoming tips (backtrack until $).
+  - [ ] Add traditional node overlap detection
+- [ ] Rewrite edge vector so it is faster (currently a wavelet tree)
+  - [ ] Vector with four bits for each node, with rank/select only on the non-minus flagged edges? (potential problem with sampling)
+- [ ] Add support for external sorting (for large data sets)
+
+### Horizon
 
 - Set up Docker image for [nucleotid.es][nucleotides],
-- Add [Boost Graph Library][bgl] style API,
+- Add [Boost Graph Library][bgl] style API (to get merged into a heavyweight assembler),
+- Prepare documentation for said API,
 - Add support for indirect sorting (to let people attach k-mer counts or colours or whatever people want...) accessible like node/edge properties in [Boost Graph Library][bgl],
 - Improve assembly and add error correction (iterative construction),
 - Implement dynamic version (necessary for online construction and dynamic error correction),
@@ -120,7 +133,7 @@ These people also proved incredibly helpful:
 - [Rayan Chikhi][rchikhi] - endless advice regarding de Bruijn graphs and assembly in general,
 - [Simon Puglisi][spuglisi] - fruitful discussions regarding optimisation,
 - [Simon Gog][sgog] - help with [SDSL-lite][sdsl-lite],
-- [Dominik Kempa] - help with [STXXL].
+- [Dominik Kempa][dkempa] - help with [STXXL].
 
 
 ## Contributing
@@ -130,13 +143,9 @@ Your help is more than welcome! Please fork and send a pull request, or contact 
 
 ## Why "Cosmo"?
 
-I called an earlier version of this Kramer because of its focus on k-mers, and
-because I was a fan of the Kramer character on Seinfeld. Kramer's first name happens to be
-Cosmo, which sounded cooler to me. It is also a nod to Cosmos (the show that makes science/maths accessible to
-regular peeps), and ABySS (which to me sounds spacey as well) - I feel that people exploring genomes are like
-small-scale cosmonauts.
-
-You have permission to scoff ;)
+It is a nod to Seinfeld character Cosmo Kramer (whose name I'm reminded of often while working on
+this stuff). It is also a slight nod to the [ABySS][abyss] assembler, since most of the cosmos is
+an abyss.
 
 
 ## License
@@ -147,6 +156,7 @@ It is released under the GNU General Public License (GPL) version 3.
 
 [dsk]: http://minia.genouest.org/dsk/
 [minia]: http://minia.genouest.org/
+[abyss]: https://github.com/bcgsc/abyss
 [succ]: http://alexbowe.com/succinct-debruijn-graphs
 [debby]: http://github.com/alexbowe/debby
 
