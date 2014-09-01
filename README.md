@@ -60,22 +60,22 @@ has their pros and cons). In fact, this is actually wrong :/ we need to fix the 
 Here is a general overview of each program (details in the upcoming paper):
 
 ### pack-edges  
-- Ignoring memory requirements, main operations are map - `O(m)`, reduce - `O(m)`, radix sort - `O(mk)`, set difference `O(m)` and merging `O(m)`, for `m` edges;
-- Generating all incoming dummies (e.g. `{$ACG} -> {$ACG, $$AC, $$$A}`, so we don't lose any node label data from storing only the last two symbols): `O(dk)` for `d` dummies;
-- Adding each dummy shift means that incoming dummies have to be sorted again: `O(dk * k) = O(dk^2)`;
-- Since in the worst case `d = m`, total is `O(mk^2)`, but since usually `d << m`, `O(mk)` in practice;
-- If this was all implemented in memory, the space requirement would be `m * k * 2 * 2` (we add reverse complements and use a copy-based radix sort)
-`+ d * k * 2 = 4mk + 2dk` nucleotides, so `8mk + 4dk` bits (wait...);
-- Using the copy-based radix sort is actually a speed optimisation, since it lets us save the second last iteration which we need for the set difference calculations (how we find the required dummies);
-- The sort, merge, set difference, map and reduce design of this means it is easy to distribute or make external. Besides, [DSK][dsk] reduces the memory requirement drastically as it is;
+- Ignoring memory requirements, main operations are map - O(m), reduce - O(m), radix sort - O(mk), set difference - O(m), and merging - O(m), for m edges.
+- Generating all incoming dummies (e.g. {$ACG} -> {$ACG, $$AC, $$$A}, so we don't lose any node label data from storing only the last two symbols) - O(dk) for d dummies.
+- Adding each dummy shift means that incoming dummies have to be sorted again: O(dk * k) = O(dk^2).
+- Since in the worst case d = m, total is O(mk^2), but since usually d << m, O(mk) in practice.
+- If this was all implemented in memory, the space requirement would be m * k * 2 * 2 (we add reverse complements and use a copy-based radix sort) + d * k * 2 = 4mk + 2dk
+nucleotides, so 8mk + 4dk bits (which might sound like a lot, but...),
+- Using the copy-based radix sort is actually a speed optimisation, since it lets us save the second last iteration which we need for the set difference calculations (how we find the required dummies).
+- The sort, merge, set difference, map and reduce design of this means it is easy to distribute or make external. Besides, [DSK][dsk] reduces the memory requirement drastically as it is.
 - In the output `.packed` file, each edge is represented as five bits (edge symbol + flags) in 64-bit blocks (with four bits wasted per block).
 
 ### cosmo-build  
-- Constructs the de Bruijn graph *in memory* using succinct data structures that each have linear time construction algorithms - `O(m)`.
+- Constructs the de Bruijn graph *in memory* using succinct data structures that each have linear time construction algorithms - O(m).
 
 ### cosmo-assemble  
-- Iterates over every edge to build a compressed bit-vector that marks nodes that branch in or out - `O(m)`, since indegree and outdegree are `O(1)`;
-- Selects to each branching edge, and follows subsequent edges until it reaches another branch node - `O(m)`.
+- Iterates over every edge to build a compressed bit-vector that marks nodes that branch in or out - O(m), since indegree and outdegree are O(1);
+- Selects to each branching edge, and follows subsequent edges until it reaches another branch node - O(m).
 
 
 ## Compilation
@@ -99,10 +99,10 @@ However, you will have to download and build these manually: [DSK][dsk] and [SDS
 
 ## .plan
 
-### Pressing Issues
+### Upcoming Release
 
 - [ ] Work out how to traverse correctly
-  - [ ] At least address the reverse complement corner cases discussed by [Pall Melsted](https://twitter.com/pmelsted) [here](http://pmelsted.wordpress.com/2014/01/17/edge-cases-in-de-bruijn-graphs/),
+  - [ ] At least address the reverse complement corner cases discussed by [Pall Melsted](https://twitter.com/pmelsted) in blog posts [here](http://pmelsted.wordpress.com/2014/01/17/edge-cases-in-de-bruijn-graphs/),
   and [here](http://pmelsted.wordpress.com/2014/02/24/debugging-de-bruijn-graphs/).
   - [ ] Handle the first k symbols of incoming tips (backtrack until $).
   - [ ] Add traditional node overlap detection
@@ -110,11 +110,12 @@ However, you will have to download and build these manually: [DSK][dsk] and [SDS
   - [ ] Vector with four bits for each node, with rank/select only on the non-minus flagged edges? (potential problem with sampling)
 - [ ] Add support for external sorting (for large data sets)
 
-### Horizon
+### Future Releases
 
 - Set up Docker image for [nucleotid.es][nucleotides],
 - Add [Boost Graph Library][bgl] style API (to get merged into a heavyweight assembler),
 - Prepare documentation for said API,
+- Improve memory use for dummy edge generation (many of the shifted dummies are repeated... could build a trie instead),
 - Add support for indirect sorting (to let people attach k-mer counts or colours or whatever people want...) accessible like node/edge properties in [Boost Graph Library][bgl],
 - Improve assembly and add error correction (iterative construction),
 - Implement dynamic version (necessary for online construction and dynamic error correction),
@@ -143,9 +144,9 @@ Your help is more than welcome! Please fork and send a pull request, or contact 
 
 ## Why "Cosmo"?
 
-It is a nod to Seinfeld character Cosmo Kramer (whose name I'm reminded of often while working on
-this stuff). It is also a slight nod to the [ABySS][abyss] assembler, since most of the cosmos is
-an abyss.
+It is a reference to the Seinfeld character Cosmo Kramer (whose name I'm often reminded of while working on
+this stuff). It is also a nod to the [ABySS][abyss] assembler, since most of the cosmos is
+an abyss. Yeah...
 
 
 ## License
