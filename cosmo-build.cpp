@@ -35,7 +35,6 @@ void parse_arguments(int argc, char **argv, parameters_t & params)
             "Default prefix: basename(input_file).", false, "", output_short_form, cmd);
   cmd.parse( argc, argv );
 
-  // -d flag for decompression to original kmer biz
   params.input_filename  = input_filename_arg.getValue();
   params.output_prefix   = output_prefix_arg.getValue();
 }
@@ -49,6 +48,13 @@ int main(int argc, char* argv[]) {
   //vector<size_t> minus_positions;
   debruijn_graph<> dbg = debruijn_graph<>::load_from_packed_edges(input, "$ACGT"/*, &minus_positions*/);
   input.close();
+
+  cerr << "k             : " << dbg.k << endl;
+  cerr << "num_nodes()   : " << dbg.num_nodes() << endl;
+  cerr << "num_edges()   : " << dbg.num_edges() << endl;
+  cerr << "Total size    : " << size_in_mega_bytes(dbg) << " MB" << endl;
+  cerr << "Bits per edge : " << bits_per_element(dbg) << " Bits" << endl;
+
 
   // The parameter should be const... On my computer the parameter
   // isn't const though, yet it doesn't modify the string...

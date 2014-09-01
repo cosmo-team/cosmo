@@ -49,8 +49,7 @@ int main(int argc, char* argv[]) {
   // isn't const though, yet it doesn't modify the string...
   // This is still done AFTER loading the file just in case
   char * base_name = basename(const_cast<char*>(p.input_filename.c_str()));
-  string outfilename = ((p.output_prefix == "")? base_name : p.output_prefix) + graph_extension;
-  cout << outfilename << endl;
+  string outfilename = ((p.output_prefix == "")? base_name : p.output_prefix);
 
   // TO LOAD:
   debruijn_graph<> dbg;
@@ -61,6 +60,11 @@ int main(int argc, char* argv[]) {
   cerr << "Total size    : " << size_in_mega_bytes(dbg) << " MB" << endl;
   cerr << "Bits per edge : " << bits_per_element(dbg) << " Bits" << endl;
 
+  // This actually does take a little while (10 sec) to build. Should maybe add flags to
+  // pre-build it during graph construction and pass it in (faster)
+  // TODO: TIME it on ch14
+  // e.g. cosmo-build -u (unipaths)
+  // cosmo-assemble -u unipaths-file
   sd_vector<> b = make_branch_vector(dbg);
   cerr << "Branch size   : " << size_in_mega_bytes(b) << " MB" << endl;
 
