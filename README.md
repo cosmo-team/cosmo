@@ -28,7 +28,7 @@ Where `input_file` is the binary output of a [DSK][dsk] run. Each program has a 
 detailed description of how to use them.
 
 
-## Things to be aware of
+## Caveats
 
 Here are some things that you don't want to let surprise you:
 
@@ -91,7 +91,7 @@ There is an included Makefile - just type `make` to build it (assuming you have 
 - [SDSL-lite][sdsl-lite] - low level succinct data structures,
 - [TClap][tclap] - command line parsing,
 - [DSK][dsk] - k-mer counting (we need this for input),
-- Optionally (for developers): [Python][python] and [NumPy][nympy] - rebuilding the lookup tables.
+- Optionally (for developers): [Python][python] and [NumPy][numpy] - rebuilding the lookup tables.
 
 Many of these are all installable with a package manager (e.g. `(apt-get | yum install | brew install) boost libstxxl tclap`).
 However, you will have to download and build these manually: [DSK][dsk] and [SDSL-lite][sdsl-lite].
