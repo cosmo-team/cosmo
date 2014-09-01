@@ -55,6 +55,25 @@ Unlike [Minia][minia] (for example), we don't treat each node as equal to its re
 has their pros and cons). In fact, this is actually wrong :/ we need to fix the way it handles reverse complements.
 
 
+## Compilation
+
+There is an included Makefile - just type `make` to build it (assuming you have the dependencies listed below).
+
+*Note: it has only been tested on Mac OS X. Changes to work on any *NIX should be minor.*
+
+### Dependencies  
+- A compiler that supports C++11,
+- [Boost][boost] - ranges and range algorithms, zip iterator, and tuple comparison),
+- [STXXL][stxxl] - external merging,
+- [SDSL-lite][sdsl-lite] - low level succinct data structures,
+- [TClap][tclap] - command line parsing,
+- [DSK][dsk] - k-mer counting (we need this for input),
+- Optionally (for developers): [Python][python] and [NumPy][numpy] - rebuilding the lookup tables.
+
+Many of these are all installable with a package manager (e.g. `(apt-get | yum install | brew install) boost libstxxl tclap`).
+However, you will have to download and build these manually: [DSK][dsk] and [SDSL-lite][sdsl-lite].
+
+
 ## Overview and Performance
 
 Here is a general overview of each program (details in the upcoming paper):
@@ -76,25 +95,6 @@ nucleotides, so 8mk + 4dk bits (which might sound like a lot, but...),
 ### cosmo-assemble  
 - Iterates over every edge to build a compressed bit-vector that marks nodes that branch in or out - O(m), since indegree and outdegree are O(1);
 - Selects to each branching edge, and follows subsequent edges until it reaches another branch node - O(m).
-
-
-## Compilation
-
-There is an included Makefile - just type `make` to build it (assuming you have the dependencies listed below).
-
-*Note: it has only been tested on Mac OS X. Changes to work on any *NIX should be minor.*
-
-### Dependencies  
-- A compiler that supports C++11,
-- [Boost][boost] - ranges and range algorithms, zip iterator, and tuple comparison),
-- [STXXL][stxxl] - external merging,
-- [SDSL-lite][sdsl-lite] - low level succinct data structures,
-- [TClap][tclap] - command line parsing,
-- [DSK][dsk] - k-mer counting (we need this for input),
-- Optionally (for developers): [Python][python] and [NumPy][numpy] - rebuilding the lookup tables.
-
-Many of these are all installable with a package manager (e.g. `(apt-get | yum install | brew install) boost libstxxl tclap`).
-However, you will have to download and build these manually: [DSK][dsk] and [SDSL-lite][sdsl-lite].
 
 
 ## .plan
