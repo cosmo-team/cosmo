@@ -29,7 +29,8 @@ ifneq ($(dummies),0)
 CPP_FLAGS+=-DALL_DUMMIES
 endif
 
-DBG_REQS=debruijn_graph.hpp utility.hpp io.hpp io.o debug.h
+BUILD_REQS=debruijn_graph.hpp io.hpp io.o debug.h
+ASSEM_REQS=debruijn_graph.hpp algorithm.hpp utility.hpp kmer.hpp uint128_t.hpp
 PACK_REQS=lut.hpp debug.h io.hpp io.o sort.hpp kmer.hpp dummies.hpp
 BINARIES=pack-edges cosmo-build cosmo-assemble
 
@@ -45,10 +46,10 @@ io.o: io.hpp io.cpp debug.h dummies.hpp kmer.hpp
 pack-edges: pack-edges.cpp $(PACK_REQS)
 		$(CXX) $(CPP_FLAGS) -o $@ $< io.o
 
-cosmo-build: cosmo-build.cpp $(DBG_REQS)
+cosmo-build: cosmo-build.cpp $(BUILD_REQS)
 		$(CXX) $(CPP_FLAGS) $(DEP_FLAGS) -o $@ $< io.o
 
-cosmo-assemble: cosmo-assemble.cpp $(DBG_REQS) algorithm.hpp
+cosmo-assemble: cosmo-assemble.cpp $(ASSEM_REQS)
 		$(CXX) $(CPP_FLAGS) $(DEP_FLAGS) -o $@ $<
 
 all: $(BINARIES)
