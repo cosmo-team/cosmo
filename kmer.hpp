@@ -20,6 +20,8 @@
 // (needed because some kmer counters like DSK swap this representation, but we assume G < T
 // in our de bruijn graph implementation)
 
+// TODO: Could probably make this faster using a static k param
+
 static struct swap_gt_f : std::unary_function<uint64_t, uint64_t> {
   inline uint64_t operator() (const uint64_t & x) const { return (x ^ ((x & 0xAAAAAAAAAAAAAAAA) >> 1)); }
 } swap_gt;
@@ -36,6 +38,12 @@ inline uint8_t get_nt(const uint128_t & block, uint8_t i) {
   // but should be reusable for larger block types
   uint64_t block_64 = ((uint64_t*)(&block))[block_idx];
   return get_nt(block_64, i%nts_per_block);
+}
+
+template <typename kmer_t>
+kmer_t set_nt(const kmer_t & x, uint8_t i, uint8_t v) {
+  assert(v < DNA_RADIX);
+  return ((x & ~(3>>i*NT_WIDTH)) | (v >> i * NT_WIDTH));
 }
 
 template <typename T>
@@ -146,6 +154,20 @@ struct reverse_complement<uint128_t> : std::unary_function<uint128_t, uint128_t>
     return uint128_t(revcomp_block(x._lower), revcomp_block(x._upper)) << (128 - _k * NT_WIDTH);
   }
 };
+
+template <typename kmer_t>
+bool is_palindrome(const kmer_t & x, uint8_t k) {
+  return (k%2==0 && x == reverse_complement<kmer_t>(k)(x));
+}
+
+template <typename kmer_t>
+kmer_t follow_edge(const kmer_t & x, uint8_t c, uint8_t k) {
+  assert(y < DNA_RADIX);
+  kmer_t y = set_nt(x, k-1, 0); // clear last symbol
+  y = y >> NT_WIDTH;
+  y = set_nt(y, 0, c); // set first symbol
+  return y;
+}
 
 template <typename T>
 std::string kmer_to_string(const T & kmer_block, uint8_t max_k, uint8_t this_k = -1) {
