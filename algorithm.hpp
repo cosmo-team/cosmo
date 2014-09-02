@@ -6,17 +6,19 @@
 
 #include <sdsl/bit_vectors.hpp>
 #include "debruijn_graph.hpp"
+#include "kmer.hpp"
+#include "uint128_t.hpp"
 
 using namespace std;
-using namespace sdsl;
+//using namespace sdsl;
 
 // Calling it with a vector of first minus positions is sliiiightly faster
 // But would mean we have to save another vector with our graph if we ever want to traverse
 // it again.
 // If a vector isnt provided, another method is used which is *almost as fast*
-template <bool has_branch = 1, class V=sd_vector<>, class G>
+template <bool has_branch = 1, class V=sdsl::sd_vector<>, class G>
 V make_branch_vector(const G& g, const vector<size_t> * v = nullptr) {
-  bit_vector branching_flags(g.num_edges(),!has_branch);
+  sdsl::bit_vector branching_flags(g.num_edges(),!has_branch);
   // OUTDEGREE
   for (size_t edge = 0; edge < g.num_edges()-1; edge++) {
     // This will only unset the bits that are 0,0 (which means no 11, 10, or 01, which is a sibling edge)
@@ -74,35 +76,74 @@ template <class V> struct _type_getter<1, V> {
   typedef typename V::select_1_type select_type;
 };
 
-// Should make iterator instead?
-template <const bool has_branch = 1, class G, class V, class F>
-void visit_unipaths(const G& g, const V& v, const F & f) {
+template <const bool has_branch = 1, class G, class V, class F, typename kmer_t>
+void _set_kmer_t_visit_unipaths(const G& g, const V& v, const F & f) {
   typedef typename _type_getter<has_branch, V>::rank_type rank_type;
   typedef typename _type_getter<has_branch, V>::select_type select_type;
 
   rank_type   rank(&v);
   select_type select(&v);
 
+  kmer_t buf{};
+  // Add set of minimal kmers here, then we add the last kmer
+  // and check each first kmer
+  // But first sort the output on length and check
+
   // Could reverse one step to use F to look up instead of edges...
   for (size_t sel_idx = 1; sel_idx <= rank(v.size()); sel_idx++) {
-    // If we didn't have the guarantee that EVERYTHING has at least one incoming edge (thanks dummy edges)
-    // then we might have to backtrack here to print the node
-    // if we didnt have all the k-1 dummies per edge, we would be missing some symbols
-    // but as it is now, all we have to do is traverse forwards
     size_t edge = select(sel_idx);
     assert(v[edge] == has_branch);
+    // Traverse back k-1 edges to build buffer
+    for (size_t e = edge, i = 0; i < g.k-1; i++) {
+      buf = kmer_t{}; // clear buffer
+      typename G::symbol_type x = g._symbol_access(e);
+      if (x == 0) continue; // if $ skip this one
+      buf = follow_edge(buf, x, g.k);
+      e = g._backward(e);
+    }
+
+    typename G::symbol_type x = g._strip_edge_flag(g.m_edges[edge]);
+    if (x == 0) continue;
+    buf = follow_edge(buf, x, g.k);
+    if (is_palindrome(buf, g.k)) {
+      f(g._map_symbol(0));
+      continue;
+    }
+
+    for (size_t i = 0; i < g.k; i++) {
+      uint8_t y = get_nt(buf, g.k - 1 - i);
+      f(g._map_symbol(y));
+    }
+
+    edge = g._forward(edge);
     // For each edge... each one should be a has_branch
     // Due to the definition of our branch vector
     // so it will be selected to... so we just follow _forward
-    do {
-      // TODO: change back to int repr and do mapping at caller level
-      typename G::symbol_type x = g._strip_edge_flag(g.m_edges[edge]);
+    while(v[edge] != has_branch) {
+      x = g._strip_edge_flag(g.m_edges[edge]);
+      if (x != 0) {
+        // update buffer
+        buf = follow_edge(buf, x, g.k);
+        if (is_palindrome(buf, g.k)) {
+          f(g._map_symbol(0));
+          break;
+        }
+      }
+
       f(g._map_symbol(x));
       if (x == 0) break;
       edge = g._forward(edge);
       // for pairs: check here and at the if x == 0, and return node index of this + first edge
-    } while (v[edge] != has_branch);
+    }
   }
+}
+
+template <const bool has_branch = 1, class G, class V, class F>
+void visit_unipaths(const G& g, const V& v, const F & f) {
+  size_t k = g.k;
+  if (k <= 32) return _set_kmer_t_visit_unipaths<has_branch, G, V, F, uint64_t>(g, v, f);
+  if (k <= 64) return _set_kmer_t_visit_unipaths<has_branch, G, V, F, uint128_t>(g, v, f);
+  assert(false);
 }
 
 #endif
