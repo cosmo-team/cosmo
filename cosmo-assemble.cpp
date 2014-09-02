@@ -56,8 +56,21 @@ int main(int argc, char* argv[]) {
   cerr << "k             : " << dbg.k << endl;
   cerr << "num_nodes()   : " << dbg.num_nodes() << endl;
   cerr << "num_edges()   : " << dbg.num_edges() << endl;
+  cerr << "W size        : " << size_in_mega_bytes(dbg.m_edges) << " MB" << endl;
+  cerr << "L size        : " << size_in_mega_bytes(dbg.m_node_flags) << " MB" << endl;
   cerr << "Total size    : " << size_in_mega_bytes(dbg) << " MB" << endl;
   cerr << "Bits per edge : " << bits_per_element(dbg) << " Bits" << endl;
+
+  /*
+  for (size_t i = 0; i < dbg.num_edges(); i++) {
+    uint8_t x = dbg.m_edges[i];
+    bool flag = x & 1;
+    x >>= 1;
+    cout << "$ACGT"[x] << ((flag)? "-":"") << endl;
+  }
+
+  return 0;
+  */
 
   // This actually does take a little while (10 sec) to build. Should maybe add flags to
   // pre-build it during graph construction and pass it in (faster)
@@ -71,14 +84,11 @@ int main(int argc, char* argv[]) {
   ofstream out;
   out.open(outfilename + ".fasta", ios::out);
   debruijn_graph<>::label_type s{};
-  size_t threshold = 100;
   size_t id = 1;
   visit_unipaths(dbg, b, [&](char x) {
     if (x == '$') {
-      if(s.length() >= threshold) {
-        out << ">cosmo_" << id++ << endl;
-        out << s << endl;
-      }
+      out << ">cosmo_" << id++ << endl;
+      out << s << endl;
       s = debruijn_graph<>::label_type{};
     }
     else s.push_back(x);
