@@ -32,7 +32,7 @@ endif
 BUILD_REQS=debruijn_graph.hpp io.hpp io.o debug.h
 ASSEM_REQS=debruijn_graph.hpp algorithm.hpp utility.hpp kmer.hpp uint128_t.hpp
 PACK_REQS=lut.hpp debug.h io.hpp io.o sort.hpp kmer.hpp dummies.hpp
-BINARIES=pack-edges cosmo-build cosmo-assemble
+BINARIES=cosmo-pack cosmo-build cosmo-assemble
 
 default: all
 
@@ -43,7 +43,7 @@ io.o: io.hpp io.cpp debug.h dummies.hpp kmer.hpp
 		$(CXX) $(CPP_FLAGS) -c io.cpp
 
 # TODO: Roll these all into one... "cosmo"
-pack-edges: pack-edges.cpp $(PACK_REQS)
+cosmo-pack: cosmo-pack.cpp $(PACK_REQS)
 		$(CXX) $(CPP_FLAGS) -o $@ $< io.o
 
 cosmo-build: cosmo-build.cpp $(BUILD_REQS)
