@@ -84,11 +84,14 @@ int main(int argc, char* argv[]) {
   ofstream out;
   out.open(outfilename + ".fasta", ios::out);
   debruijn_graph<>::label_type s{};
+  size_t threshold = dbg.k;
   size_t id = 1;
   visit_unipaths(dbg, b, [&](char x) {
     if (x == '$') {
-      out << ">cosmo_" << id++ << endl;
-      out << s << endl;
+      if (s.length() >= threshold) {
+        out << ">cosmo_" << id++ << endl;
+        out << s << endl;
+      }
       s = debruijn_graph<>::label_type{};
     }
     else s.push_back(x);
