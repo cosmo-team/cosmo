@@ -162,7 +162,7 @@ bool is_palindrome(const kmer_t & x, uint8_t k) {
 
 template <typename kmer_t>
 kmer_t follow_edge(const kmer_t & x, uint8_t c, uint8_t k) {
-  assert(y < DNA_RADIX);
+  assert(c < DNA_RADIX);
   kmer_t y = set_nt(x, k-1, 0); // clear last symbol
   y = y >> NT_WIDTH;
   y = set_nt(y, 0, c); // set first symbol
