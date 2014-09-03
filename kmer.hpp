@@ -40,11 +40,14 @@ inline uint8_t get_nt(const uint128_t & block, uint8_t i) {
   return get_nt(block_64, i%nts_per_block);
 }
 
+// TODO: remove or test/fix
+/*
 template <typename kmer_t>
 kmer_t set_nt(const kmer_t & x, uint8_t i, uint8_t v) {
   assert(v < DNA_RADIX);
   return ((x & ~(3>>i*NT_WIDTH)) | (v >> i * NT_WIDTH));
 }
+*/
 
 template <typename T>
 struct get_nt_functor : std::binary_function<T, uint8_t, uint8_t> {
@@ -160,14 +163,18 @@ bool is_palindrome(const kmer_t & x, uint8_t k) {
   return (k%2==0 && x == reverse_complement<kmer_t>(k)(x));
 }
 
+// TODO: clean up or remove
+/*
 template <typename kmer_t>
 kmer_t follow_edge(const kmer_t & x, uint8_t c, uint8_t k) {
+  TRACE("c: %d\n", c);
   assert(c < DNA_RADIX);
   kmer_t y = set_nt(x, k-1, 0); // clear last symbol
   y = y >> NT_WIDTH;
   y = set_nt(y, 0, c); // set first symbol
   return y;
 }
+*/
 
 template <typename T>
 std::string kmer_to_string(const T & kmer_block, uint8_t max_k, uint8_t this_k = -1) {

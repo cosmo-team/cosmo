@@ -201,12 +201,17 @@ class debruijn_graph {
   label_type node_label(size_t v) const {
     size_t i = _node_to_edge(v);
     label_type label = label_type(k-1, _map_symbol(symbol_type{}));
-    return _node_label_from_edge(i, label);
+    return _node_label_from_edge_given_buffer(i, label);
+  }
+
+  label_type node_label_from_edge(size_t i) const {
+    label_type label = label_type(k-1, _map_symbol(symbol_type{}));
+    return _node_label_from_edge_given_buffer(i, label);
   }
 
   label_type edge_label(size_t i) const {
     label_type label = label_type(k, _map_symbol(symbol_type{}));
-    _node_label_from_edge(i, label);
+    _node_label_from_edge_given_buffer(i, label);
     label[k-1] = _map_symbol(_strip_edge_flag(m_edges[i]));
     return label;
   }
@@ -231,6 +236,7 @@ class debruijn_graph {
     return m_node_rank(i);
   }
 
+  // This should be moved to a helper file...
   symbol_type _strip_edge_flag(symbol_type x) const {
     return x >> 1;
   }
@@ -260,7 +266,7 @@ class debruijn_graph {
     return x;
   }
 
-  label_type _node_label_from_edge(size_t i, label_type & label) const {
+  label_type _node_label_from_edge_given_buffer(size_t i, label_type & label) const {
     // Calculate backward k times and fill a buffer with symbol_access(edge)
     //label_type label = label_type(k-1, _map_symbol(symbol_type{}));
     for (size_t pos = 1; pos <= k-1; pos++) {
@@ -288,8 +294,14 @@ class debruijn_graph {
   // Return index of first possible edge obtained by following edge i
   public:
   ssize_t _forward(size_t i) const {
+    symbol_type temp;
+    return _forward(i, temp);
+  }
+
+  // This is so we can reuse the symbol lookup - save an access during traversal :)
+  ssize_t _forward(size_t i, symbol_type & x) const {
     assert(i < num_edges());
-    symbol_type x = _strip_edge_flag(m_edges[i]);
+    x = _strip_edge_flag(m_edges[i]);
     // if x == 0 ($) then we can't follow the edge
     // (should maybe make backward consistent with this, but using the edge 0 loop for node label generation).
     if (x == 0) return -1;
