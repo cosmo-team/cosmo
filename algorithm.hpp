@@ -106,7 +106,6 @@ void _set_kmer_t_visit_unipaths(const G& g, const V& v, const F & f) {
     if (x == 0) continue;
     buf = follow_edge(buf, x, g.k);
     if (is_palindrome(buf, g.k)) {
-      f(g._map_symbol(0));
       continue;
     }
 
