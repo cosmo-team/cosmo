@@ -40,14 +40,20 @@ inline uint8_t get_nt(const uint128_t & block, uint8_t i) {
   return get_nt(block_64, i%nts_per_block);
 }
 
+template <typename kmer_t>
+kmer_t clear_nt(const kmer_t & x, uint8_t i) {
+  // Keep in mind that 0 is the leftmost nt, but that the leftmost is the edge (so rightmost in our diagrams)
+  kmer_t mask = ~((kmer_t(3) << (bitwidth<kmer_t>::width - (1+i)*NT_WIDTH)));
+  return x & mask;
+}
+
 // TODO: remove or test/fix
-/*
 template <typename kmer_t>
 kmer_t set_nt(const kmer_t & x, uint8_t i, uint8_t v) {
   assert(v < DNA_RADIX);
-  return ((x & ~(3>>i*NT_WIDTH)) | (v >> i * NT_WIDTH));
+  kmer_t cleared = clear_nt(x, i);
+  return cleared | (kmer_t(v) << (bitwidth<kmer_t>::width - (1+i)*NT_WIDTH));
 }
-*/
 
 template <typename T>
 struct get_nt_functor : std::binary_function<T, uint8_t, uint8_t> {
@@ -163,6 +169,12 @@ bool is_palindrome(const kmer_t & x, uint8_t k) {
   return (k%2==0 && x == reverse_complement<kmer_t>(k)(x));
 }
 
+template <typename kmer_t>
+kmer_t representative(const kmer_t & x, uint8_t k) {
+  kmer_t twin = reverse_complement<kmer_t>(k)(x);
+  return (x < twin)? x : twin;
+}
+
 // TODO: clean up or remove
 /*
 template <typename kmer_t>
@@ -175,6 +187,20 @@ kmer_t follow_edge(const kmer_t & x, uint8_t c, uint8_t k) {
   return y;
 }
 */
+
+// Shift and attach a value v on to the end (so the 0th element) of the kmer,
+// and delete the last (kth) symbol (like following a path in a
+// de bruijn graph)
+template <typename kmer_t>
+kmer_t follow_edge(const kmer_t & x, uint8_t k, uint8_t v) {
+  kmer_t y(x);
+  // unset character
+  y = set_nt(y, k-1, 0);
+  y >>= NT_WIDTH;
+  // set character
+  y = set_nt(y, 0, v);
+  return y;
+}
 
 template <typename T>
 std::string kmer_to_string(const T & kmer_block, uint8_t max_k, uint8_t this_k = -1) {
