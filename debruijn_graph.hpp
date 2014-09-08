@@ -328,22 +328,33 @@ class debruijn_graph {
     return (m_alphabet.size() > 0)? m_alphabet[x] : x;
   }
 
-  size_t _first_edge(size_t v) const {
+  size_t _first_edge_of_node(size_t v) const {
     assert(v < num_nodes());
     // select is 1-based, but nodes are 0-based
     return m_node_select(v+1);
   }
 
-  size_t _last_edge(size_t v) const {
+  size_t _last_edge_of_node(size_t v) const {
     // find the *next* node's first edge and decrement
     // as long as a next node exists!
     assert(v + 1 <= num_nodes());
     if (v+1 == num_nodes()) return num_edges() - 1;
-    else return _first_edge(v+1) - 1;
+    else return _first_edge_of_node(v+1) - 1;
   }
 
   pair<size_t, size_t> _node_range(size_t v) const {
-    return make_pair(_first_edge(v), _last_edge(v));
+    return make_pair(_first_edge_of_node(v), _last_edge_of_node(v));
+  }
+
+  // TODO: add first_sibling and edge_range
+  // TODO: update to use rank and select for larger alphabets
+  size_t _last_sibling(size_t i) const {
+    size_t last = i;
+    while(last < num_edges() && m_node_flags[last] != 0) {
+      last++;
+    }
+    // last should be one past end
+    return last-1;
   }
 
   size_type serialize(ostream& out, structure_tree_node* v=NULL, string name="") const {
