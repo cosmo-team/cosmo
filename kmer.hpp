@@ -175,19 +175,6 @@ kmer_t representative(const kmer_t & x, uint8_t k) {
   return (x < twin)? x : twin;
 }
 
-// TODO: clean up or remove
-/*
-template <typename kmer_t>
-kmer_t follow_edge(const kmer_t & x, uint8_t c, uint8_t k) {
-  TRACE("c: %d\n", c);
-  assert(c < DNA_RADIX);
-  kmer_t y = set_nt(x, k-1, 0); // clear last symbol
-  y = y >> NT_WIDTH;
-  y = set_nt(y, 0, c); // set first symbol
-  return y;
-}
-*/
-
 // Shift and attach a value v on to the end (so the 0th element) of the kmer,
 // and delete the last (kth) symbol (like following a path in a
 // de bruijn graph)
