@@ -4,7 +4,9 @@ INCLUDE_PATH=/usr/local/include
 LIBRARY_PATH=/usr/local/lib
 CXX=g++
 CPP_FLAGS=-m64 -std=c++0x -pedantic-errors -W -Wall -Wextra -Wshadow -Wpointer-arith -Wcast-qual \
-					-Wunused -Wstrict-prototypes -Wmissing-prototypes -Wwrite-strings -Werror
+					-Wunused -Wstrict-prototypes -Wmissing-prototypes -Wwrite-strings -Wbool-conversions \
+					-Wshift-overflow -Wliteral-conversion \
+					-Werror
 DEP_FLAGS=-I/usr/local/include -L/usr/local/lib -lsdsl
 DEBUG_FLAGS=-g -O0
 # The MMX and SSE flags can be safely disabled
