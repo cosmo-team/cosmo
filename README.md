@@ -146,8 +146,11 @@ Your help is more than welcome! Please fork and send a pull request, or contact 
 
 ## Why "Cosmo"?
 
-It is a reference to the Seinfeld character Cosmo Kramer (whose name I'm often reminded of while working on
-this stuff). It is also a nod to the [ABySS][abyss] assembler, since most of the cosmos is abyss.
+**Cosmos** */ˈkɑz.moʊs/ (n)* : ["An ordered, harmonious whole."](http://en.wiktionary.org/wiki/cosmos).
+
+If that doesn't suit an assembly program then I don't know what does. The last s was dropped because it was nicer to say.
+Furthermore, it is a reference to the Seinfeld character Cosmo Kramer (whose last name I'm often reminded of while working on
+this stuff). Finally, it's a nod to the [ABySS][abyss] assembler's name, which also makes me think of The Universe.
 
 
 ## License
