@@ -61,28 +61,36 @@ int main(int argc, char* argv[]) {
   cerr << "Total size    : " << size_in_mega_bytes(dbg) << " MB" << endl;
   cerr << "Bits per edge : " << bits_per_element(dbg) << " Bits" << endl;
 
-  /*
-  for (size_t i = 0; i < dbg.num_edges(); i++) {
+  // Traversal
+  // TODO: Add flags to build faster e.g. cosmo-build -u (unipaths)
+
+#ifdef VERBOSE
+  // Print edges
+  size_t start = 0;
+  size_t end   = dbg.num_edges();
+
+  for (size_t i = start; i < end; i++) {
     uint8_t x = dbg.m_edges[i];
     bool flag = x & 1;
-    x >>= 1;
-    cout << "$ACGT"[x] << ((flag)? "-":"") << endl;
+    //cout << i << ": " << " " << dbg.edge_label(i) << " " << dbg.m_node_flags[i] << " " << flag << endl;
+    cout << "$ACGT"[x>>1] << " " << dbg.m_node_flags[i] << " " << flag << endl;
   }
-
   return 0;
-  */
+#endif
 
-  // This actually does take a little while (10 sec) to build. Should maybe add flags to
-  // pre-build it during graph construction and pass it in (faster)
-  // TODO: TIME it on ch14
-  // e.g. cosmo-build -u (unipaths)
-  // cosmo-assemble -u unipaths-file
-  sd_vector<> b = make_branch_vector(dbg);
-  cerr << "Branch size   : " << size_in_mega_bytes(b) << " MB" << endl;
-
-  // Traversal
   ofstream out;
   out.open(outfilename + ".fasta", ios::out);
+
+  /*
+  auto visit = make_unipath_visitor(dbg);
+  typedef typename decltype(dbg)::symbol_type symbol_type;
+  visit([&](symbol_type x) {
+      if (x != 0) cout << "$acgt"[x];
+      else cout << endl;
+    }
+  );
+  */
+  /*
   debruijn_graph<>::label_type s{};
   size_t threshold = dbg.k;
   size_t id = 1;
@@ -96,6 +104,7 @@ int main(int argc, char* argv[]) {
     }
     else s.push_back(x);
   });
+  */
   out.flush();
   out.close();
 }
