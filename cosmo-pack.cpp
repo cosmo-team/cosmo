@@ -119,7 +119,7 @@ void convert(kmer_t * kmers, size_t num_kmers, const uint32_t k, Visitor visit) 
                   visit(tag, x, x_k, first_start_node, first_end_node);
                   // TODO: this should be factored into a class that prints full kmers in ascii
                   // then add a --full option
-                  #ifdef DEBUG // print each kmer to stderr if debug on
+                  #ifdef VERBOSE // print each kmer to stderr for testing
                   if (tag == out_dummy)
                     cerr << kmer_to_string(get_start_node(x), k-1, k-1) << "$";
                   else
