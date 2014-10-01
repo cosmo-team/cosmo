@@ -138,11 +138,12 @@ class FirstEndNodeFlagger {
       kmer_t this_suffix = get_start_node_suffix(x, k);
 
       // reset "edge seen" flags
-      if (tag == out_dummy || first_iter || this_suffix != last_suffix || k != last_k) {
-        first_iter = false;
+      if (this_suffix != last_suffix || k != last_k || first_iter) {
         reset_flags();
         edge_flag = true;
+        first_iter = false;
       }
+      // Only get the edge label if not a dummy out edge
       if (tag != out_dummy){
         uint8_t edge = get_edge_label(x);
         edge_flag = !edge_seen[edge];
