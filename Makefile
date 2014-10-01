@@ -23,6 +23,10 @@ else
 CPP_FLAGS+=$(RELEASE_FLAGS)
 endif
 
+ifeq ($(verbose),1)
+CPP_FLAGS+=-DVERBOSE
+endif
+
 ifneq ($(revcomps),0)
 CPP_FLAGS+=-DADD_REVCOMPS
 endif
