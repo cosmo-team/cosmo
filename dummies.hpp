@@ -122,11 +122,12 @@ class FirstStartNodeFlagger {
 
 template <class Visitor>
 class FirstEndNodeFlagger {
-  Visitor _v;
+  Visitor  _v;
+  uint32_t _graph_k;
   bool first_iter = true;
 
   public:
-    FirstEndNodeFlagger(Visitor v) : _v(v) {}
+    FirstEndNodeFlagger(Visitor v, uint32_t k) : _v(v), _graph_k(k) {}
     template <typename kmer_t>
     void operator()(edge_tag tag, const kmer_t & x, const uint32_t k, bool last) {
       static kmer_t last_suffix;
@@ -135,7 +136,7 @@ class FirstEndNodeFlagger {
       #define reset_flags() memset(edge_seen, 0, DNA_RADIX)
 
       bool edge_flag = true;
-      kmer_t this_suffix = get_start_node_suffix(x, k);
+      kmer_t this_suffix = get_start_node_suffix(x, _graph_k);
 
       // reset "edge seen" flags
       if (this_suffix != last_suffix || k != last_k || first_iter) {
@@ -168,8 +169,8 @@ auto add_first_start_node_flag(Visitor v) -> FirstStartNodeFlagger<decltype(v)> 
 }
 
 template <class Visitor>
-auto add_first_end_node_flag(Visitor v) -> FirstEndNodeFlagger<decltype(v)> {
-  return FirstEndNodeFlagger<decltype(v)>(v);
+auto add_first_end_node_flag(Visitor v, uint32_t k) -> FirstEndNodeFlagger<decltype(v)> {
+  return FirstEndNodeFlagger<decltype(v)>(v, k);
 }
 
 // Could be done cleaner: set_difference iterator as outgoing dummies, transform to have tuple with k value, merge + merge again iterator with comp functor.
@@ -183,7 +184,7 @@ void merge_dummies(kmer_t * table_a, kmer_t * table_b, const size_t num_records,
                    kmer_t * in_dummies, size_t num_incoming_dummies, uint8_t * dummy_lengths,
                    Visitor visitor_f) {
   // runtime speed: O(num_records) (since num_records >= num_incoming_dummies)
-  auto visit = uniquify(add_first_start_node_flag(add_first_end_node_flag(visitor_f)));
+  auto visit = uniquify(add_first_start_node_flag(add_first_end_node_flag(visitor_f, k)));
 
   #define get_a(i) (get_start_node(table_a[(i)]) >> 2)
   #define get_b(i) (get_end_node(table_b[(i)], k) >> 2) // shifting to give dummy check call consistency
