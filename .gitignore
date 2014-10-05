@@ -15,7 +15,7 @@ test_data/*
 
 # Python stuff
 .ipynb_checkpoints/*
-*.ipynb
+#*.ipynb
 
 # Output files
 *.packed
