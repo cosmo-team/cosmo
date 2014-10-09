@@ -6,6 +6,7 @@
 #include <functional>
 #include <algorithm>
 #include <string>
+#include "utility.hpp"
 #include "debug.h"
 #include "lut.hpp"
 #include "uint128_t.hpp"
@@ -218,5 +219,38 @@ void print_kmers(std::ostream & out, kmer_t * kmers, size_t num_kmers, uint32_t 
   }
 }
 
+// Longest common suffix
+template <typename kmer_t>
+size_t lcs(const kmer_t & a, const kmer_t & b, size_t k) {
+  static const size_t num_blocks = bitwidth<kmer_t>::width/BLOCK_WIDTH;
+  //kmer_t x = a ^ b; // Do this in the loop below instead to potentially save some cycles
+  uint64_t * p = (uint64_t*)&a;
+  uint64_t * q = (uint64_t*)&b;
+  size_t total = 0;
+  // This should unroll. for 128 bits its only 2 iters
+  for (int i = 0; i < num_blocks; i++) {
+    if (p[i] == q[i]) {
+      total += BLOCK_WIDTH;
+      continue;
+    }
+    else {
+      // COUNT *LEADING* ZEROS - we store kmers backwards
+      total += clz(p[i] ^ q[i]);
+      break;
+    }
+  }
+  total /= NT_WIDTH;
+  return std::min(total, k);
+}
+
+template <typename kmer_t>
+size_t node_lcs(const kmer_t & a, const kmer_t & b, size_t k) {
+  kmer_t x(a);
+  kmer_t y(b);
+  // TODO: make position-templated set_nt()
+  ((uint64_t*)&x)[0] &= 0x3FFFFFFFFFFFFFFF;
+  ((uint64_t*)&y)[0] &= 0x3FFFFFFFFFFFFFFF;
+  return lcs(x,y,k) - 1;
+}
 
 #endif
