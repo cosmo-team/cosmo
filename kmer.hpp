@@ -228,7 +228,7 @@ size_t lcs(const kmer_t & a, const kmer_t & b, size_t k) {
   uint64_t * q = (uint64_t*)&b;
   size_t total = 0;
   // This should unroll. for 128 bits its only 2 iters
-  for (int i = 0; i < num_blocks; i++) {
+  for (size_t i = 0; i < num_blocks; i++) {
     if (p[i] == q[i]) {
       total += BLOCK_WIDTH;
       continue;
