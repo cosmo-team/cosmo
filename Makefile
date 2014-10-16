@@ -14,7 +14,7 @@ RELEASE_FLAGS=-O3 -DNDEBUG -mmmx -msse -msse2 -msse3 -msse4 -march=native
 
 # DEFINITIONS
 # Using Semantic Versioning: http://semver.org/
-VERSION=0.4.5
+VERSION=0.4.6
 CPP_FLAGS+=-DVERSION=\"$(VERSION)\"
 
 ifeq ($(debug),1)
