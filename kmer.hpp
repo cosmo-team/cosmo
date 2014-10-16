@@ -245,6 +245,7 @@ size_t lcs(const kmer_t & a, const kmer_t & b, size_t k) {
 
 template <typename kmer_t>
 size_t node_lcs(const kmer_t & a, const kmer_t & b, size_t k) {
+  assert(k>0); // Shouldnt be called this way, but we also minus 1 down below...
   kmer_t x(a);
   kmer_t y(b);
   // TODO: make position-templated set_nt()
