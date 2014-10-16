@@ -1,18 +1,17 @@
 # NOTE: needs boost, tclap, and sdsl
 
-INCLUDE_PATH=/usr/local/include
-LIBRARY_PATH=/usr/local/lib
-CXX=g++
+CXX=clang++ # g++
 CPP_FLAGS=-m64 -std=c++0x -pedantic-errors -W -Wall -Wextra -Wshadow -Wpointer-arith -Wcast-qual \
-					-Wunused -Wstrict-prototypes -Wmissing-prototypes -Wwrite-strings -Wbool-conversions \
-					-Wshift-overflow -Wliteral-conversion \
+					-Wunused -Wstrict-prototypes -Wmissing-prototypes -Wwrite-strings \
+					-Wbool-conversions -Wshift-overflow -Wliteral-conversion \
 					-Werror
-DEP_FLAGS=-I/usr/local/include -L/usr/local/lib -lsdsl
+DEP_PATH=$(HOME)/deps
+INC_PATH=$(DEP_PATH)/include
+LIB_PATH=$(DEP_PATH)/lib
+DEP_FLAGS=-I$(INC_PATH)/ -L$(LIB_PATH)/ -lsdsl # -ldivsufsort -ldivsufsort64
 DEBUG_FLAGS=-g -O0
-# The MMX and SSE flags can be safely disabled
-RELEASE_FLAGS=-O3 -DNDEBUG -mmmx -msse -msse2 -msse3 -msse4 -march=native
+RELEASE_FLAGS=-O3 -DNDEBUG -mmmx -msse -msse2 -msse3 -msse4 -msse4.2 -march=native
 
-# DEFINITIONS
 # Using Semantic Versioning: http://semver.org/
 VERSION=0.4.6
 CPP_FLAGS+=-DVERSION=\"$(VERSION)\"
@@ -57,10 +56,10 @@ cosmo-pack: cosmo-pack.cpp $(PACK_REQS)
 		$(CXX) $(CPP_FLAGS) -o $@ $< io.o
 
 cosmo-build: cosmo-build.cpp $(BUILD_REQS)
-		$(CXX) $(CPP_FLAGS) $(DEP_FLAGS) -o $@ $< io.o
+		$(CXX) $(CPP_FLAGS) -o $@ $< io.o $(DEP_FLAGS) 
 
 cosmo-assemble: cosmo-assemble.cpp $(ASSEM_REQS)
-		$(CXX) $(CPP_FLAGS) $(DEP_FLAGS) -o $@ $<
+		$(CXX) $(CPP_FLAGS) -o $@ $< $(DEP_FLAGS) 
 
 all: $(BINARIES)
 
