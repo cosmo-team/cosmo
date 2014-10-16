@@ -61,4 +61,9 @@ int main(int argc, char* argv[]) {
   char * base_name = basename(const_cast<char*>(p.input_filename.c_str()));
   string outfilename = ((p.output_prefix == "")? base_name : p.output_prefix) + extension;
   store_to_file(dbg, outfilename);
+
+  wt_huff<rrr_vector<63>> wt;
+  construct(wt, base_name + string(".lcs"), 1);
+  cerr << "LCS : " << size_in_mega_bytes(wt) << " MB" << endl;
+  cerr << "LCS bits per edge : " << bits_per_element(wt) << " Bits" << endl;
 }
