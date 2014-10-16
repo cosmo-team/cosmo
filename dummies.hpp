@@ -101,21 +101,36 @@ class Unique {
 template <class Visitor>
 class FirstStartNodeFlagger {
   Visitor _v;
-  bool first_iter = true;
+  uint32_t _graph_k;
 
   public:
-    FirstStartNodeFlagger(Visitor v) : _v(v) {}
+    FirstStartNodeFlagger(Visitor v, uint32_t k) : _v(v), _graph_k(k) {}
     template <typename kmer_t>
     void operator()(edge_tag tag, const kmer_t & x, const uint32_t k) {
-      static kmer_t last_start_node;
-      static uint32_t last_k;
-      bool first_flag = true;
+      // Note: for multithreading, this might be dangerous? could make class members instead
+      static uint32_t last_k = 0;
 
+#ifdef VAR_ORDER
+      static kmer_t last_edge = 0;
+      size_t result = node_lcs(x, last_edge, std::min(k, last_k));
+      // If dummy edge length is equal, and the LCS length is the length of the non-dummy suffix,
+      // include the $ signs as well
+      if (last_k == k && k - 1 == result)
+        result = _graph_k - 1;
+      last_edge = x;
+      // This should bump to K when it is == this_k - 1
+      //std::cerr << "kmer: " << kmer_to_string(x,k) << std::endl;
+      //std::cerr << "lcs: " << result << std::endl;
+#else
+      static kmer_t last_start_node = 0;
+      static bool first_iter = true;
       kmer_t this_start_node = get_start_node(x);
-      first_flag = (first_iter || this_start_node != last_start_node || k != last_k);
-      _v(tag, x, k, first_flag);
+      size_t result = (first_iter || this_start_node != last_start_node || k != last_k);
       first_iter = false;
       last_start_node  = this_start_node;
+#endif
+
+      _v(tag, x, k, result);
       last_k     = k;
     }
 };
@@ -129,7 +144,7 @@ class FirstEndNodeFlagger {
   public:
     FirstEndNodeFlagger(Visitor v, uint32_t k) : _v(v), _graph_k(k) {}
     template <typename kmer_t>
-    void operator()(edge_tag tag, const kmer_t & x, const uint32_t k, bool last) {
+    void operator()(edge_tag tag, const kmer_t & x, const uint32_t k, uint32_t start_node_flag) {
       static kmer_t last_suffix;
       static uint32_t last_k;
       static bool edge_seen[DNA_RADIX];
@@ -151,7 +166,7 @@ class FirstEndNodeFlagger {
         edge_seen[edge] = true;
       }
 
-      _v(tag, x, k, last, edge_flag);
+      _v(tag, x, k, start_node_flag, edge_flag);
 
       last_suffix = this_suffix;
       last_k      = k;
@@ -164,8 +179,8 @@ auto uniquify(Visitor v) -> Unique<decltype(v)> {
 }
 
 template <class Visitor>
-auto add_first_start_node_flag(Visitor v) -> FirstStartNodeFlagger<decltype(v)> {
-  return FirstStartNodeFlagger<decltype(v)>(v);
+auto add_first_start_node_flag(Visitor v, uint32_t k) -> FirstStartNodeFlagger<decltype(v)> {
+  return FirstStartNodeFlagger<decltype(v)>(v, k);
 }
 
 template <class Visitor>
@@ -184,7 +199,7 @@ void merge_dummies(kmer_t * table_a, kmer_t * table_b, const size_t num_records,
                    kmer_t * in_dummies, size_t num_incoming_dummies, uint8_t * dummy_lengths,
                    Visitor visitor_f) {
   // runtime speed: O(num_records) (since num_records >= num_incoming_dummies)
-  auto visit = uniquify(add_first_start_node_flag(add_first_end_node_flag(visitor_f, k)));
+  auto visit = uniquify(add_first_start_node_flag(add_first_end_node_flag(visitor_f, k),k));
 
   #define get_a(i) (get_start_node(table_a[(i)]) >> 2)
   #define get_b(i) (get_end_node(table_b[(i)], k) >> 2) // shifting to give dummy check call consistency
