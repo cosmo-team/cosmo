@@ -5,21 +5,29 @@ CPP_FLAGS=-m64 -std=c++0x -pedantic-errors -W -Wall -Wextra -Wshadow -Wpointer-a
 					-Wunused -Wstrict-prototypes -Wmissing-prototypes -Wwrite-strings \
 					-Wbool-conversions -Wshift-overflow -Wliteral-conversion \
 					-Werror
-DEP_PATH=$(HOME)/deps
+DEP_PATH=/usr/local
 INC_PATH=$(DEP_PATH)/include
 LIB_PATH=$(DEP_PATH)/lib
 DEP_FLAGS=-I$(INC_PATH)/ -L$(LIB_PATH)/ -lsdsl # -ldivsufsort -ldivsufsort64
-DEBUG_FLAGS=-g -O0
-RELEASE_FLAGS=-O3 -DNDEBUG -mmmx -msse -msse2 -msse3 -msse4 -msse4.2 -march=native
+DEBUG_FLAGS=-g
+NDEBUG_FLAGS=-DNDEBUG
+OPT_FLAGS=-O3 -mmmx -msse -msse2 -msse3 -msse4 -msse4.2 -march=native
+NOPT_FLAGS=-O0
 
 # Using Semantic Versioning: http://semver.org/
 VERSION=0.4.6
 CPP_FLAGS+=-DVERSION=\"$(VERSION)\"
 
+ifeq ($(optimise),0)
+CPP_FLAGS+=$(NOPT_FLAGS)
+else
+CPP_FLAGS+=$(OPT_FLAGS)
+endif
+
 ifeq ($(debug),1)
 CPP_FLAGS+=$(DEBUG_FLAGS)
 else
-CPP_FLAGS+=$(RELEASE_FLAGS)
+CPP_FLAGS+=$(NDEBUG_FLAGS)
 endif
 
 ifeq ($(verbose),1)
