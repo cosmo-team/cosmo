@@ -234,10 +234,14 @@ int main(int argc, char * argv[]) {
 
   string outfilename = (params.output_prefix == "")? base_name : params.output_prefix;
   ofstream ofs;
+  #ifdef VAR_ORDER
   ofstream lcs;
+  #endif
   // TODO: Should probably do checking here when opening the file...
   ofs.open(outfilename + extension, ios::out | ios::binary);
+  #ifdef VAR_ORDER
   lcs.open(outfilename + extension + ".lcs", ios::out | ios::binary);
+  #endif
   PackedEdgeOutputer out(ofs);
 
   if (kmer_num_bits == 64) {
@@ -245,9 +249,13 @@ int main(int argc, char * argv[]) {
     size_t prev_k = 0; // for input, k is always >= 1
       convert(kmer_blocks, num_kmers, k,
         [&](edge_tag tag, const kmer_t & x, const uint32_t this_k, size_t lcs_len, bool first_end_node) {
+          #ifdef VAR_ORDER
           out.write(tag, x, this_k, (lcs_len != k-1), first_end_node);
           char l(lcs_len);
           lcs.write((char*)&l, 1);
+          #else
+          out.write(tag, x, this_k, lcs_len, first_end_node);
+          #endif
           prev_k = this_k;
         });
   }
@@ -257,15 +265,22 @@ int main(int argc, char * argv[]) {
     kmer_t * kmer_blocks_128 = (kmer_t*)kmer_blocks;
     convert(kmer_blocks_128, num_kmers, k,
         [&](edge_tag tag, const kmer_t & x, const uint32_t this_k, size_t lcs_len, bool first_end_node) {
+          #ifdef VAR_ORDER
           out.write(tag, x, this_k, (lcs_len != k-1), first_end_node);
           char l(lcs_len);
           lcs.write((char*)&l, 1);
+          #else
+          out.write(tag, x, this_k, lcs_len, first_end_node);
+          #endif
           prev_k = this_k;
         });
   }
 
   out.close();
+  #ifdef VAR_ORDER
+  lcs.flush();
   lcs.close();
+  #endif
   uint64_t t_k(k); // make uint64_t just to make parsing easier
   // (can read them all at once and take the last 6 values)
   ofs.write((char*)&t_k, sizeof(uint64_t));
