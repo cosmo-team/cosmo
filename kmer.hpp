@@ -228,7 +228,7 @@ size_t lcs(const kmer_t & a, const kmer_t & b, size_t k) {
   uint64_t * q = (uint64_t*)&b;
   size_t total = 0;
   // This should unroll. for 128 bits its only 2 iters
-  for (int i = 0; i < num_blocks; i++) {
+  for (size_t i = 0; i < num_blocks; i++) {
     if (p[i] == q[i]) {
       total += BLOCK_WIDTH;
       continue;
@@ -245,6 +245,8 @@ size_t lcs(const kmer_t & a, const kmer_t & b, size_t k) {
 
 template <typename kmer_t>
 size_t node_lcs(const kmer_t & a, const kmer_t & b, size_t k) {
+  //assert(k>0); // Shouldnt be called this way, but we also minus 1 down below...
+  if (k == 0) return 0;
   kmer_t x(a);
   kmer_t y(b);
   // TODO: make position-templated set_nt()

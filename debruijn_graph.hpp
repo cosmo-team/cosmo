@@ -29,7 +29,7 @@ template <size_t t_sigma            = 4, // default: DNA, TODO: change to 0 and 
           class  t_symbol_type      = typename t_edge_vector_type::value_type,
           class  t_label_type       = string> // can define basic_string<t_symbol_type>, but need to use correct print func
 class debruijn_graph {
-  //static_assert(t_sigma == 4, "Alphabet sizes other than 4 are not yet supported.");
+  static_assert(t_sigma == 4, "Alphabet sizes other than 4 are not yet supported.");
 
   public:
   const static size_t sigma = t_sigma;
@@ -374,6 +374,8 @@ class debruijn_graph {
     return written_bytes;
   }
 
+  // THIS IS PROBABLY A BAD DESIGN CHOICE on behalf of sdsl
+  // we shouldnt have a function which mutates the state? I dunno, I just have a bad feeling
   //! Loads the data structure from the given istream.
   void load(std::istream& in) {
     // DANGER WILL ROBINSON!
