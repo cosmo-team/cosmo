@@ -10,6 +10,7 @@
 
 #include "io.hpp"
 #include "debruijn_graph.hpp"
+#include "debruijn_hypergraph.hpp"
 #include "algorithm.hpp"
 
 using namespace std;
@@ -53,6 +54,7 @@ int main(int argc, char* argv[]) {
   // TO LOAD:
   debruijn_graph<> dbg;
   load_from_file(dbg, p.input_filename);
+
   cerr << "k             : " << dbg.k << endl;
   cerr << "num_nodes()   : " << dbg.num_nodes() << endl;
   cerr << "num_edges()   : " << dbg.num_edges() << endl;
@@ -61,6 +63,17 @@ int main(int argc, char* argv[]) {
   cerr << "Total size    : " << size_in_mega_bytes(dbg) << " MB" << endl;
   cerr << "Bits per edge : " << bits_per_element(dbg) << " Bits" << endl;
 
+#ifdef VAR_ORDER
+  wt_huff<rrr_vector<63>> lcs;
+  load_from_file(lcs, p.input_filename + ".lcs.wt");
+
+  cerr << "LCS size      : " << size_in_mega_bytes(lcs) << " MB" << endl;
+  cerr << "LCS bits/edge : " << bits_per_element(lcs) << " Bits" << endl;
+
+  debruijn_hypergraph<> dbh(dbg, lcs);
+#endif
+
+  // TODO: copy this file and write benchmarks
   // Traversal
   // TODO: Add flags to build faster e.g. cosmo-build -u (unipaths)
 
@@ -78,10 +91,11 @@ int main(int argc, char* argv[]) {
   return 0;
 #endif
 
+
+  /*
   ofstream out;
   out.open(outfilename + ".fasta", ios::out);
 
-  /*
   auto visit = make_unipath_visitor(dbg);
   typedef typename decltype(dbg)::symbol_type symbol_type;
   visit([&](symbol_type x) {
@@ -105,7 +119,7 @@ int main(int argc, char* argv[]) {
     else s.push_back(x);
   });
   */
-  out.flush();
-  out.close();
+  //out.flush();
+  //out.close();
 }
 
