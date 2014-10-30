@@ -68,7 +68,8 @@ There is an included Makefile - just type `make` to build it (assuming you have 
 - A compiler that supports C++11,
 - [Boost][boost] - ranges and range algorithms, zip iterator, and tuple comparison),
 - [STXXL][stxxl] - external merging,
-- [SDSL-lite][sdsl-lite] - low level succinct data structures,
+- [SDSL-lite][sdsl-lite] - low level succinct data structures (For now you will have to use my branch if you want to use variable order
+graphs: clone [this](https://github.com/alexbowe/sdsl-lite) and checkout the `develop` branch before compiling),
 - [TClap][tclap] - command line parsing,
 - [DSK][dsk] - k-mer counting (we need this for input),
 - Optionally (for developers): [Python][python] and [NumPy][numpy] - rebuilding the lookup tables.
