@@ -3,12 +3,13 @@
 #define _DEBRUIJN_HYPERGRAPH_H
 
 #include <boost/optional.hpp>
+//#include <sdsl/wt_algorithm.hpp>
 #include "debruijn_graph.hpp"
 
 using namespace boost;
 
 template <class t_debruijn_graph = debruijn_graph<>,
-          class t_lcs_vector     = wt_huff<rrr_vector<63>> >
+          class t_lcs_vector     = wt_int<rrr_vector<63>> >
 class debruijn_hypergraph : t_debruijn_graph {
   // Nodes are now ranges of edges (could be done for standard de bruijn graph too...
   // would save time by saving state?)
@@ -26,6 +27,14 @@ class debruijn_hypergraph : t_debruijn_graph {
   debruijn_hypergraph(const t_debruijn_graph & dbg, const t_lcs_vector & lcs) : m_dbg(dbg), m_lcs(lcs) {}
 
   // shorter(v, k) - returns the hypernode whose label is the last k characters of v's label (reduce context)
+  /*
+  node_type shorter(const node_type & v, size_t k) {
+    // search backward on WT to find the first occurence of a number less than k
+    // v = [i,j]
+    // find largest i' <= i
+    // smallest j' >= j
+  }
+  */
   // longer(v, k) - list nodes (new "node") whose labels have length k <= K and end with v's label
 
   // maxlen(v, x) - returns some node in the *original* (kmax) graph whose label ends with v's
@@ -54,7 +63,7 @@ class debruijn_hypergraph : t_debruijn_graph {
     return optional<node_type>();
   }
 
-  // function to get node by id
+  // function to get standard node by rank (then use shorter)
   // fwd, back, lastchar
 };
 

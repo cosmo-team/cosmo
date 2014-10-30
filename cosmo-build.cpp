@@ -63,7 +63,7 @@ int main(int argc, char* argv[]) {
   store_to_file(dbg, outfilename);
 
   #ifdef VAR_ORDER
-  wt_huff<rrr_vector<63>> lcs;
+  wt_int<rrr_vector<63>> lcs;
   construct(lcs, base_name + string(".lcs"), 1);
   cerr << "LCS size      : " << size_in_mega_bytes(lcs) << " MB" << endl;
   cerr << "LCS bits/edge : " << bits_per_element(lcs) << " Bits" << endl;

@@ -7,11 +7,13 @@
 
 #include <sdsl/bit_vectors.hpp>
 #include <sdsl/wavelet_trees.hpp>
+#include <sdsl/wt_algorithm.hpp>
 
 #include "io.hpp"
 #include "debruijn_graph.hpp"
 #include "debruijn_hypergraph.hpp"
 #include "algorithm.hpp"
+#include "wt_algorithm.hpp"
 
 using namespace std;
 using namespace sdsl;
@@ -64,7 +66,7 @@ int main(int argc, char* argv[]) {
   cerr << "Bits per edge : " << bits_per_element(g) << " Bits" << endl;
 
   #ifdef VAR_ORDER
-  wt_huff<rrr_vector<63>> lcs;
+  wt_int<rrr_vector<63>> lcs;
   load_from_file(lcs, p.input_filename + ".lcs.wt");
 
   cerr << "LCS size      : " << size_in_mega_bytes(lcs) << " MB" << endl;
@@ -83,7 +85,17 @@ int main(int argc, char* argv[]) {
   auto y = h.maxlen(v,1);
   if (!y) cout << "NONE" << endl;
   else cout << "maxlen: " << y->first << ", " << y->second << endl;
-  #endif
+  //size_t plte = prev_lte(lcs, 1, 2);
+  //cout << plte << endl;
+  //cout << "bit: " << get_bit_at_level(lcs, 1, 15) << endl;
 
+
+  wt_int<rrr_vector<63>> wt; //0 1  2  3  4  5  6  7  8
+  construct_im(wt, int_vector<>({1, 0, 1, 1, 1, 1, 1, 20}));
+  //auto plte = prev_lte(wt, 6, 100);
+  auto nlte = next_lte(wt, 6, 100);
+  //cout << plte << endl;
+  cout << nlte << endl;
+  #endif
 }
 
