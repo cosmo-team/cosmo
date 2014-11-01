@@ -250,6 +250,15 @@ int main(int argc, char * argv[]) {
   #ifdef VAR_ORDER
   ofstream lcs;
   #endif
+  #if 1
+  static const size_t BUFFER_LEN = 2*1024*1024;
+  char buffer_a[BUFFER_LEN];
+  ofs.rdbuf()->pubsetbuf(buffer_a, BUFFER_LEN);
+  #ifdef VAR_ORDER
+  char buffer_b[BUFFER_LEN];
+  lcs.rdbuf()->pubsetbuf(buffer_b, BUFFER_LEN);
+  #endif
+  #endif
   // TODO: Should probably do checking here when opening the file...
   ofs.open(outfilename + extension, ios::out | ios::binary);
   #ifdef VAR_ORDER
