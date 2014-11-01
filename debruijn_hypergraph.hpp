@@ -2,6 +2,7 @@
 #ifndef _DEBRUIJN_HYPERGRAPH_H
 #define _DEBRUIJN_HYPERGRAPH_H
 
+#include <vector>
 #include <boost/optional.hpp>
 //#include <sdsl/wt_algorithm.hpp>
 #include "wt_algorithm.hpp"
@@ -44,6 +45,22 @@ class debruijn_hypergraph : t_debruijn_graph {
   }
 
   // longer(v, k) - list nodes (new "node") whose labels have length k <= K and end with v's label
+  // could make iterator instead
+  vector<node_type> longer(const node_type & v, size_t k) {
+    vector<node_type> longer_nodes;
+    size_t i = get<0>(v);
+    size_t j = get<1>(v);
+    auto starts = range_lte(m_lcs, i, j, k-1);
+    // add code to add first edge?
+    for (size_t idx = 1; idx < starts.size()-1; idx++) {
+      size_t start = starts[idx-1];
+      size_t end   = starts[idx]-1;
+      longer_nodes.push_back(node_type(start, end));
+    }
+    size_t last = starts[starts.size()-1];
+    longer_nodes.push_back(node_type(last-1, j));
+    return longer_nodes;
+  }
 
   // maxlen(v, x) - returns some node in the *original* (kmax) graph whose label ends with v's
   // label, and that has an outgoing edge labelled x, or NULL otherwise

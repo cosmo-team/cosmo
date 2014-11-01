@@ -116,19 +116,16 @@ size_t next_lte(const t_wt & wt, size_t i, typename t_wt::value_type c) {
   return _next_lte_rec(wt, wt.root(), i, c);
 }
 
-/*
+// make iterators instead
 template <class t_wt>
-size_t next_lte(const t_wt & wt, size_t i, typename t_wt::value_type c) {
-  static_assert(t_wt::lex_ordered, "next_lte requires a lex_ordered WT");
-  return 0;
+vector<size_t> range_lte(const t_wt & wt, size_t i, size_t j, typename t_wt::value_type c) {
+  vector<size_t> range;
+  for (size_t next = i; next <= j; next++) {
+    next = next_lte(wt,next,c);
+    if (next > j) break;
+    range.push_back(next);
+  }
+  return range;
 }
-*/
-
-/*
-template <class t_wt>
-size_t range_lte(const t_wt & wt, size_t i, size_t j, typename t_wt::value_type c) {
-  return 0;
-}
-*/
 
 #endif

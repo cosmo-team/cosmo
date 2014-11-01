@@ -82,7 +82,7 @@ int main(int argc, char* argv[]) {
   //node_type v(3422771,3422796); // ......ttccgtagc->[acgt]
   node_type u = h.maxlen(v);
   cout << "maxlen: " << u.first << ", " << u.second << endl;
-  auto y = h.maxlen(v,1);
+  auto y = h.maxlen(v,2);
   if (!y) cout << "NONE" << endl;
   else cout << "maxlen: " << y->first << ", " << y->second << endl;
   //size_t plte = prev_lte(lcs, 1, 2);
@@ -92,13 +92,20 @@ int main(int argc, char* argv[]) {
 
   //construct_im(wt, int_vector<>({2, 4, 1, 1, 0, 1, 1, 20}));
   //wt_int<rrr_vector<63>> wt; //0 1  2  3  4  5  6  7  8
-  //construct_im(wt, int_vector<>({6, 6, 6, 2, 5, 0}));
+  //construct_im(wt, int_vector<>({0, 6, 6, 2, 5, 0}));
   //auto plte = prev_lte(wt, 6, 100);
   //auto nlte = next_lte(wt, 5, 4); // 5
   //cout << plte << endl;
   //cout << nlte << endl;
-  auto v_prime = h.shorter(v, 3);
-  cout << get<0>(v_prime) << ", " << get<1>(v_prime) << endl;
+  //auto v_s = h.shorter(v, 3);
+  //cout << "shorter: " get<0>(v_s) << ", " << get<1>(v_s) << endl;
+  //auto v_l = h.longer(v, 3);
+  auto r = h.longer(v,12);
+
+  for (auto x : r) {
+    cout << get<0>(x) << ", " << get<1>(x) << endl;
+  }
+
   #endif
 }
 
