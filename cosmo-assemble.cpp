@@ -81,10 +81,10 @@ int main(int argc, char* argv[]) {
   node_type v(3422774,3422778); // ....tattccgtagc->[t3,g2]
   //node_type v(3422771,3422796); // ......ttccgtagc->[acgt]
   node_type u = h.maxlen(v);
-  cout << "maxlen: " << u.first << ", " << u.second << endl;
+  cout << "maxlen: " << get<0>(u) << ", " << get<1>(u) << endl;
   auto y = h.maxlen(v,2);
   if (!y) cout << "NONE" << endl;
-  else cout << "maxlen: " << y->first << ", " << y->second << endl;
+  else cout << "maxlen: " << get<0>(*y) << ", " << get<1>(*y) << endl;
   //size_t plte = prev_lte(lcs, 1, 2);
   //cout << plte << endl;
   //cout << "bit: " << get_bit_at_level(lcs, 1, 15) << endl;

@@ -1,4 +1,4 @@
-// TODO: fix up pointer and calloc to use smart arrays
+// TODO: fix up pointer and malloc to use smart arrays
 // STL Headers
 //#include <fstream>
 #include <iostream>
@@ -82,10 +82,18 @@ void convert(kmer_t * kmers, size_t num_kmers, const uint32_t k, Visitor visit) 
   size_t dummy_table_factor = 1;
   #endif
   // Don't have to alloc if we aren't preparing all dummies, but this option is only used for testing. Usually we want them
-  kmer_t * incoming_dummies = (kmer_t*) calloc(num_incoming_dummies*all_dummies_factor*dummy_table_factor, sizeof(kmer_t));
+  kmer_t * incoming_dummies = (kmer_t*) malloc(num_incoming_dummies*all_dummies_factor*dummy_table_factor*sizeof(kmer_t));
+  if (!incoming_dummies) {
+    cerr << "Error allocating space for incoming dummies" << endl;
+    exit(1);
+  }
   // We store lengths because the prefix before the <length> symbols on the right will all be $ signs
   // this is a cheaper way than storing all symbols in 3 bits instead (although it means we need a varlen radix sort)
-  uint8_t * incoming_dummy_lengths = (uint8_t*) calloc(num_incoming_dummies*all_dummies_factor*dummy_table_factor, sizeof(uint8_t));
+  uint8_t * incoming_dummy_lengths = (uint8_t*) malloc(num_incoming_dummies*all_dummies_factor*dummy_table_factor*sizeof(uint8_t));
+  if (!incoming_dummy_lengths) {
+    cerr << "Error allocating space for incoming dummy lengths" << endl;
+    exit(1);
+  }
   // extract dummies
   find_incoming_dummy_edges(table_a, table_b, num_kmers*revcomp_factor, k, incoming_dummies);
   // add extra dummies
@@ -218,7 +226,12 @@ int main(int argc, char * argv[]) {
   #else
   size_t revcomp_factor = 1;
   #endif
-  uint64_t * kmer_blocks = (uint64_t*)calloc(num_kmers * 2 * revcomp_factor, sizeof(uint64_t) * kmer_num_blocks);
+  uint64_t * kmer_blocks = (uint64_t*)malloc(num_kmers * 2 * revcomp_factor * sizeof(uint64_t) * kmer_num_blocks);
+  if (!kmer_blocks) {
+    cerr << "Error allocating space for kmers" << endl;
+    exit(1);
+  }
+
 
   // READ KMERS FROM DISK INTO ARRAY
   size_t num_records_read = dsk_read_kmers(handle, kmer_num_bits, kmer_blocks);

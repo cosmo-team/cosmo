@@ -19,7 +19,7 @@ class debruijn_hypergraph : t_debruijn_graph {
   // A hypernode then replaces the defn of node without loss of generality
   public:
   typedef size_t                     edge_type;
-  typedef pair<edge_type, edge_type> node_type; // static assert 1st <= 2nd
+  typedef tuple<edge_type, edge_type, size_t> node_type;
   //typedef optional<node_type> hypernode_type; // optional return type
 
   typedef typename t_debruijn_graph::symbol_type symbol_type;
@@ -30,7 +30,7 @@ class debruijn_hypergraph : t_debruijn_graph {
 
   // shorter(v, k) - returns the hypernode whose label is the last k characters of v's label (reduce context)
   node_type shorter(const node_type & v, size_t k) {
-    if (k <= 1) return node_type(0, m_dbg.num_edges()-1);
+    if (k <= 1) return node_type(0, m_dbg.num_edges()-1, k);
 
     // search backward on WT to find the first occurence of a number less than k
     size_t i = get<0>(v);
@@ -41,7 +41,7 @@ class debruijn_hypergraph : t_debruijn_graph {
     // find smallest j' >= j with L*[j'] < k
     size_t j_prime = next_lte(m_lcs, j, k-1)-1;
 
-    return node_type(i_prime, j_prime);
+    return node_type(i_prime, j_prime, k);
   }
 
   // longer(v, k) - list nodes (new "node") whose labels have length k <= K and end with v's label
@@ -55,12 +55,20 @@ class debruijn_hypergraph : t_debruijn_graph {
     for (size_t idx = 1; idx < starts.size()-1; idx++) {
       size_t start = starts[idx-1];
       size_t end   = starts[idx]-1;
-      longer_nodes.push_back(node_type(start, end));
+      longer_nodes.push_back(node_type(start, end, k));
     }
     size_t last = starts[starts.size()-1];
-    longer_nodes.push_back(node_type(last-1, j));
+    longer_nodes.push_back(node_type(last-1, j, k));
     return longer_nodes;
   }
+
+  /*
+  node_type forward(const node_type & v, symbol_type x) {
+    m_dbg.forward(
+        // convert edge to node for dbg
+        //maxlen(v, x), x), get<2>(v);
+  }
+  */
 
   // maxlen(v, x) - returns some node in the *original* (kmax) graph whose label ends with v's
   // label, and that has an outgoing edge labelled x, or NULL otherwise
@@ -69,7 +77,7 @@ class debruijn_hypergraph : t_debruijn_graph {
     // Range_start must also be a start of a node at the top level context, so find the next top level node to find the range
     // TODO: make (or check if it exists) uniform interface for rank/select, so I can easily make next(), prev(), etc
     size_t end = m_dbg._last_edge_of_node(m_dbg._edge_to_node(start));
-    return node_type(start, end);
+    return node_type(start, end, m_dbg.k-1);
   }
 
   optional<node_type> maxlen(const node_type & v, const symbol_type x) const {
@@ -83,7 +91,8 @@ class debruijn_hypergraph : t_debruijn_graph {
       if (next > get<1>(v)) break;
       // Find node range
       size_t node_rank = m_dbg._edge_to_node(next);
-      return optional<node_type>(m_dbg._node_range(node_rank));
+      auto n_range = m_dbg._node_range(node_rank);
+      return optional<node_type>(node_type(get<0>(n_range), get<1>(n_range), m_dbg.k-1));
     }
     return optional<node_type>();
   }
