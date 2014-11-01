@@ -66,7 +66,7 @@ cosmo-pack: cosmo-pack.cpp $(PACK_REQS)
 cosmo-build: cosmo-build.cpp $(BUILD_REQS)
 		$(CXX) $(CPP_FLAGS) -o $@ $< io.o $(DEP_FLAGS) 
 
-cosmo-assemble: cosmo-assemble.cpp $(ASSEM_REQS)
+cosmo-assemble: cosmo-assemble.cpp $(ASSEM_REQS) wt_algorithm.hpp debruijn_hypergraph.hpp
 		$(CXX) $(CPP_FLAGS) -o $@ $< $(DEP_FLAGS) 
 
 all: $(BINARIES)

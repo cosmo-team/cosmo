@@ -2,6 +2,7 @@
 #ifndef _WT_ALGORITHM_H
 #define _WT_ALGORITHM_H
 
+#include <string>
 #include <sdsl/bits.hpp>
 #include <boost/optional.hpp>
 #include <sdsl/wt_algorithm.hpp>
@@ -41,29 +42,47 @@ size_t _prev_lte_rec(const t_wt & wt, const typename t_wt::node_type & node, siz
 
 template <class t_wt>
 size_t _next_lte_rec(const t_wt & wt, const typename t_wt::node_type & node, size_t i, typename t_wt::value_type c) {
-  if (i == 0) return 0;
+  string pad(node.level * 2, ' ');
+  pad += "  ";
+
+  if (i > node.size) {
+    return node.size+1;
+  }
 
   // at a leaf, we return the current position
   if (wt.is_leaf(node)) {
     return i;
   }
+  // Basic idea is the same, but need to select to next element.
+  // and check if it goes past the global rank of that symbol
 
   auto children = wt.expand(node);
   auto left_child = std::get<0>(children);
   auto right_child = std::get<1>(children);
 
   uint64_t mask = (1ULL) << (wt.max_level - 1);
-  if (!(c & (mask >> node.level))) { // left
-    size_t right_rank = wt.node_rank1(node, i);
-    size_t right_pos  = (right_rank)? wt.node_select1(node, right_rank + 1) + 1: 0;
-    size_t left_rank      = wt.node_rank0(node, i);
-    size_t left_sub_rank  = (left_rank)? _prev_lte_rec(wt, left_child, left_rank, c) : 0;
-    size_t left_pos       = (left_sub_rank)? wt.node_select0(node, left_sub_rank+1) + 1 : 0;
-    return std::min(left_pos, right_pos);
-  } else { // right
-    size_t rank = wt.node_rank1(node, i);
-    size_t sub  = (rank)? _prev_lte_rec(wt, right_child, rank, c) : 0;
-    size_t pos  = (sub)? wt.node_select1(node, sub) + 1 : 0;
+  if (c & (mask >> node.level)) {
+    size_t node_bit = (wt.node_access(node, i-1)==1);
+    // right branch
+    // find the first 0 that occurs at i' >= i
+    size_t r0 = wt.node_rank0(node, i); // # 0s in [0,i)
+    size_t extend0 = (node_bit == 1);
+    size_t p = wt.node_select0(node, r0+extend0) + 1;
+    if (p == i) return p;
+    size_t r1 = wt.node_rank1(node, i); // # 1s in [0, i)
+    size_t extend1 = (node_bit==0);// || node_bit==0);// || (r1 < i && node_bit==0));
+    size_t rr = _next_lte_rec(wt, right_child, r1 + extend1, c);
+    size_t pos = wt.node_select1(node, rr) + 1;
+    return std::min(std::min(p, pos), (size_t)node.size+1);
+  } else {
+    // bit = 0 - must recurse on left branch
+    // number of 0s in [0, i)
+    size_t r0  = wt.node_rank0(node, i);
+    //size_t extend = (lr == 0 || (r0 < i && wt.node_access(node, i-1)==1));
+    size_t extend = (wt.node_access(node, i-1)==1);
+    size_t lr  = _next_lte_rec(wt, left_child, r0+extend, c);
+    size_t pos = wt.node_select0(node, lr) + 1;
+    if (pos > node.size) return node.size+1;
     return pos;
   }
 }

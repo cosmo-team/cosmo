@@ -4,6 +4,7 @@
 
 #include <boost/optional.hpp>
 //#include <sdsl/wt_algorithm.hpp>
+#include "wt_algorithm.hpp"
 #include "debruijn_graph.hpp"
 
 using namespace boost;
@@ -27,14 +28,21 @@ class debruijn_hypergraph : t_debruijn_graph {
   debruijn_hypergraph(const t_debruijn_graph & dbg, const t_lcs_vector & lcs) : m_dbg(dbg), m_lcs(lcs) {}
 
   // shorter(v, k) - returns the hypernode whose label is the last k characters of v's label (reduce context)
-  /*
   node_type shorter(const node_type & v, size_t k) {
+    if (k <= 1) return node_type(0, m_dbg.num_edges()-1);
+
     // search backward on WT to find the first occurence of a number less than k
-    // v = [i,j]
-    // find largest i' <= i
-    // smallest j' >= j
+    size_t i = get<0>(v);
+    size_t j = get<1>(v);
+
+    // find largest i' <= i with L*[i' - 1] < k
+    size_t i_prime = prev_lte(m_lcs, i, k-1)-1;
+    // find smallest j' >= j with L*[j'] < k
+    size_t j_prime = next_lte(m_lcs, j, k-1)-1;
+
+    return node_type(i_prime, j_prime);
   }
-  */
+
   // longer(v, k) - list nodes (new "node") whose labels have length k <= K and end with v's label
 
   // maxlen(v, x) - returns some node in the *original* (kmax) graph whose label ends with v's

@@ -90,12 +90,15 @@ int main(int argc, char* argv[]) {
   //cout << "bit: " << get_bit_at_level(lcs, 1, 15) << endl;
 
 
-  wt_int<rrr_vector<63>> wt; //0 1  2  3  4  5  6  7  8
-  construct_im(wt, int_vector<>({1, 0, 1, 1, 1, 1, 1, 20}));
+  //construct_im(wt, int_vector<>({2, 4, 1, 1, 0, 1, 1, 20}));
+  //wt_int<rrr_vector<63>> wt; //0 1  2  3  4  5  6  7  8
+  //construct_im(wt, int_vector<>({6, 6, 6, 2, 5, 0}));
   //auto plte = prev_lte(wt, 6, 100);
-  auto nlte = next_lte(wt, 6, 100);
+  //auto nlte = next_lte(wt, 5, 4); // 5
   //cout << plte << endl;
-  cout << nlte << endl;
+  //cout << nlte << endl;
+  auto v_prime = h.shorter(v, 3);
+  cout << get<0>(v_prime) << ", " << get<1>(v_prime) << endl;
   #endif
 }
 
