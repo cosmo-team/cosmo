@@ -5,12 +5,12 @@
                    888       888   888 `"Y88b.   888   888   888  888   888 
                    888   .o8 888   888 o.  )88b  888   888   888  888   888 
                    `Y8bod8P' `Y8bod8P' 8""888P' o888o o888o o888o `Y8bod8P' 
-                                                                  ver 0.4.6
+                                                                  ver 0.5.0
 
 
 # Cosmo
 
-[**Version**][semver]: 0.4.6
+[**Version**][semver]: 0.5.0
 
 Cosmo is a fast, low-memory DNA assembler that uses a [succinct de Bruijn graph][succ].
 
@@ -61,83 +61,30 @@ We currently only output the unitigs (paths between branching nodes).
 ## Compilation
 
 There is an included Makefile - just type `make` to build it (assuming you have the dependencies listed below).
+To build with "Hypergraph mode", use the `varord=1` flag.
 
 *Note: it has only been tested on Mac OS X. Changes to work on any *NIX should be minor.*
 
 ### Dependencies  
 - A compiler that supports C++11,
-- [Boost][boost] - ranges and range algorithms, zip iterator, and tuple comparison),
-- [STXXL][stxxl] - external merging,
+- [Boost][boost] - ranges and range algorithms, zip iterator, tuple comparison, lots of good stuff,
 - [SDSL-lite][sdsl-lite] - low level succinct data structures (For now you will have to use my branch if you want to use variable order
 graphs: clone [this](https://github.com/alexbowe/sdsl-lite) and checkout the `develop` branch before compiling),
 - [TClap][tclap] - command line parsing,
 - [DSK][dsk] - k-mer counting (we need this for input),
-- Optionally (for developers): [Python][python] and [NumPy][numpy] - rebuilding the lookup tables.
+- Optionally (for developers): [Python][python] and [NumPy][numpy] - rebuilding the lookup tables,
+- [STXXL][stxxl] - external merging (not actually required yet though)
 
 Many of these are all installable with a package manager (e.g. `(apt-get | yum | brew ) install boost libstxxl tclap`).
 However, you will have to download and build these manually: [DSK][dsk] and [SDSL-lite][sdsl-lite].
-
-
-## Overview and Performance
-
-Here is a general overview of each program (details in the upcoming paper):
-
-### pack-edges  
-- Ignoring memory requirements, main operations are map - O(m), reduce - O(m), radix sort - O(mk), set difference - O(m), and merging - O(m), for m edges.
-- Generating all incoming dummies (e.g. {$ACG} -> {$ACG, $$AC, $$$A}, so we don't lose any node label data from storing only the last two symbols) - O(dk) for d dummies.
-- Adding each dummy shift means that incoming dummies have to be sorted again: O(dk * k) = O(dk^2).
-- Since in the worst case d = m, total is O(mk^2), but since usually d << m, O(mk) in practice.
-- If this was all implemented in memory, the space requirement would be m * k * 2 * 2 (we add reverse complements and use a copy-based radix sort) + d * k * 2 = 4mk + 2dk
-nucleotides, so 8mk + 4dk bits (which might sound like a lot, but...),
-- Using the copy-based radix sort is actually a speed optimisation, since it lets us save the second last iteration which we need for the set difference calculations (how we find the required dummies).
-- The sort, merge, set difference, map and reduce design of this means it is easy to distribute or make external. Besides, [DSK][dsk] reduces the memory requirement drastically as it is.
-- In the output `.packed` file, each edge is represented as five bits (edge symbol + flags) in 64-bit blocks (with four bits wasted per block).
-
-### cosmo-build  
-- Constructs the de Bruijn graph *in memory* using succinct data structures that each have linear time construction algorithms - O(m).
-
-### cosmo-assemble  
-- Iterates over every edge to build a compressed bit-vector that marks nodes that branch in or out - O(m), since indegree and outdegree are O(1);
-- Selects to each branching edge, and follows subsequent edges until it reaches another branch node - O(m).
-
-
-## .plan
-
-### Upcoming Release
-
-- [ ] Handle the first k symbols of incoming tips (backtrack until $ or k-1 - we want the first edge to make a kmer)
-- [ ] Handle palindromic edges (detect palindrome in last k edges followed and exit)
-- [ ] Write contig postprocessing system (store only one of the pairs of contigs - compare start to twin(end), store min)
-- [ ] Rewrite edge vector so it is faster (currently a wavelet tree - fine for general case)
-  - [ ] Vector with four bits for each node, with rank/select only on the non-minus flagged edges? (potential problem with sampling)
-  - [ ] Canonical Huffman coding (2^4 ints for frequencies, map the prefix code)
-- [ ] Add support for external sorting (for large data sets)
-
-### Future Releases
-
-- Set up Docker image for [nucleotid.es][nucleotides],
-- Add [Boost Graph Library][bgl] style API (to get merged into a heavyweight assembler),
-- Prepare documentation for said API,
-- Improve memory use for dummy edge generation (many of the shifted dummies are repeated... could build a trie instead),
-- Add support for indirect sorting (to let people attach k-mer counts or colours or whatever people want...) accessible like node/edge properties in [Boost Graph Library][bgl],
-- Improve assembly and add error correction (iterative construction),
-- Implement dynamic version (necessary for online construction and dynamic error correction),
-- Remove alphabet limitation (currently only supports DNA),
-- Write unit tests and refactor (I have some IPython notebooks that have tests in them, so this wasn't completely duct-taped together),
-- Set up continuous integration for [Travis CI][tci],
-- Add Python wrapper (for learning purposes and Python pipelines) with [NetworkX][networkx] style API.
 
 
 ## Authors
 
 Implemented by [Alex Bowe][abowe]. Original concept and prototype by [Kunihiko Sadakane][ksadakane].
 
-These people also proved incredibly helpful:
-
-- [Rayan Chikhi][rchikhi] - endless advice regarding de Bruijn graphs and assembly in general,
-- [Simon Puglisi][spuglisi] - fruitful discussions regarding optimisation,
-- [Simon Gog][sgog] - help with [SDSL-lite][sdsl-lite],
-- [Dominik Kempa][dkempa] - help with [STXXL].
+These people also proved *incredibly* helpful: [Rayan Chikhi][rchikhi], [Simon Puglisi][spuglisi],
+[Travis Gagie][tgagie], [Christina Boucher][cboucher], [Simon Gog][sgog], [Dominik Kempa][dkempa].
 
 
 ## Contributing
@@ -180,6 +127,8 @@ It is released under the GNU General Public License (GPL) version 3.
 [tci]: https://travis-ci.org
 
 [abowe]: https://github.com/alexbowe
+[cboucher]: http://christinaboucher.com/
+[tgagie]: http://www.cs.helsinki.fi/u/gagie/
 [ksadakane]: http://researchmap.jp/sada/
 [spuglisi]: http://www.cs.helsinki.fi/u/puglisi/
 [dkempa]: http://www.cs.helsinki.fi/u/dkempa/
