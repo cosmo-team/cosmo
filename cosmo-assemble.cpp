@@ -1,6 +1,6 @@
 #include <iostream>
 #include <fstream>
-
+#include <algorithm>
 #include <libgen.h> // basename
 
 #include "tclap/CmdLine.h"
@@ -78,72 +78,75 @@ int main(int argc, char* argv[]) {
   cerr << "LCS bits/edge : " << bits_per_element(lcs) << " Bits" << endl;
 
   typedef debruijn_hypergraph<> dbh;
-  dbh h(g, lcs);
-
   typedef dbh::node_type node_type;
-  //node_type v(12,215855); // ...aaa*
-  //node_type v(3422777,3422778); // ...ttattccgtagc->[t,g]. Other than that, totally different nodes.
-  node_type v(3422774,3422778, 11); // ....tattccgtagc->[t3,g2]
-  //node_type v(3422771,3422796); // ......ttccgtagc->[acgt]
-  node_type u = h.maxlen(v);
-  cout << "maxlen: " << get<0>(u) << ", " << get<1>(u) << endl;
-  auto y = h.maxlen(v,2);
-  if (!y) cout << "NONE" << endl;
-  else cout << "maxlen: " << get<0>(*y) << ", " << get<1>(*y) << endl;
-  //size_t plte = prev_lte(lcs, 1, 2);
-  //cout << plte << endl;
-  //cout << "bit: " << get_bit_at_level(lcs, 1, 15) << endl;
-
-
-  //construct_im(wt, int_vector<>({2, 4, 1, 1, 0, 1, 1, 20}));
-  //wt_int<rrr_vector<63>> wt; //0 1  2  3  4  5  6  7  8
-  //construct_im(wt, int_vector<>({0, 6, 6, 2, 5, 0}));
-  //auto plte = prev_lte(wt, 6, 100);
-  //auto nlte = next_lte(wt, 5, 4); // 5
-  //cout << plte << endl;
-  //cout << nlte << endl;
-  //auto v_s = h.shorter(v, 3);
-  //cout << "shorter: " get<0>(v_s) << ", " << get<1>(v_s) << endl;
-  //auto v_l = h.longer(v, 3);
-  auto r = h.longer(v,12);
-
-  for (auto x : r) {
-    cout << get<0>(x) << ", " << get<1>(x) << endl;
-  }
-
-  cout << "lastchar: " << "$acgt"[(int)h.lastchar(v)] << endl;
-
-  // node_type v(3422774,3422778, g.k-1); // ....tattccgtagc->[t3,g2]
-  // 01234
-  // $acgt
-  auto q = h.outgoing(v, 4);
-  if (!q) cout << "NONE" << endl;
-  else cout << get<0>(*q) << ", " << get<1>(*q) << endl;
-
-  cout << "backward:" <<endl;
-  auto prevs = h.backward(v);
-  for (auto prev: prevs) {
-    cout << get<0>(prev) << ", " << get<1>(prev) << endl;
-  }
-
+  dbh h(g, lcs);
   #endif
 
-  /*
-  int num_queries = 10;
+
+  int num_queries = 1e5;
+  size_t min_k = 0;
   typedef boost::mt19937 rng_type;
   rng_type rng(time(0));
-  boost::uniform_int<size_t> node_distribution(0,g.num_nodes()); // make go up to size of graph
-  boost::uniform_int<size_t> k_distribution(0, g.k); // make go up to size of graph
+  boost::uniform_int<size_t> node_distribution(0,g.num_nodes()-1); // make go up to size of graph
+  boost::uniform_int<size_t> k_distribution(min_k, g.k-1); // make go up to size of graph
+  boost::uniform_int<size_t> symbol_distribution(1, 4); // make go up to size of graph
   boost::variate_generator<rng_type, boost::uniform_int<size_t>> random_node(rng, node_distribution);
   boost::variate_generator<rng_type, boost::uniform_int<size_t>> random_k(rng, k_distribution);
-  cout << random_node() << ", " << random_k() << endl;
-  vector<size_t> q_nodes(boost::make_function_input_iterator(random_node,0),
-                         boost::make_function_input_iterator(random_node,num_queries));
-  //vector<size_t>    q_ks(boost::make_function_input_iterator(random_node,0),
-  //                       boost::make_function_input_iterator(random_node,10));
-  for (auto x: q_nodes) {
-    cout << x << endl;
+  boost::variate_generator<rng_type, boost::uniform_int<size_t>> random_symbol(rng, symbol_distribution);
+  //auto random_higher_k = [&](size_t low)  { return boost::uniform_int<size_t>(low+1,g.k-1)(rng); }; // make go up to size of graph
+  //auto random_lower_k  = [&](size_t high) { return boost::uniform_int<size_t>(min_k,high-1)(rng); }; // make go up to size of graph
+
+  vector<size_t> query_nodes(boost::make_function_input_iterator(random_node,0),
+                             boost::make_function_input_iterator(random_node,num_queries));
+  vector<size_t> query_syms(boost::make_function_input_iterator(random_symbol,0),
+                            boost::make_function_input_iterator(random_symbol,num_queries));
+  #ifdef VAR_ORDER
+  // Convert to variable order nodes
+  vector<size_t> query_ks(boost::make_function_input_iterator(random_k,0),
+                          boost::make_function_input_iterator(random_k,num_queries));
+
+  vector<node_type> query_varnodes;
+  //transform(query_nodes.begin(), query_nodes.end(), query_varnodes.begin(),[&](size_t v){ return h.get_node(v); });
+  for (auto u:query_nodes) {
+    query_varnodes.push_back(h.get_node(u));
   }
-  */
+
+  // set shorter for each one that has a shorter k
+  for (int i=0;i<num_queries;i++) {
+    if (query_ks[i] == g.k-1) continue;
+    query_varnodes[i] = h.shorter(query_varnodes[i], query_ks[i]);
+  }
+  #endif
+
+  #ifndef VAR_ORDER // standard dbg
+  // backward
+  for (auto v : query_nodes) { g.all_preds(v); }
+
+  // forward
+  for (size_t i=0;i<(size_t)num_queries;i++) {
+    size_t v = query_nodes[i];
+    auto   x = query_syms[i];
+    g.outgoing(v, x);
+  }
+
+  // last_char
+  for (auto v : query_nodes) { g.lastchar(v); }
+  #else
+
+  // backward
+  for (auto v : query_varnodes) {
+    h.backward(v);
+  }
+
+  // forward
+  for (size_t i=0;i<(size_t)num_queries;i++) {
+    auto v = query_varnodes[i];
+    auto x = query_syms[i];
+    auto r = h.outgoing(v, x);
+  }
+
+  // last_char
+  for (auto v : query_varnodes) { h.lastchar(v); }
+  #endif
 }
 

@@ -136,6 +136,30 @@ class debruijn_graph {
     return count - (count == 1 && _strip_edge_flag(m_edges[first]) == 0);
   }
 
+  vector<size_t> all_preds(size_t v) const {
+    assert(v < num_nodes());
+    assert(x < sigma + 1);
+    // node u -> v : edge i -> j
+    size_t j = _node_to_edge(v);
+    symbol_type y = _symbol_access(j);
+    if (y == 0) return vector<size_t>(0);
+    size_t i_first = _backward(j);
+    size_t i_last  = _next_edge(i_first, y);
+    size_t base_rank = m_edges.rank(i_first, _with_edge_flag(y, true));
+    size_t last_rank = m_edges.rank(i_last, _with_edge_flag(y, true));
+    size_t num_predecessors = last_rank - base_rank + 1;
+    // binary search over first -> first + count;
+    auto selector = [&](size_t i) -> size_t {
+      return (i == 0)? i_first : m_edges.select(base_rank+i, _with_edge_flag(y,true));
+    };
+
+    vector<size_t> result(num_predecessors);
+    for (size_t i = 0; i<num_predecessors; i++) {
+      result.push_back(_edge_to_node(selector(i)));
+    }
+    return result;
+  }
+
   size_t indegree(size_t v) const {
     // find first predecessor edge i->j
     size_t j = _node_to_edge(v);
@@ -172,7 +196,7 @@ class debruijn_graph {
   }
 
   // For DCC
-  size_t _outgoing_edge_pair(size_t first, size_t last, symbol_type x) const {
+  ssize_t _outgoing_edge_pair(size_t first, size_t last, symbol_type x) const {
     // Try both with and without a flag
     for (symbol_type c = _with_edge_flag(x,false); c <= _with_edge_flag(x, true); c++) {
       size_t most_recent = m_edges.select(m_edges.rank(last+1, c), c);
@@ -328,6 +352,7 @@ class debruijn_graph {
     return next;
   }
 
+
   size_t _backward(size_t i) const {
     assert(i < num_edges());
     symbol_type x  = _symbol_access(i);
@@ -339,6 +364,10 @@ class debruijn_graph {
     if (x == 0) return 0;
     // no minus flag because we want the FIRST
     return m_edges.select(nth+1, _with_edge_flag(x, false));
+  }
+
+  size_t backward(size_t v) const {
+    return _edge_to_node(_backward(_node_to_edge(v)));
   }
 
   symbol_type _map_symbol(symbol_type x) const {
