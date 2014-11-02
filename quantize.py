@@ -2,6 +2,8 @@ import numpy as np
 from bisect import bisect_right
 import argparse, os
 
+# TODO: try ideas from http://scikit-learn.org/stable/auto_examples/cluster/plot_lena_compress.html
+
 parser = argparse.ArgumentParser(description='Quantize LCS vector to compress better.')
 parser.add_argument('filename')
 mode = parser.add_mutually_exclusive_group(required=True)
