@@ -6,6 +6,7 @@
 #include <functional>
 #include <algorithm>
 #include <string>
+#include "utility.hpp"
 #include "debug.h"
 #include "lut.hpp"
 #include "uint128_t.hpp"
@@ -19,6 +20,8 @@
 // Swaps G (11 -> 10) and T (10 -> 11) representation so radix ordering is lexical
 // (needed because some kmer counters like DSK swap this representation, but we assume G < T
 // in our de bruijn graph implementation)
+
+// TODO: Could probably make this faster using a static k param
 
 static struct swap_gt_f : std::unary_function<uint64_t, uint64_t> {
   inline uint64_t operator() (const uint64_t & x) const { return (x ^ ((x & 0xAAAAAAAAAAAAAAAA) >> 1)); }
@@ -36,6 +39,21 @@ inline uint8_t get_nt(const uint128_t & block, uint8_t i) {
   // but should be reusable for larger block types
   uint64_t block_64 = ((uint64_t*)(&block))[block_idx];
   return get_nt(block_64, i%nts_per_block);
+}
+
+template <typename kmer_t>
+kmer_t clear_nt(const kmer_t & x, uint8_t i) {
+  // Keep in mind that 0 is the leftmost nt, but that the leftmost is the edge (so rightmost in our diagrams)
+  kmer_t mask = ~((kmer_t(3) << (bitwidth<kmer_t>::width - (1+i)*NT_WIDTH)));
+  return x & mask;
+}
+
+// TODO: remove or test/fix
+template <typename kmer_t>
+kmer_t set_nt(const kmer_t & x, uint8_t i, uint8_t v) {
+  assert(v < DNA_RADIX);
+  kmer_t cleared = clear_nt(x, i);
+  return cleared | (kmer_t(v) << (bitwidth<kmer_t>::width - (1+i)*NT_WIDTH));
 }
 
 template <typename T>
@@ -147,6 +165,31 @@ struct reverse_complement<uint128_t> : std::unary_function<uint128_t, uint128_t>
   }
 };
 
+template <typename kmer_t>
+bool is_palindrome(const kmer_t & x, uint8_t k) {
+  return (k%2==0 && x == reverse_complement<kmer_t>(k)(x));
+}
+
+template <typename kmer_t>
+kmer_t representative(const kmer_t & x, uint8_t k) {
+  kmer_t twin = reverse_complement<kmer_t>(k)(x);
+  return (x < twin)? x : twin;
+}
+
+// Shift and attach a value v on to the end (so the 0th element) of the kmer,
+// and delete the last (kth) symbol (like following a path in a
+// de bruijn graph)
+template <typename kmer_t>
+kmer_t follow_edge(const kmer_t & x, uint8_t k, uint8_t v) {
+  kmer_t y(x);
+  // unset character
+  y = set_nt(y, k-1, 0);
+  y >>= NT_WIDTH;
+  // set character
+  y = set_nt(y, 0, v);
+  return y;
+}
+
 template <typename T>
 std::string kmer_to_string(const T & kmer_block, uint8_t max_k, uint8_t this_k = -1) {
   std::string buf(max_k, DUMMY_SYM);
@@ -176,5 +219,40 @@ void print_kmers(std::ostream & out, kmer_t * kmers, size_t num_kmers, uint32_t 
   }
 }
 
+// Longest common suffix
+template <typename kmer_t>
+size_t lcs(const kmer_t & a, const kmer_t & b, size_t k) {
+  static const size_t num_blocks = bitwidth<kmer_t>::width/BLOCK_WIDTH;
+  //kmer_t x = a ^ b; // Do this in the loop below instead to potentially save some cycles
+  uint64_t * p = (uint64_t*)&a;
+  uint64_t * q = (uint64_t*)&b;
+  size_t total = 0;
+  // This should unroll. for 128 bits its only 2 iters
+  for (size_t i = 0; i < num_blocks; i++) {
+    if (p[i] == q[i]) {
+      total += BLOCK_WIDTH;
+      continue;
+    }
+    else {
+      // COUNT *LEADING* ZEROS - we store kmers backwards
+      total += clz(p[i] ^ q[i]);
+      break;
+    }
+  }
+  total /= NT_WIDTH;
+  return std::min(total, k);
+}
+
+template <typename kmer_t>
+size_t node_lcs(const kmer_t & a, const kmer_t & b, size_t k) {
+  //assert(k>0); // Shouldnt be called this way, but we also minus 1 down below...
+  if (k == 0) return 0;
+  kmer_t x(a);
+  kmer_t y(b);
+  // TODO: make position-templated set_nt()
+  ((uint64_t*)&x)[0] &= 0x3FFFFFFFFFFFFFFF;
+  ((uint64_t*)&y)[0] &= 0x3FFFFFFFFFFFFFFF;
+  return lcs(x,y,k) - 1;
+}
 
 #endif

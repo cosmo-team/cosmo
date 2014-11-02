@@ -2,21 +2,24 @@
 #ifndef _ALGORITHM_HPP
 #define _ALGORITHM_HPP
 
-#include <iostream>
+#include <vector>
+#include <stack>
 
 #include <sdsl/bit_vectors.hpp>
 #include "debruijn_graph.hpp"
+#include "kmer.hpp"
+#include "uint128_t.hpp"
 
 using namespace std;
-using namespace sdsl;
+//using namespace sdsl;
 
 // Calling it with a vector of first minus positions is sliiiightly faster
 // But would mean we have to save another vector with our graph if we ever want to traverse
 // it again.
 // If a vector isnt provided, another method is used which is *almost as fast*
-template <bool has_branch = 1, class V=sd_vector<>, class G>
+template <bool has_branch = 1, class G, class V=sdsl::sd_vector<> >
 V make_branch_vector(const G& g, const vector<size_t> * v = nullptr) {
-  bit_vector branching_flags(g.num_edges(),!has_branch);
+  sdsl::bit_vector branching_flags(g.num_edges(),!has_branch);
   // OUTDEGREE
   for (size_t edge = 0; edge < g.num_edges()-1; edge++) {
     // This will only unset the bits that are 0,0 (which means no 11, 10, or 01, which is a sibling edge)
@@ -74,34 +77,103 @@ template <class V> struct _type_getter<1, V> {
   typedef typename V::select_1_type select_type;
 };
 
-// Should make iterator instead?
-template <const bool has_branch = 1, class G, class V, class F>
-void visit_unipaths(const G& g, const V& v, const F & f) {
-  typedef typename _type_getter<has_branch, V>::rank_type rank_type;
-  typedef typename _type_getter<has_branch, V>::select_type select_type;
 
-  rank_type   rank(&v);
-  select_type select(&v);
+// Not technically a visitor... but a visitor pattern
+// Should change this to an edge iterator sometime
+// Or refactor it to unipath_debruijn_graph
+template <class G, const bool has_branch = 1, class B=sdsl::sd_vector<>>
+class unipath_visitor {
+  typedef sdsl::bit_vector bit_vector;
+  typedef typename _type_getter<has_branch, B>::rank_type rank_type;
+  typedef typename _type_getter<has_branch, B>::select_type select_type;
+  typedef typename G::symbol_type symbol_type;
+  typedef typename G::label_type  label_type;
 
-  // Could reverse one step to use F to look up instead of edges...
-  for (size_t sel_idx = 1; sel_idx <= rank(v.size()); sel_idx++) {
-    // If we didn't have the guarantee that EVERYTHING has at least one incoming edge (thanks dummy edges)
-    // then we might have to backtrack here to print the node
-    // if we didnt have all the k-1 dummies per edge, we would be missing some symbols
-    // but as it is now, all we have to do is traverse forwards
-    size_t edge = select(sel_idx);
-    assert(v[edge] == has_branch);
-    // For each edge... each one should be a has_branch
-    // Due to the definition of our branch vector
-    // so it will be selected to... so we just follow _forward
-    do {
-      typename G::symbol_type x = g._strip_edge_flag(g.m_edges[edge]);
-      f(g._map_symbol(x));
-      if (x == 0) break;
-      edge = g._forward(edge);
-      // for pairs: check here and at the if x == 0, and return node index of this + first edge
-    } while (v[edge] != has_branch);
+  public: // change this later
+  const G & g;
+  const B   b;
+  const rank_type   branch_rank;
+  const select_type branch_select;
+
+  // CTORs
+  unipath_visitor(const G& dbg) : g(dbg), b(make_branch_vector(g)), branch_rank(&b), branch_select(&b) {}
+  // The below may be slightly faster (if a branch vector is prebuilt at graph construction)
+  unipath_visitor(const G& dbg, B & branches) : g(dbg), b(branches), branch_rank(&b), branch_select(&b) {}
+  unipath_visitor(const G& dbg, const vector<size_t> & v) : g(dbg), b(make_branch_vector(g, v)), branch_rank(&b), branch_select(&b) {}
+
+  template <class F>
+  void operator()(const F & f) const {
+    // Need to keep track of visited incase we have isolated cycles (e.g. plasmids)
+    bit_vector visited(g.num_edges(),0);
+    // We increment this for a faster popcount at the end (to check if we need to traverse cycles)
+    size_t     num_visited = 0;
+
+    _traverse_branches(visited, num_visited, f);
+    _traverse_cycles(visited, num_visited, f);
   }
+
+  template <class F>
+  void _traverse_branches(bit_vector & visited, size_t &, const F &) const {
+    // This way was just to avoid a big stack...
+    // Select to each contig split
+    for (size_t sel_idx = 1; sel_idx <= g.num_edges(); sel_idx++) {
+      size_t base = branch_select(sel_idx);
+      size_t last = g._last_sibling(base); // first not needed in this calculation
+      size_t num_siblings = last - base + 1;
+
+      // Check siblings to see if already visited (then we can skip this)
+      size_t non_visited_count = 0;
+      for (size_t sibling = 0; sibling < num_siblings; sibling++) {
+        if (!visited[base+sibling]) non_visited_count++;
+      }
+      // Skip the siblings if all are visited
+      if (non_visited_count > 0) {
+        // Loop backwards to get starting k-1 (if $ before that then we skip... and only do this if the siblings arent visited)
+
+        // loop across sibling branches to avoid selecting (access is faster) and backtracking multiple times
+        for (size_t sibling = 0; sibling < num_siblings; sibling++) {
+          // If an element is already visited, just skip it (but keep iterating)
+          if (visited[base+sibling]) continue;
+          // do unipath path traversal
+        }
+      }
+      sel_idx += num_siblings;
+    }
+  }
+
+  template <class F>
+  void _traverse_cycles(bit_vector &, size_t num_visited, const F &) const {
+    // If we have visited every edge, then we have nothing left to do!
+    // Anything else is a cycle (if we handled the branches before)
+    if (num_visited == g.num_edges()) return;
+
+    // Just iterate over all edges that arent visited, then follow them until we get to a visited
+  }
+
+  // Assumes starting from edge straight after branch == has_branch
+  /*
+  template <class F>
+  void _traverse_unipath(bit_vector &, size_t &, const F & f, ssize_t edge) {
+    //auto visit = [&](size_t i) -> void { visited[i] = 1; num_visited++; };
+    // Check if first kmer is in set (yes)> return
+
+    //if (edge == -1 || (size_t)edge >= dbg.num_edges()) return;
+    // visit elements in buffer to output first kmer
+
+    symbol_type x;
+    while(edge != -1 && b[edge] != has_branch) { // and edge not palindrome
+      edge = g._forward(edge, x);
+      f(x);
+    }
+    // Add last kmer to set
+    // Call this recursively if branch
+  }
+  */
+};
+
+template <class G>
+unipath_visitor<G> make_unipath_visitor(const G & g) {
+  return unipath_visitor<G>(g);
 }
 
 #endif

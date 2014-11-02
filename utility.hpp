@@ -21,4 +21,7 @@ T & deconst(const T & x) {
   return const_cast<T&>(x);
 }
 
+// This may not work in VS etc... Add code to support other compilers?
+#define clz(x) __builtin_clzll((x))
+
 #endif

@@ -29,7 +29,7 @@ template <size_t t_sigma            = 4, // default: DNA, TODO: change to 0 and 
           class  t_symbol_type      = typename t_edge_vector_type::value_type,
           class  t_label_type       = string> // can define basic_string<t_symbol_type>, but need to use correct print func
 class debruijn_graph {
-  //static_assert(t_sigma == 4, "Alphabet sizes other than 4 are not yet supported.");
+  static_assert(t_sigma == 4, "Alphabet sizes other than 4 are not yet supported.");
 
   public:
   const static size_t sigma = t_sigma;
@@ -136,6 +136,30 @@ class debruijn_graph {
     return count - (count == 1 && _strip_edge_flag(m_edges[first]) == 0);
   }
 
+  vector<size_t> all_preds(size_t v) const {
+    assert(v < num_nodes());
+    assert(x < sigma + 1);
+    // node u -> v : edge i -> j
+    size_t j = _node_to_edge(v);
+    symbol_type y = _symbol_access(j);
+    if (y == 0) return vector<size_t>(0);
+    size_t i_first = _backward(j);
+    size_t i_last  = _next_edge(i_first, y);
+    size_t base_rank = m_edges.rank(i_first, _with_edge_flag(y, true));
+    size_t last_rank = m_edges.rank(i_last, _with_edge_flag(y, true));
+    size_t num_predecessors = last_rank - base_rank + 1;
+    // binary search over first -> first + count;
+    auto selector = [&](size_t i) -> size_t {
+      return (i == 0)? i_first : m_edges.select(base_rank+i, _with_edge_flag(y,true));
+    };
+
+    vector<size_t> result(num_predecessors);
+    for (size_t i = 0; i<num_predecessors; i++) {
+      result.push_back(_edge_to_node(selector(i)));
+    }
+    return result;
+  }
+
   size_t indegree(size_t v) const {
     // find first predecessor edge i->j
     size_t j = _node_to_edge(v);
@@ -171,6 +195,20 @@ class debruijn_graph {
     return -1;
   }
 
+  // For DCC
+  ssize_t _outgoing_edge_pair(size_t first, size_t last, symbol_type x) const {
+    // Try both with and without a flag
+    for (symbol_type c = _with_edge_flag(x,false); c <= _with_edge_flag(x, true); c++) {
+      size_t most_recent = m_edges.select(m_edges.rank(last+1, c), c);
+      // if within range, follow forward
+      if (first <= most_recent && most_recent <= last) {
+        // Don't have to check fwd for -1 since we checked for $ above
+        return _forward(most_recent);
+      }
+    }
+    return -1;
+  }
+
   // incoming
   ssize_t incoming(size_t v, symbol_type x) const {
     // This is very similar to indegree, so should maybe be refactored
@@ -201,12 +239,17 @@ class debruijn_graph {
   label_type node_label(size_t v) const {
     size_t i = _node_to_edge(v);
     label_type label = label_type(k-1, _map_symbol(symbol_type{}));
-    return _node_label_from_edge(i, label);
+    return _node_label_from_edge_given_buffer(i, label);
+  }
+
+  label_type node_label_from_edge(size_t i) const {
+    label_type label = label_type(k-1, _map_symbol(symbol_type{}));
+    return _node_label_from_edge_given_buffer(i, label);
   }
 
   label_type edge_label(size_t i) const {
     label_type label = label_type(k, _map_symbol(symbol_type{}));
-    _node_label_from_edge(i, label);
+    _node_label_from_edge_given_buffer(i, label);
     label[k-1] = _map_symbol(_strip_edge_flag(m_edges[i]));
     return label;
   }
@@ -231,6 +274,7 @@ class debruijn_graph {
     return m_node_rank(i);
   }
 
+  // This should be moved to a helper file...
   symbol_type _strip_edge_flag(symbol_type x) const {
     return x >> 1;
   }
@@ -247,6 +291,9 @@ class debruijn_graph {
     return upper_bound(m_symbol_ends.begin(), m_symbol_ends.end(), i) - m_symbol_ends.begin();
   }
 
+  // provided for DCC paper
+  inline symbol_type lastchar(size_t v) const { return _symbol_access(_node_to_edge(v)); }
+
   // more efficient than generating full label for incoming()
   symbol_type _first_symbol(size_t i) const {
     symbol_type x = 0;
@@ -260,7 +307,7 @@ class debruijn_graph {
     return x;
   }
 
-  label_type _node_label_from_edge(size_t i, label_type & label) const {
+  label_type _node_label_from_edge_given_buffer(size_t i, label_type & label) const {
     // Calculate backward k times and fill a buffer with symbol_access(edge)
     //label_type label = label_type(k-1, _map_symbol(symbol_type{}));
     for (size_t pos = 1; pos <= k-1; pos++) {
@@ -288,8 +335,14 @@ class debruijn_graph {
   // Return index of first possible edge obtained by following edge i
   public:
   ssize_t _forward(size_t i) const {
+    symbol_type temp;
+    return _forward(i, temp);
+  }
+
+  // This is so we can reuse the symbol lookup - save an access during traversal :)
+  ssize_t _forward(size_t i, symbol_type & x) const {
     assert(i < num_edges());
-    symbol_type x = _strip_edge_flag(m_edges[i]);
+    x = _strip_edge_flag(m_edges[i]);
     // if x == 0 ($) then we can't follow the edge
     // (should maybe make backward consistent with this, but using the edge 0 loop for node label generation).
     if (x == 0) return -1;
@@ -298,6 +351,7 @@ class debruijn_graph {
     size_t next  = m_node_select(m_node_rank(start+1) + nth);
     return next;
   }
+
 
   size_t _backward(size_t i) const {
     assert(i < num_edges());
@@ -312,26 +366,41 @@ class debruijn_graph {
     return m_edges.select(nth+1, _with_edge_flag(x, false));
   }
 
+  size_t backward(size_t v) const {
+    return _edge_to_node(_backward(_node_to_edge(v)));
+  }
+
   symbol_type _map_symbol(symbol_type x) const {
     return (m_alphabet.size() > 0)? m_alphabet[x] : x;
   }
 
-  size_t _first_edge(size_t v) const {
+  size_t _first_edge_of_node(size_t v) const {
     assert(v < num_nodes());
     // select is 1-based, but nodes are 0-based
     return m_node_select(v+1);
   }
 
-  size_t _last_edge(size_t v) const {
+  size_t _last_edge_of_node(size_t v) const {
     // find the *next* node's first edge and decrement
     // as long as a next node exists!
     assert(v + 1 <= num_nodes());
     if (v+1 == num_nodes()) return num_edges() - 1;
-    else return _first_edge(v+1) - 1;
+    else return _first_edge_of_node(v+1) - 1;
   }
 
   pair<size_t, size_t> _node_range(size_t v) const {
-    return make_pair(_first_edge(v), _last_edge(v));
+    return make_pair(_first_edge_of_node(v), _last_edge_of_node(v));
+  }
+
+  // TODO: add first_sibling and edge_range
+  // TODO: update to use rank and select for larger alphabets
+  size_t _last_sibling(size_t i) const {
+    size_t last = i;
+    while(last < num_edges() && m_node_flags[last] != 0) {
+      last++;
+    }
+    // last should be one past end
+    return last-1;
   }
 
   size_type serialize(ostream& out, structure_tree_node* v=NULL, string name="") const {
@@ -351,6 +420,8 @@ class debruijn_graph {
     return written_bytes;
   }
 
+  // THIS IS PROBABLY A BAD DESIGN CHOICE on behalf of sdsl
+  // we shouldnt have a function which mutates the state? I dunno, I just have a bad feeling
   //! Loads the data structure from the given istream.
   void load(std::istream& in) {
     // DANGER WILL ROBINSON!

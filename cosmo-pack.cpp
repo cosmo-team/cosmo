@@ -1,4 +1,4 @@
-// TODO: fix up pointer and calloc to use smart arrays
+// TODO: fix up pointer and malloc to use smart arrays
 // STL Headers
 //#include <fstream>
 #include <iostream>
@@ -82,10 +82,18 @@ void convert(kmer_t * kmers, size_t num_kmers, const uint32_t k, Visitor visit) 
   size_t dummy_table_factor = 1;
   #endif
   // Don't have to alloc if we aren't preparing all dummies, but this option is only used for testing. Usually we want them
-  kmer_t * incoming_dummies = (kmer_t*) calloc(num_incoming_dummies*all_dummies_factor*dummy_table_factor, sizeof(kmer_t));
+  kmer_t * incoming_dummies = (kmer_t*) malloc(num_incoming_dummies*all_dummies_factor*dummy_table_factor*sizeof(kmer_t));
+  if (!incoming_dummies) {
+    cerr << "Error allocating space for incoming dummies" << endl;
+    exit(1);
+  }
   // We store lengths because the prefix before the <length> symbols on the right will all be $ signs
   // this is a cheaper way than storing all symbols in 3 bits instead (although it means we need a varlen radix sort)
-  uint8_t * incoming_dummy_lengths = (uint8_t*) calloc(num_incoming_dummies*all_dummies_factor*dummy_table_factor, sizeof(uint8_t));
+  uint8_t * incoming_dummy_lengths = (uint8_t*) malloc(num_incoming_dummies*all_dummies_factor*dummy_table_factor*sizeof(uint8_t));
+  if (!incoming_dummy_lengths) {
+    cerr << "Error allocating space for incoming dummy lengths" << endl;
+    exit(1);
+  }
   // extract dummies
   find_incoming_dummy_edges(table_a, table_b, num_kmers*revcomp_factor, k, incoming_dummies);
   // add extra dummies
@@ -115,17 +123,17 @@ void convert(kmer_t * kmers, size_t num_kmers, const uint32_t k, Visitor visit) 
                 dummies_a, num_incoming_dummies*all_dummies_factor,
                 lengths_a,
                 // edge_tag needed to distinguish between dummy out edge or not...
-                [=](edge_tag tag, const kmer_t & x, const uint32_t x_k, bool first_start_node, bool first_end_node) {
-                  visit(tag, x, x_k, first_start_node, first_end_node);
+                [=](edge_tag tag, const kmer_t & x, const uint32_t x_k, size_t first_start_node, bool first_end_node) {
                   // TODO: this should be factored into a class that prints full kmers in ascii
                   // then add a --full option
-                  #ifdef DEBUG // print each kmer to stderr if debug on
+                  #ifdef VERBOSE // print each kmer to stderr for testing
                   if (tag == out_dummy)
                     cerr << kmer_to_string(get_start_node(x), k-1, k-1) << "$";
                   else
                     cerr << kmer_to_string(x, k, x_k);
                   cerr << " " << first_start_node << " " << first_end_node << endl;
                   #endif
+                  visit(tag, x, x_k, first_start_node, first_end_node);
                 });
   // TODO: impl external-merge (for large input. Read in chunk, sort, write temp, ext merge + add dummies to temp, 3-way-merge)
   // TODO: use SSE instructions or CUDA if available (very far horizon)
@@ -218,7 +226,12 @@ int main(int argc, char * argv[]) {
   #else
   size_t revcomp_factor = 1;
   #endif
-  uint64_t * kmer_blocks = (uint64_t*)calloc(num_kmers * 2 * revcomp_factor, sizeof(uint64_t) * kmer_num_blocks);
+  uint64_t * kmer_blocks = (uint64_t*)malloc(num_kmers * 2 * revcomp_factor * sizeof(uint64_t) * kmer_num_blocks);
+  if (!kmer_blocks) {
+    cerr << "Error allocating space for kmers" << endl;
+    exit(1);
+  }
+
 
   // READ KMERS FROM DISK INTO ARRAY
   size_t num_records_read = dsk_read_kmers(handle, kmer_num_bits, kmer_blocks);
@@ -234,27 +247,62 @@ int main(int argc, char * argv[]) {
 
   string outfilename = (params.output_prefix == "")? base_name : params.output_prefix;
   ofstream ofs;
+  #ifdef VAR_ORDER
+  ofstream lcs;
+  #endif
+  #if 1
+  static const size_t BUFFER_LEN = 2*1024*1024;
+  char buffer_a[BUFFER_LEN];
+  ofs.rdbuf()->pubsetbuf(buffer_a, BUFFER_LEN);
+  #ifdef VAR_ORDER
+  char buffer_b[BUFFER_LEN];
+  lcs.rdbuf()->pubsetbuf(buffer_b, BUFFER_LEN);
+  #endif
+  #endif
   // TODO: Should probably do checking here when opening the file...
   ofs.open(outfilename + extension, ios::out | ios::binary);
+  #ifdef VAR_ORDER
+  lcs.open(outfilename + extension + ".lcs", ios::out | ios::binary);
+  #endif
   PackedEdgeOutputer out(ofs);
 
   if (kmer_num_bits == 64) {
     typedef uint64_t kmer_t;
+    size_t prev_k = 0; // for input, k is always >= 1
       convert(kmer_blocks, num_kmers, k,
-        [&](edge_tag tag, const kmer_t & x, const uint32_t this_k, bool first_start_node, bool first_end_node) {
-          out.write(tag, x, this_k, first_start_node, first_end_node);
+        [&](edge_tag tag, const kmer_t & x, const uint32_t this_k, size_t lcs_len, bool first_end_node) {
+          #ifdef VAR_ORDER
+          out.write(tag, x, this_k, (lcs_len != k-1), first_end_node);
+          char l(lcs_len);
+          lcs.write((char*)&l, 1);
+          #else
+          out.write(tag, x, this_k, lcs_len, first_end_node);
+          #endif
+          prev_k = this_k;
         });
   }
   else if (kmer_num_bits == 128) {
     typedef uint128_t kmer_t;
+    size_t prev_k = 0;
     kmer_t * kmer_blocks_128 = (kmer_t*)kmer_blocks;
     convert(kmer_blocks_128, num_kmers, k,
-        [&](edge_tag tag, const kmer_t & x, const uint32_t this_k, bool first_start_node, bool first_end_node) {
-          out.write(tag, x, this_k, first_start_node, first_end_node);
+        [&](edge_tag tag, const kmer_t & x, const uint32_t this_k, size_t lcs_len, bool first_end_node) {
+          #ifdef VAR_ORDER
+          out.write(tag, x, this_k, (lcs_len != k-1), first_end_node);
+          char l(lcs_len);
+          lcs.write((char*)&l, 1);
+          #else
+          out.write(tag, x, this_k, lcs_len, first_end_node);
+          #endif
+          prev_k = this_k;
         });
   }
 
   out.close();
+  #ifdef VAR_ORDER
+  lcs.flush();
+  lcs.close();
+  #endif
   uint64_t t_k(k); // make uint64_t just to make parsing easier
   // (can read them all at once and take the last 6 values)
   ofs.write((char*)&t_k, sizeof(uint64_t));

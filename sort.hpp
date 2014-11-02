@@ -13,7 +13,7 @@ void colex_partial_radix_sort(T * a, T * b, size_t num_records, uint32_t lo, uin
       || (!lengths_a && !lengths_b && !new_lengths_a && !new_lengths_b));
   // MIGHT BE FASTER TO MAKE VARLEN A TEMPLATE PARAM, but this might get optimised too since it is a template
   // (and examinable on the default inputs) already.
-  const bool varlen = lengths_a;
+  const bool varlen = (bool) lengths_a;
   // Init counts (+ $ if we are doing variable length sorting)
   size_t bases[base + 1];
 
@@ -23,7 +23,7 @@ void colex_partial_radix_sort(T * a, T * b, size_t num_records, uint32_t lo, uin
     for (int c = 0; c < base + varlen; c++) bases[c] = 0;
     // Count how many of each digit there are in each position
     for (size_t i = 0; i < num_records; i++) {
-      if (varlen && lengths_a[i] < digit_pos) {
+      if (varlen && lengths_a[i] <= digit_pos) {
         bases[0]++;
       } else {
         bases[get_digit(a[i], digit_pos)+varlen]++;
@@ -37,7 +37,7 @@ void colex_partial_radix_sort(T * a, T * b, size_t num_records, uint32_t lo, uin
     // Stably copy each element into its corresponding location
     // Done in reverse to simplify sub-array calculations
     for (ssize_t i = num_records - 1; i >= 0; i--) {
-      int x = (varlen && lengths_a[i] < digit_pos)? 0 : get_digit(a[i], digit_pos) + varlen;
+      int x = (varlen && lengths_a[i] <= digit_pos)? 0 : get_digit(a[i], digit_pos) + varlen;
       b[--bases[x]] = a[i];
       if (varlen) lengths_b[bases[x]] = lengths_a[i];
     }
