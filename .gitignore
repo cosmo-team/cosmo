@@ -1,10 +1,26 @@
 # Project Executable
-pack-edges
+cosmo-pack
 cosmo-build
 cosmo-assemble
+cosmo-benchmark
 
-# Other project stuff
+# Output files
+*.packed*
+*.dbg*
+*.lcs*
+*.qzd*
+*.gz
+
+# Data
+*.fq
+*.fa
+*.fastq
+*.fasta
 test_data/*
+
+# DSK
+*.reads_binary
+*.solid_kmers_binary
 
 # Generated files
 # lut.hpp # actually want this since it removes python dependency
@@ -15,8 +31,5 @@ test_data/*
 
 # Python stuff
 .ipynb_checkpoints/*
-#*.ipynb
-
-# Output files
-*.packed
-*.dbg
+# Usually just use these to play around with things, nothing releasable
+*.ipynb
