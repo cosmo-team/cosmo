@@ -13,7 +13,7 @@ using namespace boost;
 
 template <class t_debruijn_graph = debruijn_graph<>,
           class t_lcs_vector     = wt_int<rrr_vector<63>> >
-class debruijn_hypergraph : t_debruijn_graph {
+class debruijn_hypergraph {
   // Nodes are now ranges of edges (could be done for standard de bruijn graph too...
   // would save time by saving state?)
   // A node is a contiguous range of edges, a hypernode is a contiguous range of nodes (hence a range of edges)
@@ -81,20 +81,16 @@ class debruijn_hypergraph : t_debruijn_graph {
     // This could be done lazily, and searched over...
     //if (get<2>(v) == m_dbg.k-1) {} // do standard version - not needed?
     auto l = longer(v, get<2>(v)+1);
-    for (auto u : l) { cout << "1. " << get<0>(u) << ", " << get<1>(u) << endl; } cout<<endl;
     // map maxlen to each element in l
     transform(l.begin(), l.end(), l.begin(), [&](const node_type & u){ return maxlen(u); } );
-    for (auto u : l) { cout << "2. " << get<0>(u) << ", " << get<1>(u) << endl; }cout<<endl;
     // map standard dbg backward to each element
     transform(l.begin(), l.end(), l.begin(), [&](const node_type & u){
       size_t start = m_dbg._backward(get<0>(u));
       size_t end   = m_dbg._last_edge_of_node(m_dbg._edge_to_node(start));
       return node_type(start, end, get<2>(u));
     });
-    for (auto u : l) { cout << "3. " << get<0>(u) << ", " << get<1>(u) << endl; }cout<<endl;
     // map shorter to each element
     transform(l.begin(), l.end(), l.begin(), [&](const node_type & u){ return shorter(u, get<2>(v)); });
-    for (auto u : l) { cout << "4. " << get<0>(u) << ", " << get<1>(u) << endl; }cout<<endl;
     return l;
   }
 

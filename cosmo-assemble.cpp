@@ -120,8 +120,8 @@ int main(int argc, char* argv[]) {
   if (!q) cout << "NONE" << endl;
   else cout << get<0>(*q) << ", " << get<1>(*q) << endl;
 
-  cout << "incoming:" <<endl;
-  auto prevs = h.incoming(v);
+  cout << "backward:" <<endl;
+  auto prevs = h.backward(v);
   for (auto prev: prevs) {
     cout << get<0>(prev) << ", " << get<1>(prev) << endl;
   }
