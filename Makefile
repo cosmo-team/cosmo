@@ -49,7 +49,7 @@ endif
 BUILD_REQS=debruijn_graph.hpp io.hpp io.o debug.h
 ASSEM_REQS=debruijn_graph.hpp algorithm.hpp utility.hpp kmer.hpp uint128_t.hpp
 PACK_REQS=lut.hpp debug.h io.hpp io.o sort.hpp kmer.hpp dummies.hpp
-BINARIES=cosmo-pack cosmo-build cosmo-assemble
+BINARIES=cosmo-pack cosmo-build cosmo-benchmark # cosmo-assemble
 
 default: all
 
@@ -66,7 +66,10 @@ cosmo-pack: cosmo-pack.cpp $(PACK_REQS)
 cosmo-build: cosmo-build.cpp $(BUILD_REQS)
 		$(CXX) $(CPP_FLAGS) -o $@ $< io.o $(DEP_FLAGS) 
 
-cosmo-assemble: cosmo-assemble.cpp $(ASSEM_REQS) wt_algorithm.hpp debruijn_hypergraph.hpp
+#cosmo-assemble: cosmo-assemble.cpp $(ASSEM_REQS) wt_algorithm.hpp debruijn_hypergraph.hpp
+#		$(CXX) $(CPP_FLAGS) -o $@ $< $(DEP_FLAGS) 
+
+cosmo-benchmark: cosmo-benchmark.cpp $(ASSEM_REQS) wt_algorithm.hpp debruijn_hypergraph.hpp
 		$(CXX) $(CPP_FLAGS) -o $@ $< $(DEP_FLAGS) 
 
 all: $(BINARIES)
