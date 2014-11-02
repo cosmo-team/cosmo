@@ -3,6 +3,7 @@
 #define _DEBRUIJN_HYPERGRAPH_H
 
 #include <vector>
+#include <algorithm>
 #include <boost/optional.hpp>
 //#include <sdsl/wt_algorithm.hpp>
 #include "wt_algorithm.hpp"
@@ -37,11 +38,11 @@ class debruijn_hypergraph : t_debruijn_graph {
     size_t j = get<1>(v);
 
     // find largest i' <= i with L*[i' - 1] < k
-    size_t i_prime = prev_lte(m_lcs, i, k-1)-1;
+    size_t i_prime = prev_lte(m_lcs, i+1, k-1)-1;
     // find smallest j' >= j with L*[j'] < k
-    size_t j_prime = next_lte(m_lcs, j, k-1)-1;
+    size_t j_prime = next_lte(m_lcs, j+2, k-1)-2;
 
-    return node_type(i_prime, j_prime, k);
+    return node_type(i_prime, std::max(i_prime, j_prime), k);
   }
 
   // longer(v, k) - list nodes (new "node") whose labels have length k <= K and end with v's label
@@ -62,16 +63,44 @@ class debruijn_hypergraph : t_debruijn_graph {
     return longer_nodes;
   }
 
-  /*
-  node_type forward(const node_type & v, symbol_type x) {
-    m_dbg.forward(
-        // convert edge to node for dbg
-        //maxlen(v, x), x), get<2>(v);
+  symbol_type lastchar(const node_type& v) const {
+    return m_dbg._symbol_access(get<0>(v));
   }
-  */
+
+  optional<node_type> outgoing(const node_type & v, symbol_type x) {
+    assert(x < m_dbg.sigma + 1);
+    if (x == 0) return optional<node_type>();
+    auto max = maxlen(v, x);
+    if (!max) return optional<node_type>();
+    size_t i = m_dbg._outgoing_edge_pair(get<0>(*max), get<1>(*max), x);
+    size_t j = m_dbg._last_edge_of_node(m_dbg._edge_to_node(i));
+    return optional<node_type>(shorter(node_type(i,j,m_dbg.k-1), get<2>(v)));
+  }
+
+  vector<node_type> backward(const node_type & v) {
+    // This could be done lazily, and searched over...
+    //if (get<2>(v) == m_dbg.k-1) {} // do standard version - not needed?
+    auto l = longer(v, get<2>(v)+1);
+    for (auto u : l) { cout << "1. " << get<0>(u) << ", " << get<1>(u) << endl; } cout<<endl;
+    // map maxlen to each element in l
+    transform(l.begin(), l.end(), l.begin(), [&](const node_type & u){ return maxlen(u); } );
+    for (auto u : l) { cout << "2. " << get<0>(u) << ", " << get<1>(u) << endl; }cout<<endl;
+    // map standard dbg backward to each element
+    transform(l.begin(), l.end(), l.begin(), [&](const node_type & u){
+      size_t start = m_dbg._backward(get<0>(u));
+      size_t end   = m_dbg._last_edge_of_node(m_dbg._edge_to_node(start));
+      return node_type(start, end, get<2>(u));
+    });
+    for (auto u : l) { cout << "3. " << get<0>(u) << ", " << get<1>(u) << endl; }cout<<endl;
+    // map shorter to each element
+    transform(l.begin(), l.end(), l.begin(), [&](const node_type & u){ return shorter(u, get<2>(v)); });
+    for (auto u : l) { cout << "4. " << get<0>(u) << ", " << get<1>(u) << endl; }cout<<endl;
+    return l;
+  }
 
   // maxlen(v, x) - returns some node in the *original* (kmax) graph whose label ends with v's
   // label, and that has an outgoing edge labelled x, or NULL otherwise
+  // should return dbg::node_type
   node_type maxlen(const node_type & v) const {
     size_t start = get<0>(v); // have to update this to select to the next node
     // Range_start must also be a start of a node at the top level context, so find the next top level node to find the range

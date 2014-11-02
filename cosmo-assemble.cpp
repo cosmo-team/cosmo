@@ -9,6 +9,11 @@
 #include <sdsl/wavelet_trees.hpp>
 #include <sdsl/wt_algorithm.hpp>
 
+#include <boost/random.hpp>
+#include <boost/generator_iterator.hpp>
+#include <boost/iterator/function_input_iterator.hpp>
+//#include <boost_iterator/zip_iterator.hpp>
+
 #include "io.hpp"
 #include "debruijn_graph.hpp"
 #include "debruijn_hypergraph.hpp"
@@ -78,7 +83,7 @@ int main(int argc, char* argv[]) {
   typedef dbh::node_type node_type;
   //node_type v(12,215855); // ...aaa*
   //node_type v(3422777,3422778); // ...ttattccgtagc->[t,g]. Other than that, totally different nodes.
-  node_type v(3422774,3422778); // ....tattccgtagc->[t3,g2]
+  node_type v(3422774,3422778, 11); // ....tattccgtagc->[t3,g2]
   //node_type v(3422771,3422796); // ......ttccgtagc->[acgt]
   node_type u = h.maxlen(v);
   cout << "maxlen: " << get<0>(u) << ", " << get<1>(u) << endl;
@@ -106,6 +111,39 @@ int main(int argc, char* argv[]) {
     cout << get<0>(x) << ", " << get<1>(x) << endl;
   }
 
+  cout << "lastchar: " << "$acgt"[(int)h.lastchar(v)] << endl;
+
+  // node_type v(3422774,3422778, g.k-1); // ....tattccgtagc->[t3,g2]
+  // 01234
+  // $acgt
+  auto q = h.outgoing(v, 4);
+  if (!q) cout << "NONE" << endl;
+  else cout << get<0>(*q) << ", " << get<1>(*q) << endl;
+
+  cout << "incoming:" <<endl;
+  auto prevs = h.incoming(v);
+  for (auto prev: prevs) {
+    cout << get<0>(prev) << ", " << get<1>(prev) << endl;
+  }
+
   #endif
+
+  /*
+  int num_queries = 10;
+  typedef boost::mt19937 rng_type;
+  rng_type rng(time(0));
+  boost::uniform_int<size_t> node_distribution(0,g.num_nodes()); // make go up to size of graph
+  boost::uniform_int<size_t> k_distribution(0, g.k); // make go up to size of graph
+  boost::variate_generator<rng_type, boost::uniform_int<size_t>> random_node(rng, node_distribution);
+  boost::variate_generator<rng_type, boost::uniform_int<size_t>> random_k(rng, k_distribution);
+  cout << random_node() << ", " << random_k() << endl;
+  vector<size_t> q_nodes(boost::make_function_input_iterator(random_node,0),
+                         boost::make_function_input_iterator(random_node,num_queries));
+  //vector<size_t>    q_ks(boost::make_function_input_iterator(random_node,0),
+  //                       boost::make_function_input_iterator(random_node,10));
+  for (auto x: q_nodes) {
+    cout << x << endl;
+  }
+  */
 }
 

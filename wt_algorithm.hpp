@@ -2,6 +2,7 @@
 #ifndef _WT_ALGORITHM_H
 #define _WT_ALGORITHM_H
 
+#include <vector>
 #include <string>
 #include <sdsl/bits.hpp>
 #include <boost/optional.hpp>
@@ -117,6 +118,7 @@ size_t next_lte(const t_wt & wt, size_t i, typename t_wt::value_type c) {
 }
 
 // make iterators instead
+// random access next_lte (select_lte) is probably quite possible as well
 template <class t_wt>
 vector<size_t> range_lte(const t_wt & wt, size_t i, size_t j, typename t_wt::value_type c) {
   vector<size_t> range;

@@ -171,6 +171,20 @@ class debruijn_graph {
     return -1;
   }
 
+  // For DCC
+  size_t _outgoing_edge_pair(size_t first, size_t last, symbol_type x) const {
+    // Try both with and without a flag
+    for (symbol_type c = _with_edge_flag(x,false); c <= _with_edge_flag(x, true); c++) {
+      size_t most_recent = m_edges.select(m_edges.rank(last+1, c), c);
+      // if within range, follow forward
+      if (first <= most_recent && most_recent <= last) {
+        // Don't have to check fwd for -1 since we checked for $ above
+        return _forward(most_recent);
+      }
+    }
+    return -1;
+  }
+
   // incoming
   ssize_t incoming(size_t v, symbol_type x) const {
     // This is very similar to indegree, so should maybe be refactored
@@ -252,6 +266,9 @@ class debruijn_graph {
     // I assume std binary search is optimised for small ranges (if sigma is small, e.g. DNA)
     return upper_bound(m_symbol_ends.begin(), m_symbol_ends.end(), i) - m_symbol_ends.begin();
   }
+
+  // provided for DCC paper
+  inline symbol_type lastchar(size_t v) const { return _symbol_access(_node_to_edge(v)); }
 
   // more efficient than generating full label for incoming()
   symbol_type _first_symbol(size_t i) const {
