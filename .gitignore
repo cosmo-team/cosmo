@@ -30,5 +30,5 @@ test_data/*
 *.dSYM
 
 # Python stuff
-.ipynb_checkpoints/*
+.ipynb_checkpoints
 #*.ipynb
