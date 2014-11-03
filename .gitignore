@@ -31,5 +31,4 @@ test_data/*
 
 # Python stuff
 .ipynb_checkpoints/*
-# Usually just use these to play around with things, nothing releasable
-*.ipynb
+#*.ipynb
