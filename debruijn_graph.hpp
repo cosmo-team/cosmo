@@ -36,6 +36,8 @@ class debruijn_graph {
   typedef t_symbol_type symbol_type;
   typedef t_label_type  label_type;
   typedef typename t_bit_vector_type::size_type size_type;
+  typedef size_t edge_type;
+  typedef pair<edge_type, edge_type> node_type;
 
   const size_t           k{};
 
@@ -136,13 +138,13 @@ class debruijn_graph {
     return count - (count == 1 && _strip_edge_flag(m_edges[first]) == 0);
   }
 
-  vector<size_t> all_preds(size_t v) const {
+  vector<node_type> all_preds(const node_type & v) const {
     assert(v < num_nodes());
     assert(x < sigma + 1);
     // node u -> v : edge i -> j
-    size_t j = _node_to_edge(v);
+    size_t j = get<0>(v);
     symbol_type y = _symbol_access(j);
-    if (y == 0) return vector<size_t>(0);
+    if (y == 0) return vector<node_type>(0);
     size_t i_first = _backward(j);
     size_t i_last  = _next_edge(i_first, y);
     size_t base_rank = m_edges.rank(i_first, _with_edge_flag(y, true));
@@ -153,9 +155,11 @@ class debruijn_graph {
       return (i == 0)? i_first : m_edges.select(base_rank+i, _with_edge_flag(y,true));
     };
 
-    vector<size_t> result(num_predecessors);
+    vector<node_type> result(num_predecessors);
     for (size_t i = 0; i<num_predecessors; i++) {
-      result.push_back(_edge_to_node(selector(i)));
+      edge_type e_i = selector(i);
+      edge_type e_j = _last_edge_of_node(_edge_to_node(e_i));
+      result.push_back(node_type(e_i, e_j));
     }
     return result;
   }
@@ -194,6 +198,28 @@ class debruijn_graph {
     }
     return -1;
   }
+
+  // Added for DCC. Will remove the other one later and rename this one.
+  ssize_t interval_node_outgoing(const node_type & u, symbol_type x) const {
+    assert(u < num_nodes());
+    assert(x < sigma + 1);
+    if (x == 0) return -1;
+    //auto range = _node_range(u);
+    size_t first = get<0>(u);
+    size_t last  = get<1>(u);
+    // Try both with and without a flag
+    for (symbol_type c = _with_edge_flag(x,false); c <= _with_edge_flag(x, true); c++) {
+      size_t most_recent = m_edges.select(m_edges.rank(last+1, c), c);
+      // if within range, follow forward
+      if (first <= most_recent && most_recent <= last) {
+        // Don't have to check fwd for -1 since we checked for $ above
+        return _edge_to_node(_forward(most_recent));
+      }
+    }
+    return -1;
+  }
+
+
 
   // For DCC
   ssize_t _outgoing_edge_pair(size_t first, size_t last, symbol_type x) const {
@@ -291,8 +317,15 @@ class debruijn_graph {
     return upper_bound(m_symbol_ends.begin(), m_symbol_ends.end(), i) - m_symbol_ends.begin();
   }
 
+  node_type get_node(size_t v) const {
+    auto r = _node_range(v);
+    return node_type(get<0>(r), get<1>(r));
+  }
+
   // provided for DCC paper
-  inline symbol_type lastchar(size_t v) const { return _symbol_access(_node_to_edge(v)); }
+  inline symbol_type lastchar(const node_type & v) const {
+    return _symbol_access(get<0>(v));
+  }
 
   // more efficient than generating full label for incoming()
   symbol_type _first_symbol(size_t i) const {

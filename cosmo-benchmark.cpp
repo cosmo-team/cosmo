@@ -126,6 +126,12 @@ int main(int argc, char* argv[]) {
     if (query_ks[i] == g.k-1) continue;
     query_varnodes[i] = h.shorter(query_varnodes[i], query_ks[i]);
   }
+  #else
+  vector<debruijn_graph<>::node_type> query_rangenodes;
+  //transform(query_nodes.begin(), query_nodes.end(), query_varnodes.begin(),[&](size_t v){ return h.get_node(v); });
+  for (auto u:query_nodes) {
+    query_rangenodes.push_back(g.get_node(u));
+  }
   #endif
 
   typedef chrono::nanoseconds unit;
@@ -134,7 +140,7 @@ int main(int argc, char* argv[]) {
   #ifndef VAR_ORDER // standard dbg
   // backward
   auto t1 = chrono::high_resolution_clock::now();
-  for (auto v : query_nodes) { g.all_preds(v); }
+  for (auto v : query_rangenodes) { g.all_preds(v); }
   auto t2 = chrono::high_resolution_clock::now();
   auto dur = chrono::duration_cast<unit>(t2-t1).count();
   //cerr << "backward total : " << dur << " ns" <<endl;
@@ -143,9 +149,9 @@ int main(int argc, char* argv[]) {
   // forward
   t1 = chrono::high_resolution_clock::now();
   for (size_t i=0;i<(size_t)num_queries;i++) {
-    size_t v = query_nodes[i];
+    auto v = query_rangenodes[i];
     auto   x = query_syms[i];
-    g.outgoing(v, x);
+    g.interval_node_outgoing(v, x);
   }
   t2 = chrono::high_resolution_clock::now();
   dur = chrono::duration_cast<unit>(t2-t1).count();
@@ -154,7 +160,7 @@ int main(int argc, char* argv[]) {
 
   // last_char
   t1 = chrono::high_resolution_clock::now();
-  for (auto v : query_nodes) { g.lastchar(v); }
+  for (auto v : query_rangenodes) { g.lastchar(v); }
   t2 = chrono::high_resolution_clock::now();
   dur = chrono::duration_cast<unit>(t2-t1).count();
   //cerr << "lastchar total : " << dur << " ns" <<endl;
