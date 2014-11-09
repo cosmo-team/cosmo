@@ -213,21 +213,25 @@ int main(int argc, char* argv[]) {
     cerr << "shorter"<<" mean : " << (double)dur/(num_queries-skipped) << unit_s <<endl;
   //}
 
-    /*
   // longer
-  for (size_t k : {1,2,4,8}) {
+  skipped = 0;
+  //for (size_t k : {1,2,4,8}) {
     t1 = chrono::high_resolution_clock::now();
     for (size_t i=0;i<(size_t)num_queries;i++) {
       auto v = query_varnodes[i];
+      auto k = higher_ks[i];
+      if (get<2>(v) > k) {
+        skipped++;
+        continue;
+      }
       //cout << get<0>(v) << ", " << get<1>(v) << ", " << get<2>(v) << endl;
-      h.longer(v, get<2>(v)+k);
+      h.longer(v, k);
     }
     t2 = chrono::high_resolution_clock::now();
     dur = chrono::duration_cast<unit>(t2-t1).count();
     //cerr << "longer(v,+"<<k<<") total : " << dur << " ns" <<endl;
-    cerr << "longer"<<k<<" mean  : " << (double)dur/num_queries << unit_s <<endl;
-  }
-  */
+    cerr << "longer"<<" mean  : " << (double)dur/(num_queries-skipped) << unit_s <<endl;
+  //}
 
   // maxlen with symbol
   t1 = chrono::high_resolution_clock::now();
