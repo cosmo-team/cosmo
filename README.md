@@ -5,12 +5,12 @@
                    888       888   888 `"Y88b.   888   888   888  888   888 
                    888   .o8 888   888 o.  )88b  888   888   888  888   888 
                    `Y8bod8P' `Y8bod8P' 8""888P' o888o o888o o888o `Y8bod8P' 
-                                                                  ver 0.5.0
+                                                                  ver 0.5.1
 
 
 # Cosmo
 
-[**Version**][semver]: 0.5.0
+[**Version**][semver]: 0.5.1
 
 Cosmo is a fast, low-memory DNA assembler that uses a [succinct de Bruijn graph][succ].
 
@@ -22,7 +22,7 @@ After [compiling](#compilation), you can run Cosmo like so:
 ```sh
 $ pack-edges <input_file> # this adds reverse complements and dummy edges, and packs them
 $ cosmo-build <input_file>.packed # compresses and builds indices
-$ cosmo-assemble <input_file>.packed.dbg # output: <input_file>.packed.dbg.fasta
+$ cosmo-assemble <input_file>.packed.dbg # output: <input_file>.packed.dbg.fasta # NOT IMPLEMENTED YET
 ```
 
 Where `input_file` is the binary output of a [DSK][dsk] run. Each program has a `--help` option for a more
@@ -61,7 +61,7 @@ We currently only output the unitigs (paths between branching nodes).
 ## Compilation
 
 There is an included Makefile - just type `make` to build it (assuming you have the dependencies listed below).
-To build with "Hypergraph mode", use the `varord=1` flag.
+To build with "Variable order mode", use the `varord=1` flag.
 
 *Note: it has only been tested on Mac OS X. Changes to work on any *NIX should be minor.*
 
@@ -98,7 +98,7 @@ Your help is more than welcome! Please fork and send a pull request, or contact 
 
 If that doesn't suit an assembly program then I don't know what does. The last s was dropped because it was nicer to say.
 Furthermore, it is a reference to the Seinfeld character Cosmo Kramer (whose last name I'm often reminded of while working on
-this stuff). Finally, it's a nod to the [ABySS][abyss] assembler's name, which also makes me think of The Universe.
+this stuff).
 
 
 ## License

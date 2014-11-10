@@ -15,7 +15,7 @@ OPT_FLAGS=-O3 -mmmx -msse -msse2 -msse3 -msse4 -msse4.2 -march=native
 NOPT_FLAGS=-O0
 
 # Using Semantic Versioning: http://semver.org/
-VERSION=0.5.0
+VERSION=0.5.1
 CPP_FLAGS+=-DVERSION=\"$(VERSION)\"
 
 ifeq ($(optimise),0)
