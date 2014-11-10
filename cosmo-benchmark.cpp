@@ -100,20 +100,18 @@ int main(int argc, char* argv[]) {
   vector<size_t> query_syms(boost::make_function_input_iterator(random_symbol,0),
                             boost::make_function_input_iterator(random_symbol,num_queries));
   #ifdef VAR_ORDER
-  //auto random_higher_k = [&](size_t low)  { return boost::uniform_int<size_t>(low+1,g.k-1)(rng); }; // make go up to size of graph
-  //auto random_lower_k  = [&](size_t high) { return boost::uniform_int<size_t>(min_k,std::max(high,(size_t)1)-1)(rng); }; // make go up to size of graph
+  auto random_higher_k = [&](size_t low)  { return boost::uniform_int<size_t>(low+1,g.k-2)(rng); }; // make go up to size of graph
+  auto random_lower_k  = [&](size_t high) { return boost::uniform_int<size_t>(min_k+1,std::max(high,(size_t)1)-1)(rng); }; // make go up to size of graph
 
   // Convert to variable order nodes
   vector<size_t> query_ks(boost::make_function_input_iterator(random_k,0),
                           boost::make_function_input_iterator(random_k,num_queries));
   vector<size_t> maxlen_syms(boost::make_function_input_iterator(random_symbol,0),
                             boost::make_function_input_iterator(random_symbol,num_queries));
-  /*
   vector<size_t> lower_ks(num_queries);
   transform(query_ks.begin(),query_ks.end(),lower_ks.begin(),random_lower_k);
   vector<size_t> higher_ks(num_queries);
   transform(query_ks.begin(),query_ks.end(),higher_ks.begin(),random_higher_k);
-  */
 
   vector<node_type> query_varnodes;
   //transform(query_nodes.begin(), query_nodes.end(), query_varnodes.begin(),[&](size_t v){ return h.get_node(v); });
@@ -126,6 +124,12 @@ int main(int argc, char* argv[]) {
     if (query_ks[i] == g.k-1) continue;
     query_varnodes[i] = h.shorter(query_varnodes[i], query_ks[i]);
   }
+  #else
+  vector<debruijn_graph<>::node_type> query_rangenodes;
+  //transform(query_nodes.begin(), query_nodes.end(), query_varnodes.begin(),[&](size_t v){ return h.get_node(v); });
+  for (auto u:query_nodes) {
+    query_rangenodes.push_back(g.get_node(u));
+  }
   #endif
 
   typedef chrono::nanoseconds unit;
@@ -134,7 +138,7 @@ int main(int argc, char* argv[]) {
   #ifndef VAR_ORDER // standard dbg
   // backward
   auto t1 = chrono::high_resolution_clock::now();
-  for (auto v : query_nodes) { g.all_preds(v); }
+  for (auto v : query_rangenodes) { g.all_preds(v); }
   auto t2 = chrono::high_resolution_clock::now();
   auto dur = chrono::duration_cast<unit>(t2-t1).count();
   //cerr << "backward total : " << dur << " ns" <<endl;
@@ -143,9 +147,9 @@ int main(int argc, char* argv[]) {
   // forward
   t1 = chrono::high_resolution_clock::now();
   for (size_t i=0;i<(size_t)num_queries;i++) {
-    size_t v = query_nodes[i];
+    auto v = query_rangenodes[i];
     auto   x = query_syms[i];
-    g.outgoing(v, x);
+    g.interval_node_outgoing(v, x);
   }
   t2 = chrono::high_resolution_clock::now();
   dur = chrono::duration_cast<unit>(t2-t1).count();
@@ -154,7 +158,7 @@ int main(int argc, char* argv[]) {
 
   // last_char
   t1 = chrono::high_resolution_clock::now();
-  for (auto v : query_nodes) { g.lastchar(v); }
+  for (auto v : query_rangenodes) { g.lastchar(v); }
   t2 = chrono::high_resolution_clock::now();
   dur = chrono::duration_cast<unit>(t2-t1).count();
   //cerr << "lastchar total : " << dur << " ns" <<endl;
@@ -191,31 +195,43 @@ int main(int argc, char* argv[]) {
   cerr << "lastchar mean : " << (double)dur/num_queries << unit_s <<endl;
 
   // shorter
-  for (size_t k : {1,2,4,8}) {
+  size_t skipped = 0;
+  //for (size_t k : {1,2,4,8}) {
     t1 = chrono::high_resolution_clock::now();
     for (size_t i=0;i<(size_t)num_queries;i++) {
       auto v = query_varnodes[i];
-      h.longer(v, get<2>(v)-k);
+      auto k = lower_ks[i];
+      if (get<2>(v) < k) {
+        skipped++;
+        continue;
+      }
+      h.longer(v, k);
     }
     t2 = chrono::high_resolution_clock::now();
     dur = chrono::duration_cast<unit>(t2-t1).count();
     //cerr << "shorter(v,-"<<k<<") total : " << dur << " ns" <<endl;
-    cerr << "shorter"<<k<<" mean : " << (double)dur/num_queries << unit_s <<endl;
-  }
+    cerr << "shorter"<<" mean : " << (double)dur/(num_queries-skipped) << unit_s <<endl;
+  //}
 
   // longer
-  for (size_t k : {1,2,4,8}) {
+  skipped = 0;
+  //for (size_t k : {1,2,4,8}) {
     t1 = chrono::high_resolution_clock::now();
     for (size_t i=0;i<(size_t)num_queries;i++) {
       auto v = query_varnodes[i];
+      auto k = higher_ks[i];
+      if (get<2>(v) > k) {
+        skipped++;
+        continue;
+      }
       //cout << get<0>(v) << ", " << get<1>(v) << ", " << get<2>(v) << endl;
-      h.longer(v, get<2>(v)+k);
+      h.longer(v, k);
     }
     t2 = chrono::high_resolution_clock::now();
     dur = chrono::duration_cast<unit>(t2-t1).count();
     //cerr << "longer(v,+"<<k<<") total : " << dur << " ns" <<endl;
-    cerr << "longer"<<k<<" mean  : " << (double)dur/num_queries << unit_s <<endl;
-  }
+    cerr << "longer"<<" mean  : " << (double)dur/(num_queries-skipped) << unit_s <<endl;
+  //}
 
   // maxlen with symbol
   t1 = chrono::high_resolution_clock::now();

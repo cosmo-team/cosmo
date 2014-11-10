@@ -113,6 +113,7 @@ class debruijn_hypergraph {
     size_t start = get<0>(v); // have to update this to select to the next node
     // Range_start must also be a start of a node at the top level context, so find the next top level node to find the range
     // TODO: make (or check if it exists) uniform interface for rank/select, so I can easily make next(), prev(), etc
+    // could easily scan as well - might be faster (but its already super fast... only do this if maxlen is called repeatedly)
     size_t end = m_dbg._last_edge_of_node(m_dbg._edge_to_node(start));
     return node_type(start, end, m_dbg.k-1);
   }
