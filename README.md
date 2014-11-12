@@ -63,8 +63,6 @@ We currently only output the unitigs (paths between branching nodes).
 There is an included Makefile - just type `make` to build it (assuming you have the dependencies listed below).
 To build with "Variable order mode", use the `varord=1` flag.
 
-*Note: it has only been tested on Mac OS X. Changes to work on any *NIX should be minor.*
-
 ### Dependencies  
 - A compiler that supports C++11,
 - [Boost][boost] - ranges and range algorithms, zip iterator, tuple comparison, lots of good stuff,
