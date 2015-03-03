@@ -21,11 +21,30 @@
 // (needed because some kmer counters like DSK swap this representation, but we assume G < T
 // in our de bruijn graph implementation)
 
-// TODO: Could probably make this faster using a static k param
+inline uint64_t _swap_gt_64(const uint64_t x) {
+  return (x ^ ((x & 0xAAAAAAAAAAAAAAAA) >> 1));
+}
 
-static struct swap_gt_f : std::unary_function<uint64_t, uint64_t> {
-  inline uint64_t operator() (const uint64_t & x) const { return (x ^ ((x & 0xAAAAAAAAAAAAAAAA) >> 1)); }
-} swap_gt;
+template <class T>
+struct swap_gt : std::unary_function<T, T> {
+  inline T operator() (const T& x) const {
+    T temp(x);
+    uint64_t * blocks = reinterpret_cast<uint64_t*>(&temp);
+    for (int i = 0; i < sizeof(T)/sizeof(uint64_t); i++) {
+      blocks[i] = _swap_gt_64(blocks[i]);
+    }
+    return temp;
+  }
+};
+
+template <>
+struct swap_gt<uint64_t> : std::unary_function<uint64_t, uint64_t> {
+  inline uint64_t operator() (const uint64_t & x) const {
+    return _swap_gt_64(x);
+  }
+};
+
+
 
 inline uint8_t get_nt(uint64_t block, uint8_t i) {
   // Assumes the nts are numbered from the left (which allows them to be compared as integers)
@@ -203,6 +222,7 @@ std::string kmer_to_string(const T & kmer_block, uint8_t max_k, uint8_t this_k =
   return buf;
 }
 
+/*
 template <typename kmer_t>
 void convert_representation(const kmer_t * kmers_in, kmer_t * kmers_out, size_t num_kmers) {
   // Swap G and T and reverses the nucleotides so that they can
@@ -210,6 +230,7 @@ void convert_representation(const kmer_t * kmers_in, kmer_t * kmers_out, size_t 
   std::transform((uint64_t*)kmers_in, (uint64_t*)(kmers_in + num_kmers), (uint64_t*)kmers_out, swap_gt);
   std::transform(kmers_in, kmers_in + num_kmers, kmers_out, reverse_nt<kmer_t>());
 }
+*/
 
 // Convenience function to print array of kmers
 template <typename kmer_t>

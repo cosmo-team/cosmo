@@ -21,6 +21,12 @@ T & deconst(const T & x) {
   return const_cast<T&>(x);
 }
 
+template <class collection>
+std::pair<typename collection::const_iterator, typename collection::const_iterator>
+get_const_range(const collection & c) {
+  return std::make_pair(c.begin(), c.end());
+}
+
 // This may not work in VS etc... Add code to support other compilers?
 #define clz(x) __builtin_clzll((x))
 

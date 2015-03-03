@@ -82,6 +82,7 @@ struct uint128_t {
   template <typename S, typename T>
   uint128_t(const S & upper_rhs, const T & lower_rhs) : _upper(upper_rhs), _lower(lower_rhs) {}
 
+
   // Assignment Operator
   uint128_t & operator=(const uint128_t & rhs) {
     _upper = rhs._upper;
@@ -298,5 +299,12 @@ template <typename T> bool operator<=(const T & lhs, const uint128_t & rhs){
   return (rhs._upper)? true : (uint64_t) lhs <= rhs._lower;
 }
 */
+
+// input operator used for reading from the file
+std::istream& operator >> (std::istream& in, uint128_t& x)
+{
+  in.read((char*)&x, sizeof(uint128_t));
+  return in;
+}
 
 #endif

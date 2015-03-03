@@ -9,13 +9,14 @@
 #include <fstream>
 #include <vector>
 #include <tuple>
+#include <fstream>
 
 #include "dummies.hpp"
 #include "kmer.hpp"
 #include "debug.h"
 
 static const size_t MAX_BITS_PER_KMER = 128;
-static const size_t BUFFER_SIZE = 0x8000; // 32Kb data buffer
+static const size_t BUFFER_SIZE = 1024 * 1024;
 
 using namespace std;
 
@@ -133,6 +134,15 @@ inline edge_tuple unpack_to_tuple(packed_edge x) {
 template <typename BlockIterator>
 inline edge_tuple get_edge(BlockIterator blocks, size_t i) {
   return unpack_to_tuple(get_packed_edge(blocks, i));
+}
+
+template <typename kmer_t>
+std::pair<std::istream_iterator<kmer_t>, std::istream_iterator<kmer_t>>
+get_input_range(ifstream & in) {
+  auto in_begin = std::istream_iterator<kmer_t>(in);
+  auto in_end   = std::istream_iterator<kmer_t>();
+  auto in_range = std::make_pair(in_begin, in_end);
+  return in_range;
 }
 
 #endif
