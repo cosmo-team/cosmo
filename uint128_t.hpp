@@ -72,7 +72,7 @@ struct uint128_t {
   // These remain public because this class is mainly for bit manipulation
   // and some algorithms that use it might require the speed of direct member access (e.g. reversal)
   public:
-  block_t _upper, _lower;
+  block_t _lower, _upper;
 
   // Constructors
   uint128_t() : _upper(0), _lower(0) {}

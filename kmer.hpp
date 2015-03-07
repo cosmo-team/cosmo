@@ -146,7 +146,11 @@ struct reverse_nt : std::unary_function<T, T> {
 template <>
 struct reverse_nt<uint128_t> : std::unary_function<uint128_t, uint128_t> {
   inline uint128_t operator() (const uint128_t & x) const {
-    return uint128_t(reverse_block(x._lower), reverse_block(x._upper));
+    // NOTE: no longer swapping these around because DSK already has them in our desired BLOCK order
+    // before I was swapping them as we read them in, then swapping them again.
+    // but since we are reading from an istream now, and this is called only once to format our input,
+    // we just dont swap them at all...
+    return uint128_t(reverse_block(x._upper), reverse_block(x._lower));
   }
 };
 
@@ -180,7 +184,7 @@ struct reverse_complement<uint128_t> : std::unary_function<uint128_t, uint128_t>
   const uint8_t _k;
   reverse_complement(uint8_t k) : _k(k) {}
   uint128_t operator() (const uint128_t & x) const {
-    return uint128_t(revcomp_block(x._lower), revcomp_block(x._upper)) << (128 - _k * NT_WIDTH);
+    return uint128_t(revcomp_block(x._lower), revcomp_block(x._upper));//<< (128 - _k * NT_WIDTH);
   }
 };
 
@@ -222,15 +226,13 @@ std::string kmer_to_string(const T & kmer_block, uint8_t max_k, uint8_t this_k =
   return buf;
 }
 
-/*
 template <typename kmer_t>
 void convert_representation(const kmer_t * kmers_in, kmer_t * kmers_out, size_t num_kmers) {
   // Swap G and T and reverses the nucleotides so that they can
   // be compared and sorted as integers to give colexicographical ordering
-  std::transform((uint64_t*)kmers_in, (uint64_t*)(kmers_in + num_kmers), (uint64_t*)kmers_out, swap_gt);
+  std::transform((uint64_t*)kmers_in, (uint64_t*)(kmers_in + num_kmers), (uint64_t*)kmers_out, swap_gt<kmer_t>());
   std::transform(kmers_in, kmers_in + num_kmers, kmers_out, reverse_nt<kmer_t>());
 }
-*/
 
 // Convenience function to print array of kmers
 template <typename kmer_t>

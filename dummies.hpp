@@ -16,10 +16,13 @@ using namespace boost::adaptors;
 
 enum edge_tag { standard, in_dummy, out_dummy };
 
-template <typename kmer_t, typename OutputIterator>
-void find_incoming_dummy_edges(const kmer_t * table_a, const kmer_t * table_b, size_t num_kmers, uint32_t k, OutputIterator out) {
-  auto a_range = std::make_pair(table_a, table_a + num_kmers);
-  auto b_range = std::make_pair(table_b, table_b + num_kmers);
+template <typename InputIterator1, typename InputIterator2, typename OutputIterator>
+void find_incoming_dummy_edges(const InputIterator1 first1, const InputIterator1 last1,
+                               const InputIterator2 first2, const InputIterator2 last2,
+                               uint32_t k, OutputIterator out) {
+  typedef typename std::iterator_traits<InputIterator1>::value_type kmer_t;
+  auto a_range = std::make_pair(first1, last1);
+  auto b_range = std::make_pair(first2, last2);
   auto a_lam   = std::function<kmer_t(kmer_t)>([](kmer_t x) -> kmer_t {return get_start_node(x);});
   auto b_lam   = std::function<kmer_t(kmer_t)>([k](kmer_t x) -> kmer_t {return get_end_node(x,k);});
   auto a = a_range | transformed(a_lam) | uniqued;
