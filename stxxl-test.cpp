@@ -1,24 +1,25 @@
-#include <algorithm>    // for STL std::sort
-#include <vector>       // for STL std::vector
 #include <fstream>      // for std::fstream
 #include <stxxl.h>      // STXXL header
-#include <stxxl/bits/algo/stable_ksort.h>
-#include <boost/iterator/transform_iterator.hpp>
+#include <boost/range/adaptor/transformed.hpp>
 #include <boost/range/algorithm/copy.hpp>
+//#include <stxxl/bits/algo/stable_ksort.h>
 
-#include "uint128_t.hpp"
+#include "integers.hpp"
 #include "kmer.hpp"
-#include "dummies.hpp"
-#include "utility.hpp"
-#include "io.hpp"
+//#include "kmer.hpp"
+//#include "dummies.hpp"
+//#include "utility.hpp"
+//#include "io.hpp"
 
-// Compile flag check
+using namespace cosmo;
+
+// TODO: Compile flag check
 // typedef uint64_t kmer_t;
 typedef uint128_t kmer_t;
-typedef stxxl::vector<kmer_t> kmer_vector_t;
 
 const uint64_t MB_TO_BYTES = 1024 * 1024;
 
+/*
 struct comp {
   bool operator()(const kmer_t& lhs, const kmer_t& rhs) const {
     kmer_t lhs_node = get_start_node(lhs);
@@ -73,57 +74,65 @@ struct get_key_colex_edge
   // Have to change for uint64_t
   { return std::numeric_limits<key_type>::max(); }
 };
+*/
+
+template <typename kmer_t>
+std::pair<std::istream_iterator<kmer_t>, std::istream_iterator<kmer_t>>
+get_input_range(std::ifstream & in) {
+  auto in_begin = std::istream_iterator<kmer_t>(in);
+  auto in_end   = std::istream_iterator<kmer_t>();
+  auto in_range = std::make_pair(in_begin, in_end);
+  return in_range;
+}
 
 int main(int argc, char* argv[])
 {
-    // Parameter extraction
-    // default 5gb for mem
-    stxxl::internal_size_type M = 5 * 1024 * MB_TO_BYTES;
-    std::string file_name = argv[1];
-    uint32_t k = 56; // make parameter
+  using namespace boost::adaptors;
+  // Parameter extraction
+  // default 5gb for mem
+  stxxl::internal_size_type M = 5 * 1024 * MB_TO_BYTES;
+  std::string file_name = argv[1];
+  uint32_t k = atol(argv[2]);
 
-    // Open the file
-    std::ifstream in(file_name, std::ifstream::binary);
+  // Open the file
+  std::ifstream in(file_name, std::ifstream::binary);
 
-    // Convert to our format: reverse for colex ordering, swap g/t encoding
-    auto input = get_input_range<kmer_t>(in)
-               | transformed(swap_gt<kmer_t>())
-               | transformed(reverse_nt<kmer_t>());
+  // Convert to our format: reverse for colex ordering, swap g/t encoding
+  auto input = get_input_range<kmer_t>(in)
+             | transformed(swap_gt<kmer_t>())
+             | transformed(reverse_nt<kmer_t>());
 
-    // Create STXXL vector
-    kmer_vector_t kmers;
+  // Create STXXL vector
+  stxxl::vector<kmer_t> kmers;
 
-    // Copy kmers + reverse complements into stxxl vector
-    // if we don't want reverse complements:
-    // boost::copy(input, std::back_inserter(kmers));
-    auto revcomp = reverse_complement<kmer_t>(k);
-    for (kmer_t x : input) {
-      kmers.push_back(x);
-      kmers.push_back(revcomp(x));
-    }
+  //auto revcomp = reverse_complement<kmer_t>(k);
+  for (auto x : input) {
+    kmers.push_back(x);
+    //kmers.push_back(revcomp(x));
+  }
+  std::cerr << "Read " << kmers.size() << " kmers from file."<< std::endl;
 
-    // Sort them in colex(node)-edge order
-    //std::cerr << "Sorting..." << std::endl;
-    //stxxl::ksort(kmers.begin(), kmers.end(), get_key_colex_node(), M);
+  // Sort them in colex(node)-edge order
+  //std::cerr << "Sorting..." << std::endl;
+  //stxxl::ksort(kmers.begin(), kmers.end(), get_key_colex_node(), M);
 
-    // Get another copy of the table sorted by out-node (for dummy edge discovery)
-    //kmer_vector_t kmers_by_end_node(kmers);
-    //stxxl::ksort(kmers_by_end_node.begin(), kmers_by_end_node.end(), get_key_colex_edge(), M);
+  // Get another copy of the table sorted by out-node (for dummy edge discovery)
+  //kmer_vector_t kmers_by_end_node(kmers);
+  //stxxl::ksort(kmers_by_end_node.begin(), kmers_by_end_node.end(), get_key_colex_edge(), M);
 
-    std::cerr << kmers.size() << std::endl;
 
-    // Find incoming dummy edges
-    //kmer_vector_t incoming_dummies;
-    //find_incoming_dummy_edges(kmers.begin(), kmers.end(),
-    //                          kmers_by_end_node.begin(), kmers_by_end_node.end(),
-    //                          k, std::back_inserter(incoming_dummies));
+  // Find incoming dummy edges
+  //kmer_vector_t incoming_dummies;
+  //find_incoming_dummy_edges(kmers.begin(), kmers.end(),
+  //                          kmers_by_end_node.begin(), kmers_by_end_node.end(),
+  //                          k, std::back_inserter(incoming_dummies));
 
-    //stxxl::for_each(kmers.begin(), kmers.end(),
-    //    [k](const kmer_t x){ std::cout << kmer_to_string(x, k, 64) << std::endl; }, M);
+  //stxxl::for_each(kmers.begin(), kmers.end(),
+  //    [k](const kmer_t x){ std::cout << kmer_to_string(x, k, 64) << std::endl; }, M);
 
-    //std::cout << incoming_dummies.size() << std::endl;
-    //stxxl::for_each(incoming_dummies.begin(), incoming_dummies.end(),
-    //    [k](const kmer_t x){ std::cout << kmer_to_string(x, k, k) << std::endl; }, M);
+  //std::cout << incoming_dummies.size() << std::endl;
+  //stxxl::for_each(incoming_dummies.begin(), incoming_dummies.end(),
+  //    [k](const kmer_t x){ std::cout << kmer_to_string(x, k, k) << std::endl; }, M);
 
     /*
      * aaaa is repeated... maybe the sorting is messing it up.
@@ -135,10 +144,16 @@ int main(int argc, char* argv[])
      *
      * TEST get_start_node, get_end_node on single kmer
      */
-    kmer_t x = kmers[0];
-    kmer_t y = revcomp(kmers[0]);
-    std::cerr << kmer_to_string(x, 64, 64) << std::endl;
-    std::cerr << kmer_to_string(y, 64, 64) << std::endl;
+  kmer_t x = kmers[0];
+  //std::cerr << x.table[0] << std::endl;
+  //std::cerr << x.table[1] << std::endl;
+  std::cerr << std::setw(16) << std::setfill('0') << std::hex << ((uint64_t*)&x)[0] << std::endl;
+  std::cerr << std::setw(16) << std::hex << ((uint64_t*)&x)[1] << std::endl;
+  //kmer_t y = revcomp(kmers[0]);
+  std::cerr << kmer_to_string(x, k) << std::endl;
+  //std::cerr << kmer_to_string(y, k, k) << std::endl;
+  // the later ones are MSB -> don't reverse them
+  // a.table[0] = b.table[1] = 1 -> (a < b)
 
-    return 0;
+  return 0;
 }

@@ -2,14 +2,13 @@
 #ifndef KMER_HPP
 #define KMER_HPP
 
-#include <ostream>
-#include <functional>
-#include <algorithm>
-#include <string>
-#include "utility.hpp"
-#include "debug.h"
+//#include <ostream>
+//#include <functional>
+//#include <algorithm>
+//#include <string>
+//#include "utility.hpp"
+//#include "uint128_t.hpp"
 #include "lut.hpp"
-#include "uint128_t.hpp"
 
 #define BLOCK_WIDTH 64
 #define NT_WIDTH 2
@@ -18,9 +17,6 @@
 #define DUMMY_SYM '$'
 
 // Swaps G (11 -> 10) and T (10 -> 11) representation so radix ordering is lexical
-// (needed because some kmer counters like DSK swap this representation, but we assume G < T
-// in our de bruijn graph implementation)
-
 inline uint64_t _swap_gt_64(const uint64_t x) {
   return (x ^ ((x & 0xAAAAAAAAAAAAAAAA) >> 1));
 }
@@ -37,29 +33,65 @@ struct swap_gt : std::unary_function<T, T> {
   }
 };
 
-template <>
-struct swap_gt<uint64_t> : std::unary_function<uint64_t, uint64_t> {
-  inline uint64_t operator() (const uint64_t & x) const {
-    return _swap_gt_64(x);
+// Reverses block at two-bit (nt) level
+inline uint64_t _reverse_nt_64(const uint64_t x) {
+  uint64_t output;
+  unsigned char * p = (unsigned char *) &x;
+  unsigned char * q = (unsigned char *) &output;
+
+  for (size_t i = 0; i < 8; i++) {
+    q[8 - i - 1] = reverse_8(p[i]);
+  }
+
+  return output;
+}
+
+template <class T>
+struct reverse_nt : std::unary_function<T, T> {
+  T operator() (const T& x) const {
+    size_t num_blocks = sizeof(T)/sizeof(uint64_t);
+
+    T result(x);
+    for (size_t i = 0; i < num_blocks; i++) {
+      uint64_t block = ((uint64_t*)&x)[i];
+      ((uint64_t*)&result)[num_blocks - i - 1] = _reverse_nt_64(block);
+    }
+
+    return result;
   }
 };
 
+template <typename T>
+inline uint8_t get_nt(const T & x, size_t i) {
+  size_t num_blocks = sizeof(T)/sizeof(uint64_t);
+  size_t nts_per_block = 32;
 
-
-inline uint8_t get_nt(uint64_t block, uint8_t i) {
-  // Assumes the nts are numbered from the left (which allows them to be compared as integers)
-  return (block << (i * NT_WIDTH) >> (BLOCK_WIDTH - NT_WIDTH));
+  // Nucleotides are numbered starting from 0 on the right of kmer,
+  // and are numbered from MSB as to be sorted in colex order.
+  // 0.....k-1
+  // MSB...LSB
+  size_t block_idx = num_blocks - i/nts_per_block - 1;
+  std::cerr<< "block: " << block_idx << std::endl;
+  size_t nt_idx    = i%nts_per_block;
+  std::cerr<< "nt_id: " << nt_idx << std::endl;
+  uint64_t block   = ((uint64_t*)&x)[block_idx];
+  return (block << (nt_idx * 2)) >> 62;
 }
 
-inline uint8_t get_nt(const uint128_t & block, uint8_t i) {
-  const uint8_t nts_per_block = BLOCK_WIDTH/NT_WIDTH;
-  uint8_t block_idx = i/nts_per_block;
-  // this assumes that the block type is a multiple of 64 bits and has no other data before
-  // but should be reusable for larger block types
-  uint64_t block_64 = ((uint64_t*)(&block))[block_idx];
-  return get_nt(block_64, i%nts_per_block);
+template <typename T>
+std::string kmer_to_string(const T & kmer, size_t max_k, size_t this_k = -1) {
+  std::string buf(max_k, DUMMY_SYM);
+
+  // To enable not giving a this_k value -> we can print full kmers or dummy kmers
+  if (this_k > max_k) this_k = max_k;
+
+  for (size_t nt_pos = 0; nt_pos < this_k; nt_pos++) {
+    buf[max_k-nt_pos-1] = DNA_ALPHA[get_nt(kmer, nt_pos)];
+  }
+  return buf;
 }
 
+/*
 template <typename kmer_t>
 kmer_t clear_nt(const kmer_t & x, uint8_t i) {
   // Keep in mind that 0 is the leftmost nt, but that the leftmost is the edge (so rightmost in our diagrams)
@@ -121,39 +153,6 @@ T get_end_node(const T & x, uint8_t k) {
   return get_range(x, 0, k-1);
 }
 
-// Doesn't reverse on bit level, reverses at the two-bit level
-inline uint64_t reverse_block(uint64_t x) {
-  uint64_t output;
-
-  unsigned char * p = (unsigned char *) &x;
-  unsigned char * q = (unsigned char *) &output;
-  q[7] = reverse_8(p[0]);
-  q[6] = reverse_8(p[1]);
-  q[5] = reverse_8(p[2]);
-  q[4] = reverse_8(p[3]);
-  q[3] = reverse_8(p[4]);
-  q[2] = reverse_8(p[5]);
-  q[1] = reverse_8(p[6]);
-  q[0] = reverse_8(p[7]);
-  return output;
-}
-
-template <class T>
-struct reverse_nt : std::unary_function<T, T> {
-  T operator() (const T& x) const {return reverse_block((uint64_t)x);}
-};
-
-template <>
-struct reverse_nt<uint128_t> : std::unary_function<uint128_t, uint128_t> {
-  inline uint128_t operator() (const uint128_t & x) const {
-    // NOTE: no longer swapping these around because DSK already has them in our desired BLOCK order
-    // before I was swapping them as we read them in, then swapping them again.
-    // but since we are reading from an istream now, and this is called only once to format our input,
-    // we just dont swap them at all...
-    return uint128_t(reverse_block(x._upper), reverse_block(x._lower));
-  }
-};
-
 inline static uint64_t revcomp_block(uint64_t x) {
   uint64_t output;
 
@@ -214,14 +213,14 @@ kmer_t follow_edge(const kmer_t & x, uint8_t k, uint8_t v) {
 }
 
 template <typename T>
-std::string kmer_to_string(const T & kmer_block, uint8_t max_k, uint8_t this_k = -1) {
+std::string kmer_to_string(const T & kmer, uint8_t max_k, uint8_t this_k = -1) {
   std::string buf(max_k, DUMMY_SYM);
 
   // To enable not giving a this_k value -> we can print full kmers or dummy kmers
   if (this_k > max_k) this_k = max_k;
 
-  for (uint32_t j = 0; j < this_k; j++) {
-    buf[max_k-j-1] = DNA_ALPHA[get_nt(kmer_block, j)];
+  for (size_t nt_pos = 0; nt_pos < this_k; nt_pos++) {
+    buf[max_k-nt_pos-1] = DNA_ALPHA[get_nt(kmer_block, nt_pos)];
   }
   return buf;
 }
@@ -277,5 +276,6 @@ size_t node_lcs(const kmer_t & a, const kmer_t & b, size_t k) {
   ((uint64_t*)&y)[0] &= 0x3FFFFFFFFFFFFFFF;
   return lcs(x,y,k) - 1;
 }
+*/
 
 #endif

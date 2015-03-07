@@ -2,6 +2,18 @@
 #ifndef _UTILITY_HPP
 #define _UTILITY_HPP
 
+#include <climits> // For CHAR_BIT
+
+template <typename T>
+struct bitwidth {
+  const static size_t width = sizeof(T) * CHAR_BIT;
+};
+
+template <typename T>
+T & deconst(const T & x) {
+  return const_cast<T&>(x);
+}
+
 template <typename value_type, class IndexFunction>
 ssize_t function_binary_search(size_t lo, size_t hi, value_type key, IndexFunction f) {
   while ( lo <= hi ) {
@@ -16,18 +28,7 @@ ssize_t function_binary_search(size_t lo, size_t hi, value_type key, IndexFuncti
   return -1;
 }
 
-template <typename T>
-T & deconst(const T & x) {
-  return const_cast<T&>(x);
-}
-
-template <class collection>
-std::pair<typename collection::const_iterator, typename collection::const_iterator>
-get_const_range(const collection & c) {
-  return std::make_pair(c.begin(), c.end());
-}
-
-// This may not work in VS etc... Add code to support other compilers?
+// TODO: This may not work in VS etc... Add code to support other compilers?
 #define clz(x) __builtin_clzll((x))
 
 #endif
