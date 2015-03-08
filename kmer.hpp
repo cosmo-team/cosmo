@@ -5,9 +5,8 @@
 //#include <ostream>
 //#include <functional>
 //#include <algorithm>
-//#include <string>
-//#include "utility.hpp"
-//#include "uint128_t.hpp"
+#include <string>
+#include "utility.hpp"
 #include "lut.hpp"
 
 #define BLOCK_WIDTH 64
@@ -118,6 +117,31 @@ struct reverse_complement : std::unary_function<T, T> {
   }
 };
 
+template <typename T>
+inline T get_start_node(const T & x) {
+  return x << NT_WIDTH;
+}
+
+template <typename T>
+inline uint8_t get_edge_label(const T & x) {
+  return get_nt(x, 0);
+}
+
+// return kmer[lo, hi) - like pythons x[lo:hi] indexing
+// interface ignores the fact that these might be stored in reverse...
+// so the 0th element is still the last nucleotide
+template <typename T>
+T get_range(const T & x, uint8_t lo, uint8_t hi) {
+  const size_t NUM_NTS = bitwidth<T>::width/NT_WIDTH;
+  uint8_t shift = (hi < NUM_NTS)? (NUM_NTS - hi) * NT_WIDTH : 0;
+  return (x >> shift) << (shift + lo * NT_WIDTH);
+}
+
+template <typename T>
+T get_end_node(const T & x, uint8_t k) {
+  return get_range(x, 0, k-1);
+}
+
 /*
 template <typename kmer_t>
 kmer_t clear_nt(const kmer_t & x, uint8_t i) {
@@ -146,15 +170,6 @@ uint8_t get_edge_label(const T & x) {
   return get_nt(x, 0);
 }
 
-// return kmer[lo, hi) - like pythons x[lo:hi] indexing
-// interface ignores the fact that these might be stored in reverse...
-// so the 0th element is still the last nucleotide
-template <typename T>
-T get_range(const T & x, uint8_t lo, uint8_t hi) {
-  const size_t NUM_NTS = bitwidth<T>::width/NT_WIDTH;
-  uint8_t shift = (hi < NUM_NTS)? (NUM_NTS - hi) * NT_WIDTH : 0;
-  return (x >> shift) << (shift + lo * NT_WIDTH);
-}
 
 // It might look like the implementations for get_start_node and get_end_node
 // are around the wrong way, but remember that the kmers are stored in reverse
@@ -173,11 +188,6 @@ T get_start_node(const T & x) {
 template <typename T>
 T get_start_node_suffix(const T & x, uint8_t k) {
   return get_range(x, 1, k-1);
-}
-
-template <typename T>
-T get_end_node(const T & x, uint8_t k) {
-  return get_range(x, 0, k-1);
 }
 
 template <typename kmer_t>
@@ -203,35 +213,6 @@ kmer_t follow_edge(const kmer_t & x, uint8_t k, uint8_t v) {
   // set character
   y = set_nt(y, 0, v);
   return y;
-}
-
-template <typename T>
-std::string kmer_to_string(const T & kmer, uint8_t max_k, uint8_t this_k = -1) {
-  std::string buf(max_k, DUMMY_SYM);
-
-  // To enable not giving a this_k value -> we can print full kmers or dummy kmers
-  if (this_k > max_k) this_k = max_k;
-
-  for (size_t nt_pos = 0; nt_pos < this_k; nt_pos++) {
-    buf[max_k-nt_pos-1] = DNA_ALPHA[get_nt(kmer_block, nt_pos)];
-  }
-  return buf;
-}
-
-template <typename kmer_t>
-void convert_representation(const kmer_t * kmers_in, kmer_t * kmers_out, size_t num_kmers) {
-  // Swap G and T and reverses the nucleotides so that they can
-  // be compared and sorted as integers to give colexicographical ordering
-  std::transform((uint64_t*)kmers_in, (uint64_t*)(kmers_in + num_kmers), (uint64_t*)kmers_out, swap_gt<kmer_t>());
-  std::transform(kmers_in, kmers_in + num_kmers, kmers_out, reverse_nt<kmer_t>());
-}
-
-// Convenience function to print array of kmers
-template <typename kmer_t>
-void print_kmers(std::ostream & out, kmer_t * kmers, size_t num_kmers, uint32_t k, uint8_t * dummy_lengths = 0) {
-  for (size_t i = 0; i<num_kmers; i++) {
-    out << kmer_to_string(kmers[i], k, ((dummy_lengths)? dummy_lengths[i]:k)) << std::endl;
-  }
 }
 
 // Longest common suffix

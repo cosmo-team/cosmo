@@ -3,6 +3,13 @@
 #define _UTILITY_HPP
 
 #include <climits> // For CHAR_BIT
+//#include <ttmath/ttmath.h> // http://www.ttmath.org/
+
+//typedef ttmath::UInt<2> uint128_t;
+typedef __uint128_t uint128_t;
+
+//typedef ttmath::UInt<2> uint128_t;
+typedef __uint128_t uint128_t;
 
 template <typename T>
 struct bitwidth {
