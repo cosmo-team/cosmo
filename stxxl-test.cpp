@@ -9,7 +9,7 @@
 //#include "kmer.hpp"
 //#include "dummies.hpp"
 //#include "utility.hpp"
-//#include "io.hpp"
+#include "io.hpp"
 
 using namespace cosmo;
 
@@ -76,15 +76,6 @@ struct get_key_colex_edge
 };
 */
 
-template <typename kmer_t>
-std::pair<std::istream_iterator<kmer_t>, std::istream_iterator<kmer_t>>
-get_input_range(std::ifstream & in) {
-  auto in_begin = std::istream_iterator<kmer_t>(in);
-  auto in_end   = std::istream_iterator<kmer_t>();
-  auto in_range = std::make_pair(in_begin, in_end);
-  return in_range;
-}
-
 int main(int argc, char* argv[])
 {
   using namespace boost::adaptors;
@@ -98,23 +89,26 @@ int main(int argc, char* argv[])
   std::ifstream in(file_name, std::ifstream::binary);
 
   // Convert to our format: reverse for colex ordering, swap g/t encoding
-  auto input = get_input_range<kmer_t>(in)
+  auto input = make_typed_input_range<kmer_t>(in)
              | transformed(swap_gt<kmer_t>())
              | transformed(reverse_nt<kmer_t>());
 
   // Create STXXL vector
   stxxl::vector<kmer_t> kmers;
 
-  //auto revcomp = reverse_complement<kmer_t>(k);
+  // Load vector with kmers and reverse complements
+  auto revcomp = reverse_complement<kmer_t>(k);
+  // TODO: Try out STXXL writebuf approach for async I/O
+  // (Mainly useful if using multiple disks)
   for (auto x : input) {
     kmers.push_back(x);
-    //kmers.push_back(revcomp(x));
+    kmers.push_back(revcomp(x));
   }
   std::cerr << "Read " << kmers.size() << " kmers from file."<< std::endl;
 
   // Sort them in colex(node)-edge order
-  //std::cerr << "Sorting..." << std::endl;
-  //stxxl::ksort(kmers.begin(), kmers.end(), get_key_colex_node(), M);
+  std::cerr << "Sorting..." << std::endl;
+  stxxl::ksort(kmers.begin(), kmers.end(), get_key_colex_node(), M);
 
   // Get another copy of the table sorted by out-node (for dummy edge discovery)
   //kmer_vector_t kmers_by_end_node(kmers);
@@ -135,25 +129,13 @@ int main(int argc, char* argv[])
   //    [k](const kmer_t x){ std::cout << kmer_to_string(x, k, k) << std::endl; }, M);
 
     /*
-     * aaaa is repeated... maybe the sorting is messing it up.
-     * Try with normal sort?
      * if it changes the outcome, filter for aaaa and set a flag for aaaa...
-     * - support 64bit... (compile flag)
      * - make small .fa file so i can control which dummy edges there are...
-     * - (also have aaaa version to test the sorting thing)
      *
      * TEST get_start_node, get_end_node on single kmer
      */
-  kmer_t x = kmers[0];
-  //std::cerr << x.table[0] << std::endl;
-  //std::cerr << x.table[1] << std::endl;
-  std::cerr << std::setw(16) << std::setfill('0') << std::hex << ((uint64_t*)&x)[0] << std::endl;
-  std::cerr << std::setw(16) << std::hex << ((uint64_t*)&x)[1] << std::endl;
-  //kmer_t y = revcomp(kmers[0]);
-  std::cerr << kmer_to_string(x, k) << std::endl;
-  //std::cerr << kmer_to_string(y, k, k) << std::endl;
-  // the later ones are MSB -> don't reverse them
-  // a.table[0] = b.table[1] = 1 -> (a < b)
+  std::cerr << kmer_to_string(kmers[0], k) << std::endl;
+  std::cerr << kmer_to_string(kmers[1], k) << std::endl;
 
   return 0;
 }

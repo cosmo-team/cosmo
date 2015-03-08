@@ -8,8 +8,10 @@ namespace cosmo {
 
 // Have to define class so I can overload the istream >> operator
 // TODO: Add check for 32 bit OS
+/*
 template <size_t num_blocks>
-class big_uint : public ttmath::UInt<num_blocks> {};
+struct big_uint : ttmath::UInt<num_blocks> {
+};
 
 // Input operator used for reading from the file
 template <size_t num_blocks>
@@ -17,8 +19,9 @@ std::istream& operator >> (std::istream& in, big_uint<num_blocks>& x) {
   in.read((char*)&x, sizeof(big_uint<num_blocks>));
   return in;
 }
+*/
 
-typedef big_uint<2> uint128_t;
+typedef ttmath::UInt<2> uint128_t;
 
 }
 

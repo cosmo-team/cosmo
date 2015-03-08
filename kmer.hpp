@@ -71,9 +71,7 @@ inline uint8_t get_nt(const T & x, size_t i) {
   // 0.....k-1
   // MSB...LSB
   size_t block_idx = num_blocks - i/nts_per_block - 1;
-  std::cerr<< "block: " << block_idx << std::endl;
   size_t nt_idx    = i%nts_per_block;
-  std::cerr<< "nt_id: " << nt_idx << std::endl;
   uint64_t block   = ((uint64_t*)&x)[block_idx];
   return (block << (nt_idx * 2)) >> 62;
 }
@@ -90,6 +88,35 @@ std::string kmer_to_string(const T & kmer, size_t max_k, size_t this_k = -1) {
   }
   return buf;
 }
+
+inline static uint64_t _reverse_complement_64(uint64_t x) {
+  uint64_t output;
+
+  unsigned char * p = (unsigned char *) &x;
+  unsigned char * q = (unsigned char *) &output;
+
+  for (size_t i = 0; i < 8; i++) {
+    q[8 - i - 1] = revcomp_8(p[i]);
+  }
+
+  return output;
+}
+
+template <class T>
+struct reverse_complement : std::unary_function<T, T> {
+  const size_t _k;
+  reverse_complement(size_t k) : _k(k) {}
+  T operator() (const T& x) const {
+    size_t num_blocks = sizeof(T)/sizeof(uint64_t);
+
+    T result(x);
+    for (size_t i = 0; i < num_blocks; i++) {
+      uint64_t block = ((uint64_t*)&x)[i];
+      ((uint64_t*)&result)[num_blocks - i - 1] = _reverse_complement_64(block);
+    }
+    return result << (sizeof(T)*8 - _k * NT_WIDTH);
+  }
+};
 
 /*
 template <typename kmer_t>
@@ -152,40 +179,6 @@ template <typename T>
 T get_end_node(const T & x, uint8_t k) {
   return get_range(x, 0, k-1);
 }
-
-inline static uint64_t revcomp_block(uint64_t x) {
-  uint64_t output;
-
-  unsigned char * p = (unsigned char *) &x;
-  unsigned char * q = (unsigned char *) &output;
-  q[7] = revcomp_8(p[0]);
-  q[6] = revcomp_8(p[1]);
-  q[5] = revcomp_8(p[2]);
-  q[4] = revcomp_8(p[3]);
-  q[3] = revcomp_8(p[4]);
-  q[2] = revcomp_8(p[5]);
-  q[1] = revcomp_8(p[6]);
-  q[0] = revcomp_8(p[7]);
-  return output;
-}
-
-template <class T>
-struct reverse_complement : std::unary_function<T, T> {
-  const uint8_t _k;
-  reverse_complement(uint8_t k) : _k(k) {}
-  T operator() (const T& x) const {
-    return revcomp_block((uint64_t)x) << (64 - _k * NT_WIDTH);
-  }
-};
-
-template <>
-struct reverse_complement<uint128_t> : std::unary_function<uint128_t, uint128_t> {
-  const uint8_t _k;
-  reverse_complement(uint8_t k) : _k(k) {}
-  uint128_t operator() (const uint128_t & x) const {
-    return uint128_t(revcomp_block(x._lower), revcomp_block(x._upper));//<< (128 - _k * NT_WIDTH);
-  }
-};
 
 template <typename kmer_t>
 bool is_palindrome(const kmer_t & x, uint8_t k) {
