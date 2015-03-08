@@ -65,16 +65,17 @@ int main(int argc, char* argv[])
                             k, std::back_inserter(incoming_dummies));
   std::cerr << "Found " << incoming_dummies.size() << " incoming dummies." << std::endl;
 
-  //stxxl::for_each(kmers.begin(), kmers.end(),
-  //    [k](const kmer_t x){ std::cout << kmer_to_string(x, k) << std::endl; }, M);
-  //    [k](const kmer_t x){ std::cout << kmer_to_string(x, k, k) << std::endl; }, M);
+  std::cout << "\n\nTable A:\n";
+  stxxl::for_each(kmers.begin(), kmers.end(),
+    [k](const kmer_t x){ std::cout << kmer_to_string(x, k) << std::endl; }, M);
 
-    /*
-     * if it changes the outcome, filter for aaaa and set a flag for aaaa...
-     * - make small .fa file so i can control which dummy edges there are...
-     *
-     * TEST get_start_node, get_end_node on single kmer
-     */
+  std::cout << "\n\nTable B:\n";
+  stxxl::for_each(kmers_by_end_node.begin(), kmers_by_end_node.end(),
+    [k](const kmer_t x){ std::cout << kmer_to_string(x, k) << std::endl; }, M);
+
+  std::cout << "\n\nDummies:\n";
+  stxxl::for_each(incoming_dummies.begin(), incoming_dummies.end(),
+    [k](const kmer_t x){ std::cout << kmer_to_string(x, k, k-1) << std::endl; }, M);
 
   return 0;
 }
