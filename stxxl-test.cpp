@@ -1,21 +1,23 @@
-#include <fstream>      // for std::fstream
-#include <stxxl.h>      // STXXL header
+#include <typeinfo>
+#include <fstream>
+#include <stxxl.h>
+
 #include <boost/range/adaptor/transformed.hpp>
 #include <boost/range/algorithm/copy.hpp>
-//#include <stxxl/bits/algo/stable_ksort.h>
+#include <boost/range/iterator_range.hpp>
+#include <boost/iterator/zip_iterator.hpp>
+#include <boost/iterator/function_input_iterator.hpp>
 
+#include "utility.hpp"
 #include "kmer.hpp"
 #include "io.hpp"
 #include "sort.hpp"
-#include "utility.hpp"
-//#include "dummies.hpp"
-
+#include "dummies.hpp"
 
 // TODO: Compile flag check
 // typedef uint64_t kmer_t;
 typedef uint128_t kmer_t;
-
-const uint64_t MB_TO_BYTES = 1024 * 1024;
+typedef std::pair<kmer_t, size_t>  dummy_t;
 
 int main(int argc, char* argv[])
 {
@@ -40,13 +42,11 @@ int main(int argc, char* argv[])
 
   // Load vector with kmers and reverse complements
   auto revcomp = reverse_complement<kmer_t>(k);
-  // TODO: Try out STXXL writebuf approach for async I/O
-  // (Mainly useful if using multiple disks)
   for (auto x : input) {
     kmers.push_back(x);
     kmers.push_back(revcomp(x));
   }
-  std::cerr << "Read " << kmers.size() << " kmers from file."<< std::endl;
+  std::cerr << "Read " << kmers.size()/2 << " kmers from file."<< std::endl;
 
   // Sort them in colex(node)-edge order
   std::cerr << "Sorting..." << std::endl;
@@ -56,26 +56,16 @@ int main(int argc, char* argv[])
   stxxl::vector<kmer_t> kmers_by_end_node(kmers);
   stxxl::ksort(kmers_by_end_node.begin(), kmers_by_end_node.end(), get_key_colex_edge<kmer_t>(), M);
 
+  // Find nodes that require incoming dummy edges
+  std::cerr << "Searching for nodes requiring incoming dummy edges..." << std::endl;
+  stxxl::vector<dummy_t> incoming_dummies;
+  find_incoming_dummy_edges(kmers, kmers_by_end_node, k, incoming_dummies);
+  std::cerr << "Added " << incoming_dummies.size() << " incoming dummy edges." << std::endl;
 
-  // Find incoming dummy edges
-  std::cerr << "Searching for incoming dummies..." << std::endl;
-  stxxl::vector<kmer_t> incoming_dummies;
-  find_incoming_dummy_edges(kmers.begin(), kmers.end(),
-                            kmers_by_end_node.begin(), kmers_by_end_node.end(),
-                            k, std::back_inserter(incoming_dummies));
-  std::cerr << "Found " << incoming_dummies.size() << " incoming dummies." << std::endl;
+  // Sort dummies
+  stxxl::sort(incoming_dummies.begin(), incoming_dummies.end(), colex_dummy_less<dummy_t>(), M);
 
-  std::cout << "\n\nTable A:\n";
-  stxxl::for_each(kmers.begin(), kmers.end(),
-    [k](const kmer_t x){ std::cout << kmer_to_string(x, k) << std::endl; }, M);
-
-  std::cout << "\n\nTable B:\n";
-  stxxl::for_each(kmers_by_end_node.begin(), kmers_by_end_node.end(),
-    [k](const kmer_t x){ std::cout << kmer_to_string(x, k) << std::endl; }, M);
-
-  std::cout << "\n\nDummies:\n";
-  stxxl::for_each(incoming_dummies.begin(), incoming_dummies.end(),
-    [k](const kmer_t x){ std::cout << kmer_to_string(x, k, k-1) << std::endl; }, M);
+  // Merge dummies and output
 
   return 0;
 }
