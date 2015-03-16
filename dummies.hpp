@@ -184,15 +184,18 @@ auto add_first_end_node_flag(Visitor v, uint32_t k) -> FirstEndNodeFlagger<declt
 // but I think an extra set_difference indirection might make things slower (since we have to access outgoing dummies multiple times),
 // and this was already written and tested from an earlier C implementation.
 // Visitor functor takes 4 params: kmer, size, first flag, edge flag (could also just take kmer and size)
-// planned Visitor functors: ascii_full_edge, ascii_edge_only, binary (5 bits per row, x12 per 64 bit block, 4 bits waste per 12, or just per 8 bits at
 // first to make parsing easy)
-template <typename kmer_t, class Visitor>
-                      // range, range, k, dummies_range, visitor_f
-void merge_dummies(kmer_t * table_a, kmer_t * table_b, const size_t num_records, const uint32_t k,
-                   kmer_t * in_dummies, size_t num_incoming_dummies, uint8_t * dummy_lengths,
-                   Visitor visitor_f) {
+//
+// This really needs a refactor...
+template <typename InputRange1, typename InputRange2, class Visitor>
+void merge_dummies(const InputRange1 table_a, const InputRange1 table_b, const InputRange2 in_dummies, size_t k, Visitor visitor_f) {
+  typedef typename InputRange1::value_type kmer_t;
+
   // runtime speed: O(num_records) (since num_records >= num_incoming_dummies)
   auto visit = uniquify(add_first_start_node_flag(add_first_end_node_flag(visitor_f, k),k));
+
+  size_t num_records = table_a.end() - table_a.begin();
+  size_t num_incoming_dummies = in_dummies.end() - in_dummies.begin();
 
   #define get_a(i) (get_start_node(table_a[(i)]) >> 2)
   #define get_b(i) (get_end_node(table_b[(i)], k) >> 2) // shifting to give dummy check call consistency
@@ -210,8 +213,8 @@ void merge_dummies(kmer_t * table_a, kmer_t * table_b, const size_t num_records,
   // (d<=s) because dummies should always sort before anything that is equal to them
   // << 2 to compare node instead. Don't need to compare edge since already sorted
   #define check_for_in_dummies(s) while (d_idx < num_incoming_dummies){ \
-    kmer_t d = in_dummies[d_idx]; \
-    uint8_t len  = dummy_lengths[d_idx]; \
+    kmer_t d = in_dummies[d_idx].first; \
+    uint8_t len  = in_dummies[d_idx].second; \
     if (d<<2 <= ((s)<<2)) { visit(in_dummy, d, len); ++d_idx; }\
     else break; \
   }
@@ -261,7 +264,7 @@ void merge_dummies(kmer_t * table_a, kmer_t * table_b, const size_t num_records,
 
   // Might have in-dummies remaining
   while (d_idx < num_incoming_dummies) {
-    visit(in_dummy, in_dummies[d_idx], dummy_lengths[d_idx]);
+    visit(in_dummy, in_dummies[d_idx].first, in_dummies[d_idx].second);
     ++d_idx;
   }
 }

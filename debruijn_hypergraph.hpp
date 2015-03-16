@@ -20,7 +20,7 @@ class debruijn_hypergraph {
   // A hypernode then replaces the defn of node without loss of generality
   public:
   typedef size_t                     edge_type;
-  typedef tuple<edge_type, edge_type, size_t> node_type;
+  typedef boost::tuple<edge_type, edge_type, size_t> node_type;
   //typedef optional<node_type> hypernode_type; // optional return type
 
   typedef typename t_debruijn_graph::symbol_type symbol_type;

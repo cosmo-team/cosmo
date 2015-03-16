@@ -8,7 +8,7 @@ CPP_FLAGS=-m64 -std=c++0x -pedantic-errors -W -Wall -Wextra -Wshadow -Wpointer-a
 DEP_PATH=/usr/local
 INC_PATH=$(DEP_PATH)/include
 LIB_PATH=$(DEP_PATH)/lib
-DEP_FLAGS=-I$(INC_PATH)/ -L$(LIB_PATH)/ -lsdsl # -ldivsufsort -ldivsufsort64
+DEP_FLAGS=-I$(INC_PATH)/ -L$(LIB_PATH)/ #-lsdsl # -ldivsufsort -ldivsufsort64
 DEBUG_FLAGS=-g
 NDEBUG_FLAGS=-DNDEBUG
 OPT_FLAGS=-O3 -mmmx -msse -msse2 -msse3 -msse4 -msse4.2 -march=native
@@ -47,7 +47,7 @@ CPP_FLAGS+=-DVAR_ORDER
 endif
 
 BUILD_REQS=debruijn_graph.hpp io.hpp io.o debug.h
-ASSEM_REQS=debruijn_graph.hpp algorithm.hpp utility.hpp kmer.hpp uint128_t.hpp
+ASSEM_REQS=debruijn_graph.hpp algorithm.hpp utility.hpp kmer.hpp
 PACK_REQS=lut.hpp debug.h io.hpp io.o sort.hpp kmer.hpp dummies.hpp
 BINARIES=cosmo-pack cosmo-build cosmo-benchmark # cosmo-assemble
 
@@ -59,18 +59,18 @@ lut.hpp: make_lut.py
 io.o: io.hpp io.cpp debug.h dummies.hpp kmer.hpp
 		$(CXX) $(CPP_FLAGS) -c io.cpp
 
-# TODO: Roll these all into one... "cosmo"
+# TODO: Roll these all into one... "cosmo". Like git started off as multiple programs.
 cosmo-pack: cosmo-pack.cpp $(PACK_REQS)
-		$(CXX) $(CPP_FLAGS) -o $@ $< io.o
+		$(CXX) $(CPP_FLAGS) -o $@ $< io.o $(DEP_FLAGS) -lstxxl
 
 cosmo-build: cosmo-build.cpp $(BUILD_REQS)
-		$(CXX) $(CPP_FLAGS) -o $@ $< io.o $(DEP_FLAGS) 
+		$(CXX) $(CPP_FLAGS) -o $@ $< io.o $(DEP_FLAGS) -lsdsl
 
 #cosmo-assemble: cosmo-assemble.cpp $(ASSEM_REQS) wt_algorithm.hpp debruijn_hypergraph.hpp
-#		$(CXX) $(CPP_FLAGS) -o $@ $< $(DEP_FLAGS) 
+#		$(CXX) $(CPP_FLAGS) -o $@ $< $(DEP_FLAGS) -lsdsl
 
 cosmo-benchmark: cosmo-benchmark.cpp $(ASSEM_REQS) wt_algorithm.hpp debruijn_hypergraph.hpp
-		$(CXX) $(CPP_FLAGS) -o $@ $< $(DEP_FLAGS) 
+		$(CXX) $(CPP_FLAGS) -o $@ $< $(DEP_FLAGS) -lsdsl
 
 all: $(BINARIES)
 

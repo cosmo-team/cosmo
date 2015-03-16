@@ -17,8 +17,8 @@
 #include "kmer.hpp"
 #include "debug.h"
 
-//static const size_t MAX_BITS_PER_KMER = 128;
-//static const size_t BUFFER_SIZE = 1024 * 1024;
+static const size_t MAX_BITS_PER_KMER = 128;
+static const size_t BUFFER_SIZE = 1024 * 1024;
 
 using namespace std;
 

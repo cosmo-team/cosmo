@@ -25,7 +25,7 @@ struct swap_gt : std::unary_function<T, T> {
   inline T operator() (const T& x) const {
     T temp(x);
     uint64_t * blocks = reinterpret_cast<uint64_t*>(&temp);
-    for (int i = 0; i < sizeof(T)/sizeof(uint64_t); i++) {
+    for (size_t i = 0; i < sizeof(T)/sizeof(uint64_t); i++) {
       blocks[i] = _swap_gt_64(blocks[i]);
     }
     return temp;
@@ -142,6 +142,47 @@ T get_end_node(const T & x, uint8_t k) {
   return get_range(x, 0, k-1);
 }
 
+template <typename T>
+T get_start_node_suffix(const T & x, uint8_t k) {
+  return get_range(x, 1, k-1);
+}
+
+// Longest common suffix
+template <typename kmer_t>
+size_t lcs(const kmer_t & a, const kmer_t & b, size_t k) {
+  static const size_t num_blocks = bitwidth<kmer_t>::width/BLOCK_WIDTH;
+  //kmer_t x = a ^ b; // Do this in the loop below instead to potentially save some cycles
+  uint64_t * p = (uint64_t*)&a;
+  uint64_t * q = (uint64_t*)&b;
+  size_t total = 0;
+  // This should unroll. for 128 bits its only 2 iters
+  for (size_t i = 0; i < num_blocks; i++) {
+    if (p[i] == q[i]) {
+      total += BLOCK_WIDTH;
+      continue;
+    }
+    else {
+      // COUNT *LEADING* ZEROS - we store kmers backwards
+      total += clz(p[i] ^ q[i]);
+      break;
+    }
+  }
+  total /= NT_WIDTH;
+  return std::min(total, k);
+}
+
+template <typename kmer_t>
+size_t node_lcs(const kmer_t & a, const kmer_t & b, size_t k) {
+  //assert(k>0); // Shouldnt be called this way, but we also minus 1 down below...
+  if (k == 0) return 0;
+  kmer_t x(a);
+  kmer_t y(b);
+  // TODO: make position-templated set_nt()
+  ((uint64_t*)&x)[0] &= 0x3FFFFFFFFFFFFFFF;
+  ((uint64_t*)&y)[0] &= 0x3FFFFFFFFFFFFFFF;
+  return lcs(x,y,k) - 1;
+}
+
 /*
 template <typename kmer_t>
 kmer_t clear_nt(const kmer_t & x, uint8_t i) {
@@ -185,11 +226,6 @@ T get_start_node(const T & x) {
   //return get_range(x, 1, k);
 }
 
-template <typename T>
-T get_start_node_suffix(const T & x, uint8_t k) {
-  return get_range(x, 1, k-1);
-}
-
 template <typename kmer_t>
 bool is_palindrome(const kmer_t & x, uint8_t k) {
   return (k%2==0 && x == reverse_complement<kmer_t>(k)(x));
@@ -215,41 +251,6 @@ kmer_t follow_edge(const kmer_t & x, uint8_t k, uint8_t v) {
   return y;
 }
 
-// Longest common suffix
-template <typename kmer_t>
-size_t lcs(const kmer_t & a, const kmer_t & b, size_t k) {
-  static const size_t num_blocks = bitwidth<kmer_t>::width/BLOCK_WIDTH;
-  //kmer_t x = a ^ b; // Do this in the loop below instead to potentially save some cycles
-  uint64_t * p = (uint64_t*)&a;
-  uint64_t * q = (uint64_t*)&b;
-  size_t total = 0;
-  // This should unroll. for 128 bits its only 2 iters
-  for (size_t i = 0; i < num_blocks; i++) {
-    if (p[i] == q[i]) {
-      total += BLOCK_WIDTH;
-      continue;
-    }
-    else {
-      // COUNT *LEADING* ZEROS - we store kmers backwards
-      total += clz(p[i] ^ q[i]);
-      break;
-    }
-  }
-  total /= NT_WIDTH;
-  return std::min(total, k);
-}
-
-template <typename kmer_t>
-size_t node_lcs(const kmer_t & a, const kmer_t & b, size_t k) {
-  //assert(k>0); // Shouldnt be called this way, but we also minus 1 down below...
-  if (k == 0) return 0;
-  kmer_t x(a);
-  kmer_t y(b);
-  // TODO: make position-templated set_nt()
-  ((uint64_t*)&x)[0] &= 0x3FFFFFFFFFFFFFFF;
-  ((uint64_t*)&y)[0] &= 0x3FFFFFFFFFFFFFFF;
-  return lcs(x,y,k) - 1;
-}
 */
 
 #endif
