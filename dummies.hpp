@@ -6,6 +6,7 @@
 #include <boost/range/adaptor/uniqued.hpp>         // Uniquify
 #include <boost/range/algorithm/set_algorithm.hpp> // set_difference
 #include <boost/function_output_iterator.hpp>      // for capturing output of set_algorithms
+#include <algorithm>
 #include <utility>                                 // make_pair (for boost ranges)
 #include <functional>                              // function (to avoid errors with the lambdas)
 #include <cstring>                                 // memset
@@ -16,63 +17,54 @@ using namespace boost::adaptors;
 
 enum edge_tag { standard, in_dummy, out_dummy };
 
-template <typename kmer_t, typename OutputIterator>
-void find_incoming_dummy_edges(const kmer_t * table_a, const kmer_t * table_b, size_t num_kmers, uint32_t k, OutputIterator out) {
-  auto a_range = std::make_pair(table_a, table_a + num_kmers);
-  auto b_range = std::make_pair(table_b, table_b + num_kmers);
+template <typename InputRange1, typename InputRange2, typename OutputIterator>
+void find_incoming_dummy_nodes(const InputRange1 a_range, const InputRange2 b_range, uint32_t k, OutputIterator out) {
+  typedef typename InputRange1::value_type kmer_t;
+  typedef typename OutputIterator::value_type pair_t;
   auto a_lam   = std::function<kmer_t(kmer_t)>([](kmer_t x) -> kmer_t {return get_start_node(x);});
   auto b_lam   = std::function<kmer_t(kmer_t)>([k](kmer_t x) -> kmer_t {return get_end_node(x,k);});
   auto a = a_range | transformed(a_lam) | uniqued;
   auto b = b_range | transformed(b_lam) | uniqued;
 
-  //auto out_count = boost::make_function_output_iterator(inc_count);
-  //boost::set_difference(a, b, out_count);
-  boost::set_difference(a, b, out);
+  //auto pairer  = std::function<pair_t(kmer_t)>([&](kmer_t x) -> )
+  auto pairer  = [&](kmer_t x) { *out++ = std::make_pair(x, k-1); };
+  auto paired_out = boost::make_function_output_iterator(pairer);
+  boost::set_difference(a, b, paired_out);
 }
 
-template <typename kmer_t>
-size_t count_incoming_dummy_edges(kmer_t * table_a, kmer_t * table_b, size_t num_kmers, uint32_t k) {
-  size_t count = 0;
-
-  auto inc_count = [&count](kmer_t) {count++;};
-  // This is required because set_difference requires an output iterator :<
-  // Would be more self descriptive with a better pipeline lib
-  auto out_count = boost::make_function_output_iterator(inc_count);
-  find_incoming_dummy_edges(table_a, table_b, num_kmers, k, out_count);
-  return count;
-}
-
-inline void prepare_k_values(uint8_t * k_values, size_t num_dummies, uint32_t k) {
-  // first num_dummies are k, then it is k-1 down to 1 num_dummies times
-  memset(k_values, k, num_dummies);
-  uint8_t * new_k_values = k_values + num_dummies;
-  for (size_t i = 0; i < num_dummies * (k-1); i++) {
-    new_k_values[i] = k - (i % (k-1)) - 1;
-  }
-}
-
-template <typename kmer_t>
-void generate_dummies(kmer_t dummy_node, kmer_t * output, uint32_t k) {
+template <typename kmer_t, typename OutputIterator>
+void generate_dummy_edges(const kmer_t & dummy_node, OutputIterator & output, size_t k) {
   // until k-1 because we need at least one symbol left
+  kmer_t temp(dummy_node);
   for (size_t i = 0; i < k-1; i++) {
-    // shift the width of 1 nucleotide. (We are storing the kmers in reverse order, so a shift left
-    // is a shift right when printed out)
-    // Yeah, maybe this should be in kmer's code and produce an iterator instead...
-    // but who has time to well-abstracted code when papers need publishing?
-    output[i] = dummy_node <<= NT_WIDTH;
+    *output++ = std::make_pair(temp <<= NT_WIDTH, k - i - 1);
   }
 }
 
-template <typename kmer_t>
-void prepare_incoming_dummy_edges(kmer_t * dummy_nodes, uint8_t * k_values, size_t num_dummies, uint32_t k) {
-  // should be k * num_dummies space allocated for dummy_nodes and k_values
-  // loop over each dummy edge, and have a pointer for next, loop over k, write k and edge >> 2
-  kmer_t * output = dummy_nodes + num_dummies;
-  for (size_t i = 0; i < num_dummies; i++) {
-    generate_dummies(dummy_nodes[i], output + i * (k-1), k);
+// Change to take zip iter
+template <typename InputRange, typename OutputIterator1>
+void prepare_incoming_dummy_edge_shifts(InputRange dummy_nodes, OutputIterator1 dummy_edges, size_t k) {//OutputIterator2 k_values, size_t k) {
+  for (auto & dummy : dummy_nodes) {
+    generate_dummy_edges(dummy.first, dummy_edges, k);
   }
-  prepare_k_values(k_values, num_dummies, k);
+  //prepare_k_values(k_values, num_dummies, k);
 }
+
+template <typename InputRange1, typename InputRange2, typename OutputContainer>
+void find_incoming_dummy_edges(const InputRange1 a_range, const InputRange2 b_range, uint32_t k, OutputContainer & incoming_dummies) {
+  typedef typename InputRange1::value_type kmer_t;
+  typedef typename OutputContainer::value_type pair_t;
+
+  // Find unique nodes that need dummy edges
+  find_incoming_dummy_nodes(a_range, b_range, k, std::back_inserter(incoming_dummies));
+
+  // Generate dummy edges (all shifts prepended with $)
+  size_t num_dummy_edges = incoming_dummies.size() * (k-1); // non-unique
+  incoming_dummies.reserve(num_dummy_edges);
+
+  prepare_incoming_dummy_edge_shifts(incoming_dummies, std::back_inserter(incoming_dummies), k-1);
+}
+
 
 template <class Visitor>
 class Unique {
@@ -192,14 +184,18 @@ auto add_first_end_node_flag(Visitor v, uint32_t k) -> FirstEndNodeFlagger<declt
 // but I think an extra set_difference indirection might make things slower (since we have to access outgoing dummies multiple times),
 // and this was already written and tested from an earlier C implementation.
 // Visitor functor takes 4 params: kmer, size, first flag, edge flag (could also just take kmer and size)
-// planned Visitor functors: ascii_full_edge, ascii_edge_only, binary (5 bits per row, x12 per 64 bit block, 4 bits waste per 12, or just per 8 bits at
 // first to make parsing easy)
-template <typename kmer_t, class Visitor>
-void merge_dummies(kmer_t * table_a, kmer_t * table_b, const size_t num_records, const uint32_t k,
-                   kmer_t * in_dummies, size_t num_incoming_dummies, uint8_t * dummy_lengths,
-                   Visitor visitor_f) {
+//
+// This really needs a refactor...
+template <typename InputRange1, typename InputRange2, class Visitor>
+void merge_dummies(const InputRange1 table_a, const InputRange1 table_b, const InputRange2 in_dummies, size_t k, Visitor visitor_f) {
+  typedef typename InputRange1::value_type kmer_t;
+
   // runtime speed: O(num_records) (since num_records >= num_incoming_dummies)
   auto visit = uniquify(add_first_start_node_flag(add_first_end_node_flag(visitor_f, k),k));
+
+  size_t num_records = table_a.end() - table_a.begin();
+  size_t num_incoming_dummies = in_dummies.end() - in_dummies.begin();
 
   #define get_a(i) (get_start_node(table_a[(i)]) >> 2)
   #define get_b(i) (get_end_node(table_b[(i)], k) >> 2) // shifting to give dummy check call consistency
@@ -217,8 +213,8 @@ void merge_dummies(kmer_t * table_a, kmer_t * table_b, const size_t num_records,
   // (d<=s) because dummies should always sort before anything that is equal to them
   // << 2 to compare node instead. Don't need to compare edge since already sorted
   #define check_for_in_dummies(s) while (d_idx < num_incoming_dummies){ \
-    kmer_t d = in_dummies[d_idx]; \
-    uint8_t len  = dummy_lengths[d_idx]; \
+    kmer_t d = in_dummies[d_idx].first; \
+    uint8_t len  = in_dummies[d_idx].second; \
     if (d<<2 <= ((s)<<2)) { visit(in_dummy, d, len); ++d_idx; }\
     else break; \
   }
@@ -268,7 +264,7 @@ void merge_dummies(kmer_t * table_a, kmer_t * table_b, const size_t num_records,
 
   // Might have in-dummies remaining
   while (d_idx < num_incoming_dummies) {
-    visit(in_dummy, in_dummies[d_idx], dummy_lengths[d_idx]);
+    visit(in_dummy, in_dummies[d_idx].first, in_dummies[d_idx].second);
     ++d_idx;
   }
 }

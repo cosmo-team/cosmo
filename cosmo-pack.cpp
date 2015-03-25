@@ -1,152 +1,36 @@
-// TODO: fix up pointer and malloc to use smart arrays
-// STL Headers
-//#include <fstream>
-#include <iostream>
-//#include <algorithm>
-#include <utility>
+#include <typeinfo>
+#include <fstream>
+#include <libgen.h>
+#include <stxxl.h>
+
+#include <boost/range/adaptor/transformed.hpp>
+#include <boost/range/algorithm/copy.hpp>
+#include <boost/range/iterator_range.hpp>
+#include <boost/iterator/zip_iterator.hpp>
+#include <boost/iterator/function_input_iterator.hpp>
 
 // TCLAP
 #include "tclap/CmdLine.h"
 
-// BOOST
-#include <boost/range/adaptor/transformed.hpp>     // Map function to inputs
-//#include <boost/range/algorithm/copy.hpp>
-//#include <boost/tuple/tuple.hpp>
-//#include <boost/tuple/tuple_comparison.hpp> // for uniqued over zipped iterators
-//#include <boost/iterator/zip_iterator.hpp>
-#define BOOST_RESULT_OF_USE_DECLTYPE // needed to support lambdas in transformed
-
-// C STDLIB Headers
-#include <cstdio>
-#include <cstdlib>
-
-#include <libgen.h>
-
-// Custom Headers
-#include "uint128_t.hpp"
+#include "utility.hpp"
 #include "kmer.hpp"
 #include "io.hpp"
 #include "sort.hpp"
 #include "dummies.hpp"
-#include "debug.h"
 
-
-using namespace std;
-using namespace boost::adaptors;
-
+// TODO: Compile flag check
+// typedef uint64_t kmer_t;
+typedef uint128_t kmer_t;
+typedef std::pair<kmer_t, size_t>  dummy_t;
 const static string extension = ".packed";
-
-template <typename kmer_t, class Visitor>
-void convert(kmer_t * kmers, size_t num_kmers, const uint32_t k, Visitor visit) {
-  // Convert the nucleotide representation to allow tricks
-  convert_representation(kmers, kmers, num_kmers);
-
-  // Append reverse complements
-  #ifdef ADD_REVCOMPS
-  size_t revcomp_factor = 2;
-  transform(kmers, kmers + num_kmers, kmers + num_kmers, reverse_complement<kmer_t>(k));
-  #else
-  size_t revcomp_factor = 1;
-  #endif
-
-  // NOTE: There might be a way to do this recursively using counting (and not two tables)
-  // After the sorting phase, Table A will in <colex(node), edge> order (as required for output)
-  // and Table B will be in colex(row) order. Having both tables is helpful for detecting the missing dummy
-  // edges with a simple O(N) merge-join algorithm.
-  // NOTE: THESE SHOULD NOT BE FREED (the kmers array is freed by the caller)
-  kmer_t * table_a = kmers;
-  kmer_t * table_b = kmers + num_kmers * revcomp_factor; // x2 because of reverse complements
-  // Sort by last column to do the edge-sorted part of our <colex(node), edge>-sorted table
-  colex_partial_radix_sort<DNA_RADIX>(table_a, table_b, num_kmers * revcomp_factor, 0, 1,
-                                      &table_a, &table_b, get_nt_functor<kmer_t>());
-  // Sort from k to last column (not k to 1 - we need to sort by the edge column a second time to get colex(row) table)
-  // Note: The output names are swapped (we want table a to be the primary table and b to be aux), because our desired
-  // result is the second last iteration (<colex(node), edge>-sorted) but we still have use for the last iteration (colex(row)-sorted).
-  // Hence, table_b is the output sorted from [hi-1 to lo], and table_a is the 2nd last iter sorted from (hi-1 to lo]
-  colex_partial_radix_sort<DNA_RADIX>(table_a, table_b, num_kmers * revcomp_factor, 0, k,
-                                      &table_b, &table_a, get_nt_functor<kmer_t>());
-
-  // outgoing dummy edges are output in correct order while merging, whereas incoming dummy edges are not in the correct
-  // position, but are sorted relatively, hence can be merged if collected in a previous pass
-  // count dummies (to allocate space)
-  size_t num_incoming_dummies = count_incoming_dummy_edges(table_a, table_b, num_kmers*revcomp_factor, k);
-  TRACE("num_incoming_dummies: %zu\n", num_incoming_dummies);
-  // allocate space for dummies -> we need to generate all the $-prefixed dummies, so can't just use an iterator for the
-  // incoming dummies (the few that we get from the set_difference are the ones we apply $x[0:-1] to, so we need (k-1) more for each
-  // (to make $...$x[0])... times two because we need to radix sort these bitches.
-  #ifdef ALL_DUMMIES
-  size_t all_dummies_factor = (k-1);
-  size_t dummy_table_factor = 2;
-  #else
-  size_t all_dummies_factor = 1;
-  size_t dummy_table_factor = 1;
-  #endif
-  // Don't have to alloc if we aren't preparing all dummies, but this option is only used for testing. Usually we want them
-  kmer_t * incoming_dummies = (kmer_t*) malloc(num_incoming_dummies*all_dummies_factor*dummy_table_factor*sizeof(kmer_t));
-  if (!incoming_dummies) {
-    cerr << "Error allocating space for incoming dummies" << endl;
-    exit(1);
-  }
-  // We store lengths because the prefix before the <length> symbols on the right will all be $ signs
-  // this is a cheaper way than storing all symbols in 3 bits instead (although it means we need a varlen radix sort)
-  uint8_t * incoming_dummy_lengths = (uint8_t*) malloc(num_incoming_dummies*all_dummies_factor*dummy_table_factor*sizeof(uint8_t));
-  if (!incoming_dummy_lengths) {
-    cerr << "Error allocating space for incoming dummy lengths" << endl;
-    exit(1);
-  }
-  // extract dummies
-  find_incoming_dummy_edges(table_a, table_b, num_kmers*revcomp_factor, k, incoming_dummies);
-  // add extra dummies
-  #ifdef ALL_DUMMIES
-  prepare_incoming_dummy_edges(incoming_dummies, incoming_dummy_lengths, num_incoming_dummies, k-1);
-  #else
-  // Just set the lengths for merging
-  memset(incoming_dummy_lengths, k-1, num_incoming_dummies);
-  #endif
-
-  kmer_t * dummies_a = incoming_dummies;
-  uint8_t * lengths_a = incoming_dummy_lengths;
-  // sort dummies (varlen radix)
-  // dont need to sort if not adding the extras, since already sorted
-  #ifdef ALL_DUMMIES
-  kmer_t * dummies_b = incoming_dummies + num_incoming_dummies * (k-1);
-  uint8_t * lengths_b = incoming_dummy_lengths + num_incoming_dummies * (k-1);
-  colex_partial_radix_sort<DNA_RADIX>(dummies_a, dummies_b, num_incoming_dummies*(k-1), 0, 1,
-                                      &dummies_a, &dummies_b, get_nt_functor<kmer_t>(),
-                                      lengths_a, lengths_b, &lengths_a, &lengths_b);
-  // Don't need the last iteration (i.e. dont need to go to 0) since we arent doing a set difference like above
-  colex_partial_radix_sort<DNA_RADIX>(dummies_a, dummies_b, num_incoming_dummies*(k-1), 1, k-1,
-                                      &dummies_a, &dummies_b, get_nt_functor<kmer_t>(),
-                                      lengths_a, lengths_b, &lengths_a, &lengths_b);
-  #endif
-  merge_dummies(table_a, table_b, num_kmers*revcomp_factor, k,
-                dummies_a, num_incoming_dummies*all_dummies_factor,
-                lengths_a,
-                // edge_tag needed to distinguish between dummy out edge or not...
-                [=](edge_tag tag, const kmer_t & x, const uint32_t x_k, size_t first_start_node, bool first_end_node) {
-                  // TODO: this should be factored into a class that prints full kmers in ascii
-                  // then add a --full option
-                  #ifdef VERBOSE // print each kmer to stderr for testing
-                  if (tag == out_dummy)
-                    cerr << kmer_to_string(get_start_node(x), k-1, k-1) << "$";
-                  else
-                    cerr << kmer_to_string(x, k, x_k);
-                  cerr << " " << first_start_node << " " << first_end_node << endl;
-                  #endif
-                  visit(tag, x, x_k, first_start_node, first_end_node);
-                });
-  // TODO: impl external-merge (for large input. Read in chunk, sort, write temp, ext merge + add dummies to temp, 3-way-merge)
-  // TODO: use SSE instructions or CUDA if available (very far horizon)
-
-  free(incoming_dummies);
-  free(incoming_dummy_lengths);
-}
 
 typedef struct p
 {
     //bool ascii = false;
     std::string input_filename = "";
     std::string output_prefix = "";
+    size_t k = 0;
+    size_t m = 0;
 } parameters_t;
 
 void parse_arguments(int argc, char **argv, parameters_t & params);
@@ -161,154 +45,111 @@ void parse_arguments(int argc, char **argv, parameters_t & params)
   TCLAP::UnlabeledValueArg<std::string> input_filename_arg("input",
             "Input file. Currently only supports DSK's binary format (for k<=64).", true, "", "input_file", cmd);
   string output_short_form = "output_prefix";
+  TCLAP::ValueArg<size_t> kmer_length_arg("k", "kmer_length", "Length of edges (node is k-1).", true, 0, "length", cmd);
+  size_t default_mem = 5 * 1024 * MB_TO_BYTES;
+  TCLAP::ValueArg<size_t> mem_size_arg("m", "mem_size", "Internal memory to use (MB).", false, default_mem, "length", cmd);
+
   TCLAP::ValueArg<std::string> output_prefix_arg("o", "output_prefix",
             "Output prefix. Results will be written to [" + output_short_form + "]" + extension + ". " +
             "Default prefix: basename(input_file).", false, "", output_short_form, cmd);
   cmd.parse( argc, argv );
   //params.ascii         = ascii_arg.getValue();
   params.input_filename  = input_filename_arg.getValue();
+  params.k               = kmer_length_arg.getValue();
+  params.m               = mem_size_arg.getValue() * MB_TO_BYTES;
   params.output_prefix   = output_prefix_arg.getValue();
 }
 
-int main(int argc, char * argv[]) {
+int main(int argc, char* argv[])
+{
+  using namespace boost::adaptors;
+
+  // Parameter extraction
   parameters_t params;
   parse_arguments(argc, argv, params);
+  stxxl::internal_size_type M = params.m;
+  std::string file_name = params.input_filename;
+  char * base_name = basename(const_cast<char*>(file_name.c_str()));
+  size_t k = params.k;
 
-  const char * file_name = params.input_filename.c_str();
+  // Open the file
+  std::ifstream in(file_name, std::ifstream::binary);
 
-  // Open File
-  int handle = -1;
-  if ( (handle = open(file_name, O_RDONLY)) == -1 ) {
-    fprintf(stderr, "ERROR: Can't open file: %s\n", file_name);
-    exit(EXIT_FAILURE);
+  // Convert to our format: reverse for colex ordering, swap g/t encoding
+  auto input = make_typed_input_range<kmer_t>(in)
+             | transformed(swap_gt<kmer_t>())
+             | transformed(reverse_nt<kmer_t>());
+
+  // Create STXXL vector
+  stxxl::vector<kmer_t> kmers;
+
+  // Load vector with kmers and reverse complements
+  auto revcomp = reverse_complement<kmer_t>(k);
+  for (auto x : input) {
+    kmers.push_back(x);
+    kmers.push_back(revcomp(x));
   }
+  std::cerr << "Read " << kmers.size()/2 << " kmers from file."<< std::endl;
 
-  // The parameter should be const... On my computer the parameter
-  // isn't const though, yet it doesn't modify the string...
-  // This is still done AFTER loading the file just in case
-  char * base_name = basename(const_cast<char*>(file_name));
+  // Sort them in colex(node)-edge order
+  std::cerr << "Sorting..." << std::endl;
+  stxxl::ksort(kmers.begin(), kmers.end(), get_key_colex_node<kmer_t>(), M);
 
-  // Read Header
-  uint32_t kmer_num_bits = 0;
-  uint32_t k = 0;
-  if ( !dsk_read_header(handle, &kmer_num_bits, &k) ) {
-    fprintf(stderr, "ERROR: Error reading file %s\n", file_name);
-    exit(EXIT_FAILURE);
-  }
-  uint32_t kmer_num_blocks = (kmer_num_bits / 8) / sizeof(uint64_t);
-  TRACE(">> READING DSK FILE\n");
-  TRACE("kmer_num_bits, k = %d, %d\n", kmer_num_bits, k);
-  TRACE("kmer_num_blocks = %d\n", kmer_num_blocks);
+  // Get another copy of the table sorted by out-node (for dummy edge discovery)
+  stxxl::vector<kmer_t> kmers_by_end_node(kmers);
+  stxxl::ksort(kmers_by_end_node.begin(), kmers_by_end_node.end(), get_key_colex_edge<kmer_t>(), M);
 
-  if (kmer_num_bits > MAX_BITS_PER_KMER) {
-    fprintf(stderr, "ERROR: Kmers larger than %zu bits are not currently supported."
-                    " %s uses %d bits per kmer (possibly corrupt?).\n",
-            MAX_BITS_PER_KMER, file_name, kmer_num_bits);
-    exit(EXIT_FAILURE);
-  }
+  // Find nodes that require incoming dummy edges
+  std::cerr << "Searching for nodes requiring incoming dummy edges..." << std::endl;
+  stxxl::vector<dummy_t> incoming_dummies;
+  find_incoming_dummy_edges(kmers, kmers_by_end_node, k, incoming_dummies);
+  std::cerr << "Added " << incoming_dummies.size() << " incoming dummy edges." << std::endl;
 
-  // Read how many items there are (for allocation purposes)
-  size_t num_kmers = 0;
-  if ( dsk_num_records(handle, kmer_num_bits, &num_kmers) == -1) {
-    fprintf(stderr, "Error seeking file %s\n", file_name);
-    exit(EXIT_FAILURE);
-  }
-  if (num_kmers == 0) {
-    fprintf(stderr, "ERROR: File %s has no kmers (possibly corrupt?).\n", file_name);
-    exit(EXIT_FAILURE);
-  }
-  TRACE("num_kmers = %zu\n", num_kmers);
+  // Sort dummies
+  stxxl::sort(incoming_dummies.begin(), incoming_dummies.end(), colex_dummy_less<dummy_t>(), M);
 
-  // ALLOCATE SPACE FOR KMERS (done in one malloc call)
-  // x 4 because we need to add reverse complements, and then we have two copies of the table
-  #ifdef ADD_REVCOMPS
-  size_t revcomp_factor = 2;
-  #else
-  size_t revcomp_factor = 1;
-  #endif
-  uint64_t * kmer_blocks = (uint64_t*)malloc(num_kmers * 2 * revcomp_factor * sizeof(uint64_t) * kmer_num_blocks);
-  if (!kmer_blocks) {
-    cerr << "Error allocating space for kmers" << endl;
-    exit(1);
-  }
-
-
-  // READ KMERS FROM DISK INTO ARRAY
-  size_t num_records_read = dsk_read_kmers(handle, kmer_num_bits, kmer_blocks);
-  close(handle);
-  if (num_records_read == 0) {
-    fprintf(stderr, "Error reading file %s\n", argv[1]);
-    exit(EXIT_FAILURE);
-  }
-  TRACE("num_records_read = %zu\n", num_records_read);
-  assert (num_records_read == num_kmers);
-
-  //auto ascii_output = std::ostream_iterator<string>(std::cout, "\n");
-
+  // Make Outputter
+  // TODO: Should probably do checking here when opening the file...
   string outfilename = (params.output_prefix == "")? base_name : params.output_prefix;
   ofstream ofs;
+  ofs.open(outfilename + extension, ios::out | ios::binary);
+  PackedEdgeOutputer out(ofs);
   #ifdef VAR_ORDER
   ofstream lcs;
-  #endif
-  #if 1
-  static const size_t BUFFER_LEN = 2*1024*1024;
-  char buffer_a[BUFFER_LEN];
-  ofs.rdbuf()->pubsetbuf(buffer_a, BUFFER_LEN);
-  #ifdef VAR_ORDER
-  char buffer_b[BUFFER_LEN];
-  lcs.rdbuf()->pubsetbuf(buffer_b, BUFFER_LEN);
-  #endif
-  #endif
-  // TODO: Should probably do checking here when opening the file...
-  ofs.open(outfilename + extension, ios::out | ios::binary);
-  #ifdef VAR_ORDER
   lcs.open(outfilename + extension + ".lcs", ios::out | ios::binary);
   #endif
-  PackedEdgeOutputer out(ofs);
 
-  if (kmer_num_bits == 64) {
-    typedef uint64_t kmer_t;
-    size_t prev_k = 0; // for input, k is always >= 1
-      convert(kmer_blocks, num_kmers, k,
-        [&](edge_tag tag, const kmer_t & x, const uint32_t this_k, size_t lcs_len, bool first_end_node) {
-          #ifdef VAR_ORDER
-          out.write(tag, x, this_k, (lcs_len != k-1), first_end_node);
-          char l(lcs_len);
-          lcs.write((char*)&l, 1);
-          #else
-          out.write(tag, x, this_k, lcs_len, first_end_node);
-          #endif
-          prev_k = this_k;
-        });
-  }
-  else if (kmer_num_bits == 128) {
-    typedef uint128_t kmer_t;
-    size_t prev_k = 0;
-    kmer_t * kmer_blocks_128 = (kmer_t*)kmer_blocks;
-    convert(kmer_blocks_128, num_kmers, k,
-        [&](edge_tag tag, const kmer_t & x, const uint32_t this_k, size_t lcs_len, bool first_end_node) {
-          #ifdef VAR_ORDER
-          out.write(tag, x, this_k, (lcs_len != k-1), first_end_node);
-          char l(lcs_len);
-          lcs.write((char*)&l, 1);
-          #else
-          out.write(tag, x, this_k, lcs_len, first_end_node);
-          #endif
-          prev_k = this_k;
-        });
-  }
+  // Merge dummies and output
+  size_t prev_k = 0;
+  merge_dummies(kmers, kmers_by_end_node, incoming_dummies, k,
+    [&](edge_tag tag, const kmer_t & x, size_t this_k, size_t lcs_len, bool first_end_node) {
+      #ifdef VAR_ORDER
+      out.write(tag, x, this_k, (lcs_len != k-1), first_end_node);
+      char l(lcs_len);
+      lcs.write((char*)&l, 1);
+      #else
+      out.write(tag, x, this_k, lcs_len, first_end_node);
+      #endif
+      prev_k = this_k;
+      /*
+      if (tag == out_dummy) cerr << kmer_to_string(get_start_node(x), k-1, k-1) << "$";
+      else                  cerr << kmer_to_string(x, k, x_k);
+                            cerr << " " << first_start_node << " " << first_end_node << endl;*/
+    });
+
 
   out.close();
   #ifdef VAR_ORDER
   lcs.flush();
   lcs.close();
   #endif
+
+  // Write out counts and stuff
   uint64_t t_k(k); // make uint64_t just to make parsing easier
   // (can read them all at once and take the last 6 values)
   ofs.write((char*)&t_k, sizeof(uint64_t));
   ofs.flush();
   ofs.close();
 
-  free(kmer_blocks);
   return 0;
 }

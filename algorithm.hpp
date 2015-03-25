@@ -8,11 +8,10 @@
 #include <sdsl/bit_vectors.hpp>
 #include "debruijn_graph.hpp"
 #include "kmer.hpp"
-#include "uint128_t.hpp"
 
 using namespace std;
 //using namespace sdsl;
-
+/*
 // Calling it with a vector of first minus positions is sliiiightly faster
 // But would mean we have to save another vector with our graph if we ever want to traverse
 // it again.
@@ -151,7 +150,6 @@ class unipath_visitor {
   }
 
   // Assumes starting from edge straight after branch == has_branch
-  /*
   template <class F>
   void _traverse_unipath(bit_vector &, size_t &, const F & f, ssize_t edge) {
     //auto visit = [&](size_t i) -> void { visited[i] = 1; num_visited++; };
@@ -168,12 +166,12 @@ class unipath_visitor {
     // Add last kmer to set
     // Call this recursively if branch
   }
-  */
 };
 
 template <class G>
 unipath_visitor<G> make_unipath_visitor(const G & g) {
   return unipath_visitor<G>(g);
 }
+*/
 
 #endif
