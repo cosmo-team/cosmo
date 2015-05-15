@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <fstream>
+#include <iterator>
 #include <vector>
 #include <array>
 #include <string>
@@ -75,7 +76,7 @@ class debruijn_graph {
   }
 
   public:
-  static debruijn_graph load_from_packed_edges(istream & input, label_type alphabet=label_type{}, vector<size_t> * v=nullptr) {
+  static debruijn_graph load_from_packed_edges(istream & input, label_type alphabet=label_type{}/*, vector<size_t> * v=nullptr*/) {
     // ifstream input(filename, ios::in|ios::binary|ios::ate);
     // check length
     streampos size = input.tellg();
@@ -95,9 +96,13 @@ class debruijn_graph {
     input.seekg(0, ios::beg); // rewind
 
     // TODO: Loop through this while reading from file instead (to avoid memory waste)
+    /*
     vector<uint64_t> blocks(num_blocks,0);
     input.read((char*)&blocks[0], sizeof(uint64_t) * num_blocks);
+    */
+    //std::istream_iterator<uint64_t> blocks(input);
 
+    cerr << "FOO" << endl;
     // TODO: sanity check the inputs (e.g. tally things, convert the above asserts)
     // So we avoid a huge malloc if someone gives us a bad file
     int_vector<1> first(num_edges,0);
@@ -105,9 +110,19 @@ class debruijn_graph {
     // can accept a int_vector<4> instead (which is all we need for DNA)
     int_vector<8> edges(num_edges);
 
-    bool prev_was_minus = false;
+    for (size_t current_edge = 0, current_block = 0; current_edge < num_edges && current_block < num_blocks;) {
+      uint64_t block;
+      input.read((char*)&block, sizeof(uint64_t));
+      for (size_t i = 0; current_edge < num_edges && i < PACKED_CAPACITY; ++i, ++current_edge) {
+        auto x = unpack_to_tuple(get_packed_edge_from_block(block, i));
+        first[i] = 1-get<1>(x); // convert 0s to 1s so we can have a sparse bit vector
+        edges[i] = (get<0>(x) << 1) | !get<2>(x);
+      }
+    }
+
+    /*
+    //bool prev_was_minus = false;
     for (size_t i = 0; i < num_edges; i++) {
-      auto x = get_edge(blocks.begin(), i);
       first[i] = 1-get<1>(x); // convert 0s to 1s so we can have a sparse bit vector
       // For branchy graphs it might be better to change this and use RRR
       edges[i] = (get<0>(x) << 1) | !get<2>(x);
@@ -117,6 +132,7 @@ class debruijn_graph {
       }
       else if (v && get<0>(x) && get<2>(x)) prev_was_minus = false;
     }
+    */
 
     t_bit_vector_type bv(first);
     t_edge_vector_type wt;
@@ -139,8 +155,7 @@ class debruijn_graph {
   }
 
   vector<node_type> all_preds(const node_type & v) const {
-    assert(v < num_nodes());
-    assert(x < sigma + 1);
+    //assert(v < num_nodes());
     // node u -> v : edge i -> j
     size_t j = get<0>(v);
     symbol_type y = _symbol_access(j);
@@ -201,7 +216,7 @@ class debruijn_graph {
 
   // Added for DCC. Will remove the other one later and rename this one.
   ssize_t interval_node_outgoing(const node_type & u, symbol_type x) const {
-    assert(u < num_nodes());
+    //assert(u < num_nodes());
     assert(x < sigma + 1);
     if (x == 0) return -1;
     //auto range = _node_range(u);
