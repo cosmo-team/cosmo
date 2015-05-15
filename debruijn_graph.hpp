@@ -136,7 +136,7 @@ class debruijn_graph {
 
     t_bit_vector_type bv(first);
     t_edge_vector_type wt;
-    construct_im(wt, edges);
+    construct(wt, edges);
     return debruijn_graph(k, bv, wt, counts, alphabet);
   }
 
