@@ -87,7 +87,7 @@ class Unique {
       last_tag = tag;
       last_kmer = x;
       last_k = k;
-    };
+    }
 };
 
 template <class Visitor>
