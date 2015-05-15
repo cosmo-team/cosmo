@@ -95,8 +95,10 @@ int main(int argc, char* argv[])
   std::cerr << "Sorting..." << std::endl;
   stxxl::ksort(kmers.begin(), kmers.end(), get_key_colex_node<kmer_t>(), M);
 
+  std::cerr << "Copying table for dummy edge detection..." << std::endl;
   // Get another copy of the table sorted by out-node (for dummy edge discovery)
   stxxl::vector<kmer_t> kmers_by_end_node(kmers);
+  std::cerr << "Sorting second table..." << std::endl;
   stxxl::ksort(kmers_by_end_node.begin(), kmers_by_end_node.end(), get_key_colex_edge<kmer_t>(), M);
 
   // Find nodes that require incoming dummy edges
@@ -106,6 +108,7 @@ int main(int argc, char* argv[])
   std::cerr << "Added " << incoming_dummies.size() << " incoming dummy edges." << std::endl;
 
   // Sort dummies
+  std::cerr << "Sorting dummies..." << std::endl;
   stxxl::sort(incoming_dummies.begin(), incoming_dummies.end(), colex_dummy_less<dummy_t>(), M);
 
   // Make Outputter
@@ -118,6 +121,8 @@ int main(int argc, char* argv[])
   ofstream lcs;
   lcs.open(outfilename + extension + ".lcs", ios::out | ios::binary);
   #endif
+
+  std::cerr << "Merging dummies and outputting..." << std::endl;
 
   // Merge dummies and output
   size_t prev_k = 0;
