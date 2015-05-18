@@ -99,11 +99,15 @@ class debruijn_graph {
     // TODO: sanity check the inputs (e.g. tally things, convert the above asserts)
     // So we avoid a huge malloc if someone gives us a bad file
     t_bit_vector_type bv;
-    //string temp_file_name = "cosmo.temp";
+    string temp_file_name = "cosmo.temp";
 
+    {
+    // This doesn't use more space than loading an unpacked edge vector from disk directly.
+    // This way increases I/Os, but potentially decreases disk seeks.
+    // But personally id prefer to output individual bit-packed vectors
+    // Maybe if I take input from Megahit instead, itd be easier to build the bit vector in memory, and stream the edges
     cerr << "Allocating vector space..." << endl;
     int_vector<8> edges(num_edges);
-    {
     int_vector<1> first(num_edges,0);
     // would be nice to fix wavelet trees so the constructor
     // can accept a int_vector<4> instead (which is all we need for DNA)
@@ -119,18 +123,17 @@ class debruijn_graph {
       }
     }
 
-    //cerr << "Writing unpacked edges to temp-file (for semi-external construction)..." << endl;
-    //store_to_file(edges, temp_file_name);
+    cerr << "Writing unpacked edges to temp-file (for semi-external construction)..." << endl;
+    store_to_file(edges, temp_file_name);
     cerr << "Creating compressed bit-vector..." << endl;
     bv = t_bit_vector_type(first);
     }
 
     t_edge_vector_type wt;
     cerr << "Constructing Wavelet-Tree..." << endl;
-    construct_im(wt, edges);
-    //construct(wt, temp_file_name);
-    //cerr << "Cleaning up..." << endl;
-    //sdsl::remove(temp_file_name);
+    construct(wt, temp_file_name);
+    cerr << "Cleaning up..." << endl;
+    sdsl::remove(temp_file_name);
     cerr << "Constructing de Bruijn graph..." << endl;
     return debruijn_graph(k, bv, wt, counts, alphabet);
   }
