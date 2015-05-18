@@ -85,6 +85,7 @@ class debruijn_graph {
     assert(((size_t)size - (sigma+2) * sizeof(uint64_t))%sizeof(uint64_t) == 0); // sequence of uint64_ts
 
     // read footer
+    cerr << "Reading counts..." << endl;
     input.seekg(-(sigma+2) * sizeof(uint64_t), ios::end);
     array<size_t,1+sigma> counts{};
     uint64_t k = 0;
@@ -95,21 +96,23 @@ class debruijn_graph {
     size_t num_blocks = size_t(size)/sizeof(uint64_t) - (sigma+2);
     input.seekg(0, ios::beg); // rewind
 
-    // TODO: Loop through this while reading from file instead (to avoid memory waste)
-    /*
-    vector<uint64_t> blocks(num_blocks,0);
-    input.read((char*)&blocks[0], sizeof(uint64_t) * num_blocks);
-    */
-    //std::istream_iterator<uint64_t> blocks(input);
-
-    cerr << "FOO" << endl;
     // TODO: sanity check the inputs (e.g. tally things, convert the above asserts)
     // So we avoid a huge malloc if someone gives us a bad file
+    t_bit_vector_type bv;
+    string temp_file_name = "cosmo.temp";
+
+    {
+    cerr << "Allocating vector space..." << endl;
+    // This doesn't use more space than loading an unpacked edge vector from disk directly.
+    // This way increases I/Os, but potentially decreases disk seeks.
+    // But personally id prefer to output individual bit-packed vectors
+    // Maybe if I take input from Megahit instead, itd be easier to build the bit vector in memory, and stream the edges
+    int_vector<8> edges(num_edges);
     int_vector<1> first(num_edges,0);
     // would be nice to fix wavelet trees so the constructor
     // can accept a int_vector<4> instead (which is all we need for DNA)
-    int_vector<8> edges(num_edges);
 
+    cerr << "Reading packed edges..." << endl;
     for (size_t current_edge = 0, current_block = 0; current_edge < num_edges && current_block < num_blocks;) {
       uint64_t block;
       input.read((char*)&block, sizeof(uint64_t));
@@ -120,23 +123,18 @@ class debruijn_graph {
       }
     }
 
-    /*
-    //bool prev_was_minus = false;
-    for (size_t i = 0; i < num_edges; i++) {
-      first[i] = 1-get<1>(x); // convert 0s to 1s so we can have a sparse bit vector
-      // For branchy graphs it might be better to change this and use RRR
-      edges[i] = (get<0>(x) << 1) | !get<2>(x);
-      if (v && get<0>(x) && !get<2>(x) && !prev_was_minus) {
-        v->push_back(i);
-        prev_was_minus = true;
-      }
-      else if (v && get<0>(x) && get<2>(x)) prev_was_minus = false;
+    cerr << "Writing unpacked edges to temp-file (for semi-external construction)..." << endl;
+    store_to_file(edges, temp_file_name);
+    cerr << "Creating compressed bit-vector..." << endl;
+    bv = t_bit_vector_type(first);
     }
-    */
 
-    t_bit_vector_type bv(first);
     t_edge_vector_type wt;
-    construct(wt, edges);
+    cerr << "Constructing Wavelet-Tree..." << endl;
+    construct(wt, temp_file_name);
+    cerr << "Cleaning up..." << endl;
+    sdsl::remove(temp_file_name);
+    cerr << "Constructing de Bruijn graph..." << endl;
     return debruijn_graph(k, bv, wt, counts, alphabet);
   }
 
