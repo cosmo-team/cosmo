@@ -35,7 +35,7 @@ struct swap_gt : std::unary_function<T, T> {
 // Reverses block at two-bit (nt) level
 inline uint64_t _reverse_nt_64(const uint64_t x) {
   uint64_t output;
-  unsigned char * p = (unsigned char *) &x;
+  const unsigned char * p = (const unsigned char *) &x;
   unsigned char * q = (unsigned char *) &output;
 
   for (size_t i = 0; i < 8; i++) {
