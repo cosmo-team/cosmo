@@ -83,6 +83,7 @@ int main(int argc, char* argv[])
   // Create STXXL vector
   stxxl::vector<kmer_t> kmers;
 
+  std::cerr << "Reading..." << std::endl;
   // Load vector with kmers and reverse complements
   auto revcomp = reverse_complement<kmer_t>(k);
   for (auto x : input) {
@@ -96,7 +97,9 @@ int main(int argc, char* argv[])
   stxxl::ksort(kmers.begin(), kmers.end(), get_key_colex_node<kmer_t>(), M);
 
   // Get another copy of the table sorted by out-node (for dummy edge discovery)
+  std::cerr << "Copying for edge detection..." << std::endl;
   stxxl::vector<kmer_t> kmers_by_end_node(kmers);
+  std::cerr << "Sorting copy..." << std::endl;
   stxxl::ksort(kmers_by_end_node.begin(), kmers_by_end_node.end(), get_key_colex_edge<kmer_t>(), M);
 
   // Find nodes that require incoming dummy edges
@@ -106,7 +109,10 @@ int main(int argc, char* argv[])
   std::cerr << "Added " << incoming_dummies.size() << " incoming dummy edges." << std::endl;
 
   // Sort dummies
-  stxxl::sort(incoming_dummies.begin(), incoming_dummies.end(), colex_dummy_less<dummy_t>(), M);
+  //std::cerr << "Sorting dummies..." << std::endl;
+  //stxxl::sort(incoming_dummies.begin(), incoming_dummies.end(), colex_dummy_less<dummy_t>(), M);
+
+  std::cerr << "Merging and writing..." << std::endl;
 
   // Make Outputter
   // TODO: Should probably do checking here when opening the file...

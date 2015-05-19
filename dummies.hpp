@@ -59,10 +59,12 @@ void find_incoming_dummy_edges(const InputRange1 a_range, const InputRange2 b_ra
   find_incoming_dummy_nodes(a_range, b_range, k, std::back_inserter(incoming_dummies));
 
   // Generate dummy edges (all shifts prepended with $)
+  /*
   size_t num_dummy_edges = incoming_dummies.size() * (k-1); // non-unique
   incoming_dummies.reserve(num_dummy_edges);
 
   prepare_incoming_dummy_edge_shifts(incoming_dummies, std::back_inserter(incoming_dummies), k-1);
+  */
 }
 
 
@@ -87,7 +89,7 @@ class Unique {
       last_tag = tag;
       last_kmer = x;
       last_k = k;
-    };
+    }
 };
 
 template <class Visitor>
