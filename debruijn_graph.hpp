@@ -313,7 +313,8 @@ class debruijn_graph {
 
   size_t _edge_to_node(size_t i) const {
     assert(i < num_edges());
-    return m_node_rank(i);
+    size_t x = m_node_rank(i+1)-1;
+    return x;
   }
 
   // This should be moved to a helper file...

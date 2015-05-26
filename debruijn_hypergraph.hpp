@@ -94,7 +94,12 @@ class debruijn_hypergraph {
     //if (get<2>(v) == m_dbg.k-1) {} // do standard version - not needed?
     auto l = longer(v, get<2>(v)+1);
     // map maxlen to each element in l
-    transform(l.begin(), l.end(), l.begin(), [&](const node_type & u){ return maxlen(u); } );
+    transform(l.begin(), l.end(), l.begin(), [&](const node_type & u){
+        // Does the node start off wellformed?
+        // if not, where does it get malformed
+        auto temp = maxlen(u);
+        return temp;
+    } );
     // map standard dbg backward to each element
     transform(l.begin(), l.end(), l.begin(), [&](const node_type & u){
       size_t start = m_dbg._backward(get<0>(u));
