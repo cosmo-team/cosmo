@@ -45,6 +45,8 @@ int main(int argc, char* argv[]) {
   ifstream input(p.input_filename, ios::in|ios::binary|ios::ate);
   // Can add this to save a couple seconds off traversal - not really worth it.
   //vector<size_t> minus_positions;
+  char * base_name = basename(const_cast<char*>(p.input_filename.c_str()));
+  string outfilename = ((p.output_prefix == "")? base_name : p.output_prefix) + extension;
   {
   debruijn_graph<> dbg = debruijn_graph<>::load_from_packed_edges(input, "$ACGT"/*, &minus_positions*/);
   input.close();
@@ -59,8 +61,6 @@ int main(int argc, char* argv[]) {
   // The parameter should be const... On my computer the parameter
   // isn't const though, yet it doesn't modify the string...
   // This is still done AFTER loading the file just in case
-  char * base_name = basename(const_cast<char*>(p.input_filename.c_str()));
-  string outfilename = ((p.output_prefix == "")? base_name : p.output_prefix) + extension;
   store_to_file(dbg, outfilename);
   }
 

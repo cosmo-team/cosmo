@@ -63,8 +63,7 @@ class debruijn_graph {
       m_symbol_ends(symbol_ends),
       m_edge_max_ranks(_init_max_ranks(edges)),
       m_alphabet(alphabet),
-      m_num_nodes(m_node_rank(m_symbol_ends[sigma])) {
-  }
+      m_num_nodes(m_node_rank(m_node_flags.size())) {}
 
   array<size_t, 1+sigma> _init_max_ranks(const t_edge_vector_type & edges) {
     array<size_t, 1+sigma> max_ranks;
@@ -107,8 +106,8 @@ class debruijn_graph {
     // But personally id prefer to output individual bit-packed vectors
     // Maybe if I take input from Megahit instead, itd be easier to build the bit vector in memory, and stream the edges
     cerr << "Allocating vector space..." << endl;
-    int_vector<8> edges(num_edges);
     int_vector<1> first(num_edges,0);
+    int_vector<8> edges(num_edges);
     // would be nice to fix wavelet trees so the constructor
     // can accept a int_vector<4> instead (which is all we need for DNA)
 
@@ -118,14 +117,18 @@ class debruijn_graph {
       input.read((char*)&block, sizeof(uint64_t));
       for (size_t i = 0; current_edge < num_edges && i < PACKED_CAPACITY; ++i, ++current_edge) {
         auto x = unpack_to_tuple(get_packed_edge_from_block(block, i));
-        first[i] = 1-get<1>(x); // convert 0s to 1s so we can have a sparse bit vector
-        edges[i] = (get<0>(x) << 1) | !get<2>(x);
+        first[current_edge] = bool(1-get<1>(x)); // convert 0s to 1s so we can have a sparse bit vector
+        edges[current_edge] = (get<0>(x) << 1) | !bool(get<2>(x));
+	#ifdef VERBOSE
+        cerr << bool(1-get<1>(x)) << " " << "$acgt"[get<0>(x)] << " " << !bool(get<2>(x)) << endl;
+	#endif
       }
     }
 
     cerr << "Writing unpacked edges to temp-file (for semi-external construction)..." << endl;
     store_to_file(edges, temp_file_name);
     cerr << "Creating compressed bit-vector..." << endl;
+
     bv = t_bit_vector_type(first);
     }
 
@@ -293,7 +296,7 @@ class debruijn_graph {
     return label;
   }
 
-  size_t num_edges() const { return m_symbol_ends[sigma]; /*_node_flags.size();*/ }
+  size_t num_edges() const { return m_node_flags.size(); }
   size_t num_nodes() const { return m_num_nodes; /*m_node_rank(num_edges());*/ }
 
   private:
