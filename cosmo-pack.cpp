@@ -98,7 +98,6 @@ int main(int argc, char* argv[])
 
   std::cerr << "Copying table for dummy edge detection..." << std::endl;
   // Get another copy of the table sorted by out-node (for dummy edge discovery)
-  std::cerr << "Copying for edge detection..." << std::endl;
   stxxl::vector<kmer_t> kmers_by_end_node(kmers);
   std::cerr << "Sorting second table..." << std::endl;
   stxxl::ksort(kmers_by_end_node.begin(), kmers_by_end_node.end(), get_key_colex_edge<kmer_t>(), M);
@@ -140,10 +139,12 @@ int main(int argc, char* argv[])
       out.write(tag, x, this_k, lcs_len, first_end_node);
       #endif
       prev_k = this_k;
-      /*
-      if (tag == out_dummy) cerr << kmer_to_string(get_start_node(x), k-1, k-1) << "$";
-      else                  cerr << kmer_to_string(x, k, x_k);
-                            cerr << " " << first_start_node << " " << first_end_node << endl;*/
+      
+      #ifdef VERBOSE // print each kmer to stderr for testing
+      if (tag == out_dummy) cout << kmer_to_string(get_start_node(x), k-1, k-1) << "$";
+      else                  cout << kmer_to_string(x, k, this_k);
+      cout << " " << lcs_len << " " << first_end_node << endl;
+      #endif
     });
 
 
