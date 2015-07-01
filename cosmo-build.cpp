@@ -63,6 +63,12 @@ int main(int argc, char* argv[]) {
   // This is still done AFTER loading the file just in case
   store_to_file(dbg, outfilename);
   }
+  debruijn_graph<> g;
+  load_from_file(g, outfilename);
+  for (size_t i=0; i<g.size(); i++) {
+    cout << "$acgt"[g.m_edges[i] >> 1] + ((g.m_edges[i]&1)? "-":"") << endl;
+  }
+ 
 
   #ifdef VAR_ORDER
   wt_int<rrr_vector<63>> lcs;

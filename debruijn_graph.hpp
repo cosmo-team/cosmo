@@ -406,13 +406,20 @@ class debruijn_graph {
   size_t _backward(size_t i) const {
     assert(i < num_edges());
     symbol_type x  = _symbol_access(i);
+    //cerr << "acgt"[x] << endl;
     // This handles x = $ so that we have the all-$ edge at position 0
-    // but probably shouldn't be called this way in the normal case
+    // As we use the same symbol for outgoing dummy edges, which actually
+    // DONT point back to the incoming dummy edges.
+    // NOTE: this will only happen if we added all incoming dummy edge shifts
+    if (x == 0) return 0;
     size_t x_start = _symbol_start(x);
     // rank is over [0,i) and select is 1-based
     size_t nth = _rank_distance(x_start+1, i+1);
-    if (x == 0) return 0;
     // no minus flag because we want the FIRST
+    // ACTUALLY we might need this now, since we wont have all the shifts in some cases
+    //cerr << nth + 1 << " <=? " 
+    //     << m_edges.rank(m_edges.size(), _with_edge_flag(x, false))
+    //     << endl;
     return m_edges.select(nth+1, _with_edge_flag(x, false));
   }
 

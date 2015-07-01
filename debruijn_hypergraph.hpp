@@ -91,23 +91,34 @@ class debruijn_hypergraph {
 
   vector<node_type> backward(const node_type & v) const {
     // This could be done lazily, and searched over...
-    //if (get<2>(v) == m_dbg.k-1) {} // do standard version - not needed?
+    assert(get<2>(v) <= m_dbk.k-1);
+    // If k = k_max, use standard implementation
+    //if (get<2>(v) == m_dbg.k-1) {
+    //m_dbg.backward();
+    //} 
     auto l = longer(v, get<2>(v)+1);
     // map maxlen to each element in l
+    //cerr << "0" << endl;
     transform(l.begin(), l.end(), l.begin(), [&](const node_type & u){
         // Does the node start off wellformed?
         // if not, where does it get malformed
         auto temp = maxlen(u);
         return temp;
     } );
+    //cerr << "1.1" << endl;
     // map standard dbg backward to each element
     transform(l.begin(), l.end(), l.begin(), [&](const node_type & u){
+      //cerr << get<0>(u) << endl;
       size_t start = m_dbg._backward(get<0>(u));
+      //cerr << "1.2" << endl;
       size_t end   = m_dbg._last_edge_of_node(m_dbg._edge_to_node(start));
+      //cerr << "1.3" << endl;
       return node_type(start, end, get<2>(u));
     });
     // map shorter to each element
+    //cerr << "2" << endl;
     transform(l.begin(), l.end(), l.begin(), [&](const node_type & u){ return shorter(u, get<2>(v)); });
+    //cerr << "3" << endl;
     return l;
   }
 

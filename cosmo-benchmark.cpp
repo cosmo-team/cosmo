@@ -83,7 +83,6 @@ int main(int argc, char* argv[]) {
   dbh h(g, lcs);
   #endif
 
-
   int num_queries = 5e4;
   size_t min_k = 8;
   typedef boost::mt19937 rng_type;
@@ -100,8 +99,14 @@ int main(int argc, char* argv[]) {
   vector<size_t> query_syms(boost::make_function_input_iterator(random_symbol,0),
                             boost::make_function_input_iterator(random_symbol,num_queries));
   #ifdef VAR_ORDER
-  auto random_higher_k = [&](size_t low)  { return boost::uniform_int<size_t>(low+1,g.k-2)(rng); }; // make go up to size of graph
-  auto random_lower_k  = [&](size_t high) { return boost::uniform_int<size_t>(min_k+1,std::max(high,(size_t)1)-1)(rng); }; // make go up to size of graph
+  auto random_higher_k = [&](size_t low)  {
+    if (low+1 >= g.k-1) return g.k-1;
+    return boost::uniform_int<size_t>(low+1, g.k-1)(rng);
+  }; // make go up to size of graph
+  auto random_lower_k  = [&](size_t high) { 
+    if (high-1 <= min_k) return min_k;
+    return boost::uniform_int<size_t>(min_k, high-1)(rng);
+  }; // make go up to size of graph
 
   // Convert to variable order nodes
   vector<size_t> query_ks(boost::make_function_input_iterator(random_k,0),
@@ -167,12 +172,14 @@ int main(int argc, char* argv[]) {
   auto t1 = chrono::high_resolution_clock::now();
   // backward
   for (auto v : query_varnodes) {
+    //if (get<2>(v) == 26) continue;
+    cerr << "(" << get<0>(v) << ", " << get<1>(v) << ", " << get<2>(v) << ")" << endl;
     h.backward(v);
   }
   auto t2 = chrono::high_resolution_clock::now();
   auto dur = chrono::duration_cast<unit>(t2-t1).count();
   //cerr << "backward total : " << dur << " ns" <<endl;
-  cerr << "backward mean : " << (double)dur/num_queries << unit_s <<endl;
+  //cerr << "backward mean : " << (double)dur/num_queries << unit_s <<endl;
 
   // forward
   t1 = chrono::high_resolution_clock::now();
@@ -214,6 +221,7 @@ int main(int argc, char* argv[]) {
   //}
 
   // longer
+  /*
   skipped = 0;
   //for (size_t k : {1,2,4,8}) {
     t1 = chrono::high_resolution_clock::now();
@@ -232,6 +240,7 @@ int main(int argc, char* argv[]) {
     //cerr << "longer(v,+"<<k<<") total : " << dur << " ns" <<endl;
     cerr << "longer"<<" mean  : " << (double)dur/(num_queries-skipped) << unit_s <<endl;
   //}
+  */
 
   // maxlen with symbol
   t1 = chrono::high_resolution_clock::now();
