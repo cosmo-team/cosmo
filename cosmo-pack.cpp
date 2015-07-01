@@ -18,19 +18,21 @@
 #include "sort.hpp"
 #include "dummies.hpp"
 
-// TODO: Compile flag check
-// typedef uint64_t kmer_t;
+#if K_LEN <= 32
+typedef uint64_t kmer_t;
+#elif K_LEN <= 64
 typedef uint128_t kmer_t;
+#endif // add some static error handling to this
 typedef std::pair<kmer_t, size_t>  dummy_t;
 const static string extension = ".packed";
 
 typedef struct p
 {
-    //bool ascii = false;
-    std::string input_filename = "";
-    std::string output_prefix = "";
-    size_t k = 0;
-    size_t m = 0;
+  //bool ascii = false;
+  std::string input_filename = "";
+  std::string output_prefix = "";
+  size_t k = 0;
+  size_t m = 0;
 } parameters_t;
 
 void parse_arguments(int argc, char **argv, parameters_t & params);
@@ -71,6 +73,12 @@ int main(int argc, char* argv[])
   std::string file_name = params.input_filename;
   char * base_name = basename(const_cast<char*>(file_name.c_str()));
   size_t k = params.k;
+
+  // Check k value supported
+  if (k > K_LEN) {
+    std::cerr << "This version only supports k <= " << K_LEN << ". Try recompiling." << std::endl;
+    exit(1);
+  }
 
   // Open the file
   std::ifstream in(file_name, std::ifstream::binary);
