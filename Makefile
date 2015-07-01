@@ -1,15 +1,16 @@
 # NOTE: needs boost, tclap, and sdsl
 
-CXX=clang++ # g++
+CXX=g++#clang++-3.5#g++
 CPP_FLAGS=-m64 -std=c++0x -pedantic-errors -W -Wall -Wextra -Wshadow -Wpointer-arith -Wcast-qual \
-					-Wunused -Wstrict-prototypes -Wmissing-prototypes -Wwrite-strings \
-					-Wbool-conversions -Wshift-overflow -Wliteral-conversion \
-					-Werror
-DEP_PATH=/usr/local
+					-Wunused -Wstrict-prototypes -Wmissing-prototypes -Wwrite-strings #\
+					#-Werror
+#-Wbool-conversions -Wshift-overflow -Wliteral-conversion \
+
+DEP_PATH=/usr/local#$(HOME)#/usr/local
 INC_PATH=$(DEP_PATH)/include
 LIB_PATH=$(DEP_PATH)/lib
 DEP_FLAGS=-I$(INC_PATH)/ -L$(LIB_PATH)/ #-lsdsl # -ldivsufsort -ldivsufsort64
-DEBUG_FLAGS=-g
+DEBUG_FLAGS=-gstabs
 NDEBUG_FLAGS=-DNDEBUG
 OPT_FLAGS=-O3 -mmmx -msse -msse2 -msse3 -msse4 -msse4.2 -march=native
 NOPT_FLAGS=-O0
@@ -17,6 +18,9 @@ NOPT_FLAGS=-O0
 # Using Semantic Versioning: http://semver.org/
 VERSION=0.5.1
 CPP_FLAGS+=-DVERSION=\"$(VERSION)\"
+
+k?=64
+CPP_FLAGS+=-DK_LEN=$(k)
 
 ifeq ($(optimise),0)
 CPP_FLAGS+=$(NOPT_FLAGS)
@@ -61,7 +65,7 @@ io.o: io.hpp io.cpp debug.h dummies.hpp kmer.hpp
 
 # TODO: Roll these all into one... "cosmo". Like git started off as multiple programs.
 cosmo-pack: cosmo-pack.cpp $(PACK_REQS)
-		$(CXX) $(CPP_FLAGS) -o $@ $< io.o $(DEP_FLAGS) -lstxxl
+		$(CXX) $(CPP_FLAGS) -o $@ $< io.o $(DEP_FLAGS) -lstxxl -fopenmp #-lhpthread
 
 cosmo-build: cosmo-build.cpp $(BUILD_REQS)
 		$(CXX) $(CPP_FLAGS) -o $@ $< io.o $(DEP_FLAGS) -lsdsl
