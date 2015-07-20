@@ -139,8 +139,6 @@ class debruijn_graph {
   }
 
   vector<node_type> all_preds(const node_type & v) const {
-    assert(v < num_nodes());
-    assert(x < sigma + 1);
     // node u -> v : edge i -> j
     size_t j = get<0>(v);
     symbol_type y = _symbol_access(j);
@@ -201,7 +199,6 @@ class debruijn_graph {
 
   // Added for DCC. Will remove the other one later and rename this one.
   ssize_t interval_node_outgoing(const node_type & u, symbol_type x) const {
-    assert(u < num_nodes());
     assert(x < sigma + 1);
     if (x == 0) return -1;
     //auto range = _node_range(u);
