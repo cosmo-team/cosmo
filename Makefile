@@ -10,7 +10,7 @@ DEP_PATH=/usr/local#$(HOME)#/usr/local
 INC_PATH=$(DEP_PATH)/include
 LIB_PATH=$(DEP_PATH)/lib
 DEP_FLAGS=-I$(INC_PATH)/ -L$(LIB_PATH)/ #-lsdsl # -ldivsufsort -ldivsufsort64
-DEBUG_FLAGS=-gstabs
+DEBUG_FLAGS=-pg -gstabs
 NDEBUG_FLAGS=-DNDEBUG
 OPT_FLAGS=-O3 -mmmx -msse -msse2 -msse3 -msse4 -msse4.2 -march=native
 NOPT_FLAGS=-O0

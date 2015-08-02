@@ -48,17 +48,19 @@ void append_packed_edge(uint64_t & block, packed_edge edge) {
 }
 
 class PackedEdgeOutputer {
+  public:
   static const size_t capacity = PACKED_CAPACITY;
 
   ostream & _os;
 
   uint64_t _buf = 0;
   size_t _len   = 0;
-  vector<size_t> _counts = vector<size_t>(DNA_RADIX + 1, 0);
+  vector<size_t> _counts;
   bool closed = false;
 
-  public:
-  PackedEdgeOutputer(ostream & os) : _os(os) {}
+  PackedEdgeOutputer(ostream & os) : _os(os) {
+    _counts = vector<size_t>(DNA_RADIX + 1, 0);
+  }
 
   ~PackedEdgeOutputer() {
     close();
@@ -78,8 +80,13 @@ class PackedEdgeOutputer {
   private:
   void write_counts() {
     vector<size_t> accum(_counts);
+    cerr << "0count : " << accum[0] << endl;
+    cerr << "0accum : " << _counts[0] << endl;
     for (int i = 1; i < DNA_RADIX+1; i++) {
+      cerr << "count: " << _counts[i] << endl;
+      cerr << "pre-accum : " << accum[i] << endl;
       accum[i] += accum[i-1]; // accumulate
+      cerr << "post-accum: " << accum[i] << endl;
     }
     // write out counts
     _os.write((char*)&accum[0], (DNA_RADIX+1) * sizeof(size_t));
@@ -100,9 +107,9 @@ class PackedEdgeOutputer {
   void write(edge_tag tag, const kmer_t & x, const uint32_t k, bool first_start_node, bool first_end_node) {
     uint8_t f_sym = get_f(tag, x, k);
     uint8_t w_sym = get_w(tag, x);
-    //printf("counts[%c]: %zu -> ", "$acgt"[f_sym], _counts[f_sym]);
+    printf("counts[%c]: %zu -> ", "$acgt"[f_sym], _counts[f_sym]);
     _counts[f_sym]++;
-    //printf("%zu\n", _counts[f_sym]);
+    printf("%zu\n", _counts[f_sym]);
 
     packed_edge edge = pack_edge(w_sym, first_start_node, first_end_node);
     //cout << ((edge & 2) >> 1) << endl;

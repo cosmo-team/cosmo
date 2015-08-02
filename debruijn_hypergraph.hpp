@@ -91,7 +91,7 @@ class debruijn_hypergraph {
 
   vector<node_type> backward(const node_type & v) const {
     // This could be done lazily, and searched over...
-    assert(get<2>(v) <= m_dbk.k-1);
+    assert(get<2>(v) <= m_dbg.k-1);
     // If k = k_max, use standard implementation
     //if (get<2>(v) == m_dbg.k-1) {
     //m_dbg.backward();

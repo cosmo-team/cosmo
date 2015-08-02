@@ -116,11 +116,18 @@ int main(int argc, char* argv[])
   find_incoming_dummy_edges(kmers, kmers_by_end_node, k, incoming_dummies);
   std::cerr << "Added " << incoming_dummies.size() << " incoming dummy edges." << std::endl;
 
+  cerr << "DUMMY VECTOR:" << endl;
+  for (auto x : incoming_dummies) {
+   cerr << kmer_to_string(get<0>(x), k-1, k) << endl;;
+  }
   // Sort dummies
-  //std::cerr << "Sorting dummies..." << std::endl;
-  //stxxl::sort(incoming_dummies.begin(), incoming_dummies.end(), colex_dummy_less<dummy_t>(), M);
+  std::cerr << "Sorting dummies..." << std::endl;
+  stxxl::sort(incoming_dummies.begin(), incoming_dummies.end(), colex_dummy_less<dummy_t>(), M);
 
-  std::cerr << "Merging and writing..." << std::endl;
+  cerr << "DUMMY VECTOR:" << endl;
+  for (auto x : incoming_dummies) {
+   cerr << kmer_to_string(get<0>(x), k-1, k) << endl;;
+  }
 
   // Make Outputter
   // TODO: Should probably do checking here when opening the file...
@@ -132,6 +139,10 @@ int main(int argc, char* argv[])
   ofstream lcs;
   lcs.open(outfilename + extension + ".lcs", ios::out | ios::binary);
   #endif
+
+  for (auto x:out._counts) {
+    cerr << "COUNTS: " << x << endl;
+  }
 
   std::cerr << "Merging dummies and outputting..." << std::endl;
 
@@ -148,12 +159,26 @@ int main(int argc, char* argv[])
       #endif
       prev_k = this_k;
       
+  for (auto x:out._counts) {
+    cout << "COUNTS: " << x << endl;
+  }
+      
       #ifdef VERBOSE // print each kmer to stderr for testing
       if (tag == out_dummy) cout << kmer_to_string(get_start_node(x), k-1, k-1) << "$";
       else                  cout << kmer_to_string(x, k, this_k);
       cout << " " << lcs_len << " " << first_end_node << endl;
       #endif
     });
+
+  for (auto x:out._counts) {
+    cerr << "COUNTS: " << x << endl;
+  }
+  
+  out.close();
+  #ifdef VAR_ORDER
+  lcs.flush();
+  lcs.close();
+  #endif
 
 
   out.close();

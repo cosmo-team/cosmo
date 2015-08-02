@@ -65,8 +65,13 @@ int main(int argc, char* argv[]) {
   }
   debruijn_graph<> g;
   load_from_file(g, outfilename);
+  /*
   for (size_t i=0; i<g.size(); i++) {
-    cout << "$acgt"[g.m_edges[i] >> 1] + ((g.m_edges[i]&1)? "-":"") << endl;
+    cerr << "$acgt"[g.m_edges[i] >> 1] << ((g.m_edges[i]&1)? "-":"") << endl;
+  }
+  */
+  for (size_t i=0; i<5; i++) {
+    cerr << g.m_symbol_ends[i] << endl;
   }
  
 
