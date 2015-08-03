@@ -70,9 +70,6 @@ int main(int argc, char* argv[]) {
     cerr << "$acgt"[g.m_edges[i] >> 1] << ((g.m_edges[i]&1)? "-":"") << endl;
   }
   */
-  for (size_t i=0; i<5; i++) {
-    cerr << g.m_symbol_ends[i] << endl;
-  }
  
 
   #ifdef VAR_ORDER

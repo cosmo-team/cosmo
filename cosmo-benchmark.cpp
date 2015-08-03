@@ -84,7 +84,7 @@ int main(int argc, char* argv[]) {
   #endif
 
 
-  int num_queries = 5e4;
+  int num_queries = 1e5;
   size_t min_k = 8;
   typedef boost::mt19937 rng_type;
   rng_type rng(time(0));
