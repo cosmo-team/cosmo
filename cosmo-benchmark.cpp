@@ -71,6 +71,11 @@ int main(int argc, char* argv[]) {
   cerr << "Total size    : " << size_in_mega_bytes(g) << " MB" << endl;
   cerr << "Bits per edge : " << bits_per_element(g) << " Bits" << endl;
 
+  cerr << "Symbol ends: " << endl;
+  for (auto x:g.m_symbol_ends) {
+    cerr << x << endl;
+  }
+
   #ifdef VAR_ORDER
   wt_int<rrr_vector<63>> lcs;
   load_from_file(lcs, p.input_filename + ".lcs.wt");
@@ -86,10 +91,11 @@ int main(int argc, char* argv[]) {
 
   int num_queries = 1e5;
   size_t min_k = 8;
+  size_t max_k = g.k-1;
   typedef boost::mt19937 rng_type;
   rng_type rng(time(0));
   boost::uniform_int<size_t> node_distribution(0,g.num_nodes()-1); // make go up to size of graph
-  boost::uniform_int<size_t> k_distribution(min_k, g.k-1); // make go up to size of graph
+  boost::uniform_int<size_t> k_distribution(min_k, max_k); // make go up to size of graph
   boost::uniform_int<size_t> symbol_distribution(1, 4); // make go up to size of graph
   boost::variate_generator<rng_type, boost::uniform_int<size_t>> random_node(rng, node_distribution);
   boost::variate_generator<rng_type, boost::uniform_int<size_t>> random_k(rng, k_distribution);
@@ -100,8 +106,12 @@ int main(int argc, char* argv[]) {
   vector<size_t> query_syms(boost::make_function_input_iterator(random_symbol,0),
                             boost::make_function_input_iterator(random_symbol,num_queries));
   #ifdef VAR_ORDER
-  auto random_higher_k = [&](size_t low)  { return boost::uniform_int<size_t>(low+1,g.k-2)(rng); }; // make go up to size of graph
-  auto random_lower_k  = [&](size_t high) { return boost::uniform_int<size_t>(min_k+1,std::max(high,(size_t)1)-1)(rng); }; // make go up to size of graph
+  auto random_higher_k = [&](size_t low)  { 
+    return boost::uniform_int<size_t>(low,max_k)(rng);
+  }; // make go up to size of graph
+  auto random_lower_k  = [&](size_t high) {
+    return boost::uniform_int<size_t>(min_k,high)(rng);
+  }; // make go up to size of graph
 
   // Convert to variable order nodes
   vector<size_t> query_ks(boost::make_function_input_iterator(random_k,0),
@@ -164,9 +174,11 @@ int main(int argc, char* argv[]) {
   //cerr << "lastchar total : " << dur << " ns" <<endl;
   cerr << "lastchar mean : " << (double)dur/num_queries << unit_s <<endl;
   #else
+  cerr << "A" << endl;
   auto t1 = chrono::high_resolution_clock::now();
   // backward
   for (auto v : query_varnodes) {
+    cerr << get<0>(v) << " " << get<1>(v) << " " << get<2>(v) << endl;
     h.backward(v);
   }
   auto t2 = chrono::high_resolution_clock::now();
@@ -201,7 +213,7 @@ int main(int argc, char* argv[]) {
     for (size_t i=0;i<(size_t)num_queries;i++) {
       auto v = query_varnodes[i];
       auto k = lower_ks[i];
-      if (get<2>(v) < k) {
+      if (get<2>(v) <= k) {
         skipped++;
         continue;
       }
@@ -220,7 +232,7 @@ int main(int argc, char* argv[]) {
     for (size_t i=0;i<(size_t)num_queries;i++) {
       auto v = query_varnodes[i];
       auto k = higher_ks[i];
-      if (get<2>(v) > k) {
+      if (get<2>(v) >= k) {
         skipped++;
         continue;
       }
