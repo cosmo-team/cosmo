@@ -14,9 +14,6 @@ const uint64_t MB_TO_BYTES = 1024 * 1024;
 //typedef ttmath::UInt<2> uint128_t;
 typedef __uint128_t uint128_t;
 
-//typedef ttmath::UInt<2> uint128_t;
-typedef __uint128_t uint128_t;
-
 template <typename T>
 struct bitwidth {
   const static size_t width = sizeof(T) * CHAR_BIT;
