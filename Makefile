@@ -12,7 +12,7 @@ LIB_PATH=$(DEP_PATH)/lib
 DEP_FLAGS=-I$(INC_PATH)/ -L$(LIB_PATH)/ #-lsdsl # -ldivsufsort -ldivsufsort64
 DEBUG_FLAGS=-pg -gstabs
 NDEBUG_FLAGS=-DNDEBUG
-OPT_FLAGS=-O3 -mmmx -msse -msse2 -msse3 -msse4 -msse4.2 -march=native
+OPT_FLAGS=-O3 -mmmx -msse -msse2 -msse3 -msse4 -msse4.2 -march=native -fno-strict-aliasing
 NOPT_FLAGS=-O0
 
 # Using Semantic Versioning: http://semver.org/
