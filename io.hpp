@@ -27,6 +27,14 @@ int dsk_read_header(int, uint32_t *, uint32_t *);
 int dsk_num_records(int handle, uint32_t kmer_num_bits, size_t * num_records);
 // Read kmers from file into the output array
 size_t dsk_read_kmers(int handle, uint32_t kmer_num_bits, uint64_t * kmers_output);
+
+// Reads the cortex file input header
+int cortex_read_header(int, uint32_t *, uint32_t *);
+// Counts the number of records in the file - for allocation purposes
+int cortex_num_records(int handle, uint32_t kmer_num_bits, size_t * num_records, uint32_t * num_colors);
+// Read kmers from file into the output array
+size_t cortex_read_kmers(int handle, uint32_t kmer_num_bits, uint32_t num_colors, uint32_t k, uint64_t * kmers_output, uint64_t * kmer_colors);
+
 //void merge_and_output(FILE * outfile, uint64_t * table_a, uint64_t * table_b, uint64_t * incoming_dummies, size_t num_records, size_t num_incoming_dummies, uint32_t k);
 
 typedef uint8_t packed_edge;

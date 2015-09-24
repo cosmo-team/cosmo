@@ -37,9 +37,9 @@ using namespace boost::adaptors;
 const static string extension = ".packed";
 
 template <typename kmer_t, class Visitor>
-void convert(kmer_t * kmers, size_t num_kmers, const uint32_t k, Visitor visit) {
+void convert(kmer_t * kmers, size_t num_kmers, const uint32_t k, Visitor visit, bool swap) {
   // Convert the nucleotide representation to allow tricks
-  convert_representation(kmers, kmers, num_kmers);
+  convert_representation(kmers, kmers, num_kmers, swap);
 
   // Append reverse complements
   #ifdef ADD_REVCOMPS
@@ -95,6 +95,7 @@ void convert(kmer_t * kmers, size_t num_kmers, const uint32_t k, Visitor visit) 
     exit(1);
   }
   // extract dummies
+  printf("num_kmers=%zu; revcomp_factor=%zu; incoming_dummmies=%zu\n", num_kmers, revcomp_factor, num_incoming_dummies);
   find_incoming_dummy_edges(table_a, table_b, num_kmers*revcomp_factor, k, incoming_dummies);
   // add extra dummies
   #ifdef ALL_DUMMIES
@@ -147,6 +148,7 @@ typedef struct p
     //bool ascii = false;
     std::string input_filename = "";
     std::string output_prefix = "";
+    bool cortex = false;
 } parameters_t;
 
 void parse_arguments(int argc, char **argv, parameters_t & params);
@@ -164,10 +166,14 @@ void parse_arguments(int argc, char **argv, parameters_t & params)
   TCLAP::ValueArg<std::string> output_prefix_arg("o", "output_prefix",
             "Output prefix. Results will be written to [" + output_short_form + "]" + extension + ". " +
             "Default prefix: basename(input_file).", false, "", output_short_form, cmd);
+  TCLAP::SwitchArg cortex_arg("c", "cortex",
+            "Input file is cortex binary",
+            cmd, false);
   cmd.parse( argc, argv );
   //params.ascii         = ascii_arg.getValue();
   params.input_filename  = input_filename_arg.getValue();
   params.output_prefix   = output_prefix_arg.getValue();
+  params.cortex          = cortex_arg.getValue();
 }
 
 int main(int argc, char * argv[]) {
@@ -191,9 +197,17 @@ int main(int argc, char * argv[]) {
   // Read Header
   uint32_t kmer_num_bits = 0;
   uint32_t k = 0;
-  if ( !dsk_read_header(handle, &kmer_num_bits, &k) ) {
-    fprintf(stderr, "ERROR: Error reading file %s\n", file_name);
-    exit(EXIT_FAILURE);
+  if (params.cortex) {
+    if ( !cortex_read_header(handle, &kmer_num_bits, &k) ) {
+      fprintf(stderr, "ERROR: Error reading cortex_file %s\n", file_name);
+      exit(EXIT_FAILURE);
+    }
+  }
+  else {
+    if ( !dsk_read_header(handle, &kmer_num_bits, &k) ) {
+      fprintf(stderr, "ERROR: Error reading file %s\n", file_name);
+      exit(EXIT_FAILURE);
+    }
   }
   uint32_t kmer_num_blocks = (kmer_num_bits / 8) / sizeof(uint64_t);
   TRACE(">> READING DSK FILE\n");
@@ -209,9 +223,20 @@ int main(int argc, char * argv[]) {
 
   // Read how many items there are (for allocation purposes)
   size_t num_kmers = 0;
-  if ( dsk_num_records(handle, kmer_num_bits, &num_kmers) == -1) {
-    fprintf(stderr, "Error seeking file %s\n", file_name);
-    exit(EXIT_FAILURE);
+  uint32_t num_colors = 0;
+  if (params.cortex) {
+    printf("Num records\n");
+    if ( cortex_num_records(handle, kmer_num_bits, &num_kmers, &num_colors) == -1) {
+      fprintf(stderr, "Error seeking cortex file %s\n", file_name);
+      exit(EXIT_FAILURE);
+    }
+    printf("Got num record %zu \n", num_kmers);
+  }
+  else {
+    if ( dsk_num_records(handle, kmer_num_bits, &num_kmers) == -1) {
+      fprintf(stderr, "Error seeking file %s\n", file_name);
+      exit(EXIT_FAILURE);
+    }
   }
   if (num_kmers == 0) {
     fprintf(stderr, "ERROR: File %s has no kmers (possibly corrupt?).\n", file_name);
@@ -232,9 +257,23 @@ int main(int argc, char * argv[]) {
     exit(1);
   }
 
+  uint64_t * kmer_colors = (uint64_t*)malloc(num_kmers * 2 * revcomp_factor * sizeof(uint64_t));
+  if (!kmer_colors) {
+    cerr << "Error allocating space for kmer colors" << endl;
+    exit(1);
+  }
+
 
   // READ KMERS FROM DISK INTO ARRAY
-  size_t num_records_read = dsk_read_kmers(handle, kmer_num_bits, kmer_blocks);
+  size_t num_records_read;
+  if (params.cortex) {
+    printf("Reading kmers\n");
+    num_records_read = cortex_read_kmers(handle, kmer_num_bits, num_colors, k, kmer_blocks, kmer_colors);
+    printf("num_kmers = %zu and num_records_read=%zu\n", num_kmers, num_records_read);
+  }
+  else {
+    num_records_read = dsk_read_kmers(handle, kmer_num_bits, kmer_blocks);
+  }
   close(handle);
   if (num_records_read == 0) {
     fprintf(stderr, "Error reading file %s\n", argv[1]);
@@ -279,7 +318,7 @@ int main(int argc, char * argv[]) {
           out.write(tag, x, this_k, lcs_len, first_end_node);
           #endif
           prev_k = this_k;
-        });
+	      }, !params.cortex);
   }
   else if (kmer_num_bits == 128) {
     typedef uint128_t kmer_t;
@@ -295,7 +334,7 @@ int main(int argc, char * argv[]) {
           out.write(tag, x, this_k, lcs_len, first_end_node);
           #endif
           prev_k = this_k;
-        });
+        }, !params.cortex);
   }
 
   out.close();

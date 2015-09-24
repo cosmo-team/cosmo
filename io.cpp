@@ -5,6 +5,24 @@ int dsk_read_header(int handle, uint32_t * kmer_num_bits, uint32_t * k) {
          read(handle, (char*)k, sizeof(uint32_t)) != -1;
 }
 
+int cortex_read_header(int handle, uint32_t * kmer_num_bits, uint32_t * k) {
+  // check header
+  char magic_number[6];
+  int version;
+  int rc;
+  rc = read(handle, &magic_number, sizeof(char) * 6);
+
+  rc = read(handle, &version,sizeof(int));
+  if (read < 0 || strncmp(magic_number, "CORTEX", 6))
+    return 0;
+
+  read(handle, (char*)k ,sizeof(uint32_t));
+  read(handle, (char*)kmer_num_bits, sizeof(uint32_t));
+  *kmer_num_bits *= 64;
+  return 1;
+
+}
+
 int dsk_num_records(int handle, uint32_t kmer_num_bits, size_t * num_records) {
   size_t record_size = DSK_FILE_RECORD_SIZE(kmer_num_bits);
   off_t original_pos = -1;
@@ -16,7 +34,71 @@ int dsk_num_records(int handle, uint32_t kmer_num_bits, size_t * num_records) {
   if ( lseek(handle, original_pos, SEEK_SET) == -1 ) {
     return -1;
   }
+  *num_records = (end_pos - original_pos)/record_size * 4; // worst case there are 4 edges for each kmer
+  return 0;
+}
+
+int cortex_num_records(int handle, uint32_t kmer_num_bits, size_t * num_records, uint32_t * num_colors) {
+  int number_of_colours;
+  off_t original_pos = -1;
+  off_t end_pos = -1;
+  int rc;
+  rc  = read(handle, (char*)&number_of_colours, sizeof(uint32_t));
+  size_t record_size = kmer_num_bits / 8 + number_of_colours * 5;
+
+  // skip over per color header info
+  int i;
+  int  max_tot = 0;
+  for (i=0; i<number_of_colours;i++) {
+    int mean_read_len=0;
+    rc = read(handle,&mean_read_len, sizeof(int));
+    long long tot=0;
+    rc = read(handle, &tot, sizeof(long long));
+    if (tot > max_tot)
+      max_tot = (int) tot;
+  }
+  for (i=0; i<number_of_colours;i++) {
+    int sample_id_lens; 
+    rc = read(handle,&sample_id_lens,sizeof(int));
+    char tmp_name[100]; // hack // should null this out to avoid extra stack junk being printed
+		rc = read(handle,tmp_name,sizeof(char) * sample_id_lens);
+  }
+
+  for (i=0; i<number_of_colours;i++) {
+    long double seq_err;
+    rc = read(handle,&seq_err,sizeof(long double));
+  }
+
+  for (i=0; i<number_of_colours;i++) {
+    char dummy;
+    int d;
+
+    rc = read(handle,&dummy,sizeof(char));
+    rc = read(handle,&dummy,sizeof(char));
+    rc = read(handle,&dummy,sizeof(char));
+    rc = read(handle,&dummy,sizeof(char));
+    rc = read(handle,&d,sizeof(int));
+    rc = read(handle,&d,sizeof(int));
+    int len_name_of_graph;
+    rc = read(handle,&len_name_of_graph,sizeof(int));
+    char name_of_graph_against_which_was_cleaned[100]; // hack
+    rc = read(handle,name_of_graph_against_which_was_cleaned,sizeof(char)*len_name_of_graph);
+ }
+
+  char magic_number[6];
+  rc = read(handle, magic_number,sizeof(char)*6);
+
+  if ( (original_pos = lseek(handle, 0 ,SEEK_CUR)) == -1 ||
+       (end_pos = lseek(handle, 0, SEEK_END)) == -1  ) {
+    return -1;
+  }
+  if ( lseek(handle, original_pos, SEEK_SET) == -1 ) {
+    return -1;
+  }
+
   *num_records = (end_pos - original_pos)/record_size;
+  *num_colors = number_of_colours;
+
   return 0;
 }
 
@@ -74,5 +156,59 @@ size_t dsk_read_kmers(int handle, uint32_t kmer_num_bits, uint64_t * kmers_outpu
   }
   else assert (kmer_num_bits <= 128);
   // Return the number of kmers read (whether 64 bit or 128 bit)
+  return next_slot / ((kmer_num_bits/8)/sizeof(uint64_t));
+}
+
+
+size_t cortex_read_kmers(int handle, uint32_t kmer_num_bits, uint32_t num_colors, uint32_t k, uint64_t * kmers_output, uint64_t * kmer_colors) {
+  // TODO: Add a parameter to specify a limit to how many records we read (eventually multipass merge-sort?)
+  (void) k;
+  int next_slot = 0;
+  int coverage[100]; // hack
+  while (1) {
+    unsigned int i;
+    uint64_t kmer;
+    char individual_edges_reading_from_binary[100]; // bit field for which edges enter and leave
+    int rc;
+
+    rc = read(handle, &kmer,sizeof(uint64_t));
+    if (rc <= 0)
+      break;
+    rc = read(handle, &coverage, sizeof(int) * num_colors);
+    rc = read(handle, individual_edges_reading_from_binary, sizeof(char) * num_colors);
+
+    char edge = 0;
+    for (i=0; i<num_colors;i++) {
+      edge |= individual_edges_reading_from_binary[i] & 0xF;
+    }
+    kmers_output[next_slot] = kmer;
+
+    uint64_t color_acc;
+    uint32_t j;
+    // A (0) -> 0001, C (1) -> 0010, G (2) -> 0100, T (3) -> 1000
+    for (i=0; i< 4; i++) {
+      char mask = 1 << i;
+      if (edge & mask) {
+	/*
+	if (kmer_num_bits <= 64) {
+	  uint64_t k_plus_1 = kmer | i << (k * 2);
+	  kmers_output[next_slot] = k_plus_1;
+	}
+	*/
+	// now write out whether each color has this kmer edge
+	color_acc = 0;
+	for (j=0; j<num_colors;j++) {
+	  if (individual_edges_reading_from_binary[j] & mask)
+	    color_acc |= 1 << j % 32;
+	  if ((j > 0 && j % sizeof(color_acc) * 8 == 0) || j == num_colors -1) {
+	    // write out bits when we have filled accumulator
+	    kmer_colors[next_slot] = color_acc;
+	    color_acc = 0;
+	  }
+	}
+      }
+    }
+    next_slot++;
+  }
   return next_slot / ((kmer_num_bits/8)/sizeof(uint64_t));
 }

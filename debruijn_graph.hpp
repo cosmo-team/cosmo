@@ -199,6 +199,7 @@ class debruijn_graph {
 
   // Added for DCC. Will remove the other one later and rename this one.
   ssize_t interval_node_outgoing(const node_type & u, symbol_type x) const {
+    //assert(u < num_nodes());
     assert(x < sigma + 1);
     if (x == 0) return -1;
     //auto range = _node_range(u);
