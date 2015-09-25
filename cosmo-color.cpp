@@ -19,6 +19,7 @@ string extension = ".dbg";
 
 struct parameters_t {
   std::string input_filename = "";
+  std::string color_filename = "";
   std::string output_prefix = "";
 };
 
@@ -28,6 +29,8 @@ void parse_arguments(int argc, char **argv, parameters_t & params)
   TCLAP::CmdLine cmd("Cosmo Copyright (c) Alex Bowe (alexbowe.com) 2014", ' ', VERSION);
   TCLAP::UnlabeledValueArg<std::string> input_filename_arg("input",
             ".packed edge file (output from pack-edges).", true, "", "input_file", cmd);
+  TCLAP::UnlabeledValueArg<std::string> color_filename_arg("color",
+            ".color file (output from pack-edges).", true, "", "color_file", cmd);
   string output_short_form = "output_prefix";
   TCLAP::ValueArg<std::string> output_prefix_arg("o", "output_prefix",
             "Output prefix. Graph will be written to [" + output_short_form + "]" + extension + ". " +
@@ -35,13 +38,15 @@ void parse_arguments(int argc, char **argv, parameters_t & params)
   cmd.parse( argc, argv );
 
   params.input_filename  = input_filename_arg.getValue();
+  params.color_filename  = color_filename_arg.getValue();
   params.output_prefix   = output_prefix_arg.getValue();
 }
 
-void find_bubbles(debruijn_graph<> dbg);
-void find_bubbles(debruijn_graph<> dbg) {
+void find_bubbles(debruijn_graph<> dbg, uint64_t * colors);
+void find_bubbles(debruijn_graph<> dbg, uint64_t * colors) {
   //char visited[dbg.num_nodes()];
   //bzero(visited, dbg.num_nodes());
+  printf("Got colors %llx \n", *colors);
   for (size_t i = 0; i < dbg.num_nodes(); i++) {
     cout << dbg.node_label(i) << "\n";
       /*
@@ -76,13 +81,18 @@ int main(int argc, char* argv[]) {
   debruijn_graph<> dbg = debruijn_graph<>::load_from_packed_edges(input, "$ACGT"/*, &minus_positions*/);
   input.close();
 
+  ifstream colorfile(p.color_filename, ios::in|ios::binary|ios::ate);
+  uint64_t * colors = (uint64_t *) malloc(dbg.num_edges() * sizeof(uint64_t));
+  colorfile.read((char *)colors, dbg.num_edges() * sizeof(uint64_t));
+  colorfile.close();
+
   cerr << "k             : " << dbg.k << endl;
   cerr << "num_nodes()   : " << dbg.num_nodes() << endl;
   cerr << "num_edges()   : " << dbg.num_edges() << endl;
   cerr << "Total size    : " << size_in_mega_bytes(dbg) << " MB" << endl;
   cerr << "Bits per edge : " << bits_per_element(dbg) << " Bits" << endl;
 
-  find_bubbles(dbg);
+  find_bubbles(dbg, colors);
 
   // The parameter should be const... On my computer the parameter
   // isn't const though, yet it doesn't modify the string...

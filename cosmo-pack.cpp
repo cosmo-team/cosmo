@@ -37,7 +37,7 @@ using namespace boost::adaptors;
 const static string extension = ".packed";
 
 template <typename kmer_t, class Visitor>
-void convert(kmer_t * kmers, size_t num_kmers, const uint32_t k, Visitor visit, bool swap) {
+void convert(kmer_t * kmers, size_t num_kmers, const uint32_t k, Visitor visit, bool swap, uint64_t *colors) {
   // Convert the nucleotide representation to allow tricks
   convert_representation(kmers, kmers, num_kmers, swap);
 
@@ -45,6 +45,7 @@ void convert(kmer_t * kmers, size_t num_kmers, const uint32_t k, Visitor visit, 
   #ifdef ADD_REVCOMPS
   size_t revcomp_factor = 2;
   transform(kmers, kmers + num_kmers, kmers + num_kmers, reverse_complement<kmer_t>(k));
+  memcpy(colors, colors + num_kmers, sizeof(uint64_t) * num_kmers); // copy all of the color masks for the reverse kmers
   #else
   size_t revcomp_factor = 1;
   #endif
@@ -56,15 +57,21 @@ void convert(kmer_t * kmers, size_t num_kmers, const uint32_t k, Visitor visit, 
   // NOTE: THESE SHOULD NOT BE FREED (the kmers array is freed by the caller)
   kmer_t * table_a = kmers;
   kmer_t * table_b = kmers + num_kmers * revcomp_factor; // x2 because of reverse complements
+  uint64_t * colors_a = colors;
+  uint64_t * colors_b = colors + num_kmers * revcomp_factor;
   // Sort by last column to do the edge-sorted part of our <colex(node), edge>-sorted table
   colex_partial_radix_sort<DNA_RADIX>(table_a, table_b, num_kmers * revcomp_factor, 0, 1,
-                                      &table_a, &table_b, get_nt_functor<kmer_t>());
+                                      &table_a, &table_b, get_nt_functor<kmer_t>(),
+                                      0, 0, 0, 0,
+                                      colors_a, colors_b, &colors_a, &colors_b);
   // Sort from k to last column (not k to 1 - we need to sort by the edge column a second time to get colex(row) table)
   // Note: The output names are swapped (we want table a to be the primary table and b to be aux), because our desired
   // result is the second last iteration (<colex(node), edge>-sorted) but we still have use for the last iteration (colex(row)-sorted).
   // Hence, table_b is the output sorted from [hi-1 to lo], and table_a is the 2nd last iter sorted from (hi-1 to lo]
   colex_partial_radix_sort<DNA_RADIX>(table_a, table_b, num_kmers * revcomp_factor, 0, k,
-                                      &table_b, &table_a, get_nt_functor<kmer_t>());
+                                      &table_b, &table_a, get_nt_functor<kmer_t>(),
+                                      0, 0, 0, 0,
+                                      colors_a, colors_b, &colors_a, &colors_b);
 
   // outgoing dummy edges are output in correct order while merging, whereas incoming dummy edges are not in the correct
   // position, but are sorted relatively, hence can be merged if collected in a previous pass
@@ -270,6 +277,7 @@ int main(int argc, char * argv[]) {
     printf("Reading kmers\n");
     num_records_read = cortex_read_kmers(handle, kmer_num_bits, num_colors, k, kmer_blocks, kmer_colors);
     printf("num_kmers = %zu and num_records_read=%zu\n", num_kmers, num_records_read);
+    num_kmers = num_records_read;
   }
   else {
     num_records_read = dsk_read_kmers(handle, kmer_num_bits, kmer_blocks);
@@ -318,7 +326,7 @@ int main(int argc, char * argv[]) {
           out.write(tag, x, this_k, lcs_len, first_end_node);
           #endif
           prev_k = this_k;
-	      }, !params.cortex);
+	      }, !params.cortex, kmer_colors);
   }
   else if (kmer_num_bits == 128) {
     typedef uint128_t kmer_t;
@@ -334,7 +342,7 @@ int main(int argc, char * argv[]) {
           out.write(tag, x, this_k, lcs_len, first_end_node);
           #endif
           prev_k = this_k;
-        }, !params.cortex);
+	    }, !params.cortex, kmer_colors);
   }
 
   out.close();
@@ -348,6 +356,12 @@ int main(int argc, char * argv[]) {
   ofs.flush();
   ofs.close();
 
+  ofstream cfs;
+  cfs.open(outfilename + ".colors", ios::out | ios::binary);
+  cfs.write((char *)kmer_colors, sizeof(uint64_t) * num_kmers);
+  cfs.close();
+
   free(kmer_blocks);
+  free(kmer_colors);
   return 0;
 }

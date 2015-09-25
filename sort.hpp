@@ -7,7 +7,8 @@
 // new_b will be the results of the second-last iteration.
 template <int base, typename T, typename F>
 void colex_partial_radix_sort(T * a, T * b, size_t num_records, uint32_t lo, uint32_t hi, T ** new_a, T ** new_b, F get_digit,
-    uint8_t * lengths_a = 0, uint8_t * lengths_b = 0, uint8_t ** new_lengths_a = 0, uint8_t ** new_lengths_b = 0) {
+    uint8_t * lengths_a = 0, uint8_t * lengths_b = 0, uint8_t ** new_lengths_a = 0, uint8_t ** new_lengths_b = 0,
+    uint64_t * colors_a = 0, uint64_t * colors_b = 0, uint64_t ** new_colors_a = 0, uint64_t ** new_colors_b = 0) {
   if (hi <= lo) return;
   assert(( lengths_a &&  lengths_b &&  new_lengths_a &&  new_lengths_b)
       || (!lengths_a && !lengths_b && !new_lengths_a && !new_lengths_b));
@@ -40,6 +41,7 @@ void colex_partial_radix_sort(T * a, T * b, size_t num_records, uint32_t lo, uin
       int x = (varlen && lengths_a[i] <= digit_pos)? 0 : get_digit(a[i], digit_pos) + varlen;
       b[--bases[x]] = a[i];
       if (varlen) lengths_b[bases[x]] = lengths_a[i];
+      if (colors_a) colors_b[bases[x]] = colors_a[i];
     }
 
     // swap array ptrs
@@ -50,6 +52,11 @@ void colex_partial_radix_sort(T * a, T * b, size_t num_records, uint32_t lo, uin
       uint8_t * temp_lengths = lengths_a;
       lengths_a = lengths_b;
       lengths_b = temp_lengths;
+    }
+    if (colors_a) {
+      uint64_t * temp_colors = colors_a;
+      colors_a = colors_b;
+      colors_b = temp_colors;
     }
   }
   // Want a to be the final result, b to be the second-last iteration.
@@ -63,6 +70,10 @@ void colex_partial_radix_sort(T * a, T * b, size_t num_records, uint32_t lo, uin
   if (varlen) {
     *new_lengths_a = lengths_a;
     *new_lengths_b = lengths_b;
+  }
+  if (colors_a) {
+    *new_colors_a = colors_a;
+    *new_colors_b = colors_b;
   }
 }
 
