@@ -42,32 +42,78 @@ void parse_arguments(int argc, char **argv, parameters_t & params)
   params.output_prefix   = output_prefix_arg.getValue();
 }
 
+static char base[] = {'?','A','C','G','T'};
+
+void test_symmetry(debruijn_graph<> dbg);
+void test_symmetry(debruijn_graph<> dbg) {
+  for (unsigned long x = 0; x<dbg.sigma+1;x++) {
+    ssize_t in = dbg.incoming(43, x);
+    if (in == -1)
+      continue;
+    for (unsigned long y = 0; y<dbg.sigma+1;y++) {
+      ssize_t out = dbg.outgoing(in, y);
+      if (out == -1)
+	continue;
+      cout << "Incoming " << in <<  ":" << out <<"\n";
+    }
+  }
+}
+
+int follow(debruijn_graph<> dbg, size_t i);
+int follow(debruijn_graph<> dbg, size_t pos) {
+  int len = 1;
+  while (dbg.indegree(pos) == 1) {
+    for (unsigned long x = 1; x<dbg.sigma+1;x++) {
+      // find the next
+      ssize_t next = dbg.outgoing(pos, x);
+      if (next == -1)
+	continue;
+      cout << base[x];
+      pos = next;
+    }
+    len++;
+    if (len > 40)
+      break;
+  }
+  if (len <= 40)
+    cout << "\nEnd flank on " << dbg.node_label(pos) << "\n";
+  return len;
+}
+
+void dump_nodes(debruijn_graph<> dbg);
+void dump_nodes(debruijn_graph<> dbg) {
+  for (size_t i = 0; i < dbg.num_nodes(); i++) {
+    cout << i << ":" << dbg.node_label(i) << "\n";
+  }
+}
+
+void dump_edges(debruijn_graph<> dbg);
+void dump_edges(debruijn_graph<> dbg) {
+  for (size_t i = 0; i < dbg.num_edges(); i++) {
+    cout << i << "e:" << dbg.edge_label(i) << "\n";
+  }
+}
+
 void find_bubbles(debruijn_graph<> dbg, uint64_t * colors);
 void find_bubbles(debruijn_graph<> dbg, uint64_t * colors) {
-  //char visited[dbg.num_nodes()];
-  //bzero(visited, dbg.num_nodes());
   printf("Got colors %llx \n", *colors);
-  for (size_t i = 0; i < dbg.num_nodes(); i++) {
-    cout << dbg.node_label(i) << "\n";
-      /*
+  // walk mers skipping over the first one which is always start kmer "$$$$$$$$$$$$$$$$$"
+  for (size_t i = 1; i < dbg.num_nodes(); i++) {
+    //cout << dbg.edge_node(i) << "\n";
     if (dbg.outdegree(i) > 1) {
       // start of a bubble
-      cout << dbg.node_label(i) << "\n";
-      for (unsigned long x = 0; x<dbg.sigma+1;x++) {
+      cout << "\nStart flank: " << dbg.node_label(i) << "\n";
+      
+      for (unsigned long x = 1; x<dbg.sigma+1;x++) {
 	// follow each strand
 	ssize_t pos = dbg.outgoing(i, x);
 	if (pos == -1)
 	  continue;
-	int len = 1;
-	while (dbg.indegree(pos) == 1) {
-	  printf("pos is %zu\n", pos);
-	  pos = dbg._edge_to_node(dbg._forward(pos));
-	  len++;
-	}
+	cout << "Branch: " << base[x];
+	int len = follow(dbg, pos);
 	printf("Found bubble from %zu to %zu with %d length\n", i, pos, len); 
       }
     }
-    */
   }
 }
 

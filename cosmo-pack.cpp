@@ -45,7 +45,7 @@ void convert(kmer_t * kmers, size_t num_kmers, const uint32_t k, Visitor visit, 
   #ifdef ADD_REVCOMPS
   size_t revcomp_factor = 2;
   transform(kmers, kmers + num_kmers, kmers + num_kmers, reverse_complement<kmer_t>(k));
-  memcpy(colors, colors + num_kmers, sizeof(uint64_t) * num_kmers); // copy all of the color masks for the reverse kmers
+  memcpy(colors + num_kmers, colors, sizeof(uint64_t) * num_kmers); // copy all of the color masks for the reverse kmers
   #else
   size_t revcomp_factor = 1;
   #endif
@@ -316,6 +316,7 @@ int main(int argc, char * argv[]) {
   if (kmer_num_bits == 64) {
     typedef uint64_t kmer_t;
     size_t prev_k = 0; // for input, k is always >= 1
+
       convert(kmer_blocks, num_kmers, k,
         [&](edge_tag tag, const kmer_t & x, const uint32_t this_k, size_t lcs_len, bool first_end_node) {
           #ifdef VAR_ORDER
@@ -327,6 +328,7 @@ int main(int argc, char * argv[]) {
           #endif
           prev_k = this_k;
 	      }, !params.cortex, kmer_colors);
+    printf("color %llx\n", kmer_colors[0]);
   }
   else if (kmer_num_bits == 128) {
     typedef uint128_t kmer_t;
@@ -358,7 +360,7 @@ int main(int argc, char * argv[]) {
 
   ofstream cfs;
   cfs.open(outfilename + ".colors", ios::out | ios::binary);
-  cfs.write((char *)kmer_colors, sizeof(uint64_t) * num_kmers);
+  cfs.write((char *)kmer_colors, sizeof(uint64_t) * num_kmers * revcomp_factor);
   cfs.close();
 
   free(kmer_blocks);
