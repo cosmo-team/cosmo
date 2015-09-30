@@ -312,10 +312,13 @@ int main(int argc, char * argv[]) {
   lcs.open(outfilename + extension + ".lcs", ios::out | ios::binary);
   #endif
   PackedEdgeOutputer out(ofs);
+  ofstream cfs;
+  cfs.open(outfilename + ".colors", ios::out | ios::binary);
 
   if (kmer_num_bits == 64) {
     typedef uint64_t kmer_t;
     size_t prev_k = 0; // for input, k is always >= 1
+    size_t index = 0;
 
       convert(kmer_blocks, num_kmers, k,
         [&](edge_tag tag, const kmer_t & x, const uint32_t this_k, size_t lcs_len, bool first_end_node) {
@@ -326,6 +329,13 @@ int main(int argc, char * argv[]) {
           #else
           out.write(tag, x, this_k, lcs_len, first_end_node);
           #endif
+	  if (tag == standard) {
+	    cfs.write((char *)&kmer_colors[index++], sizeof(uint64_t));
+	  }
+	  else {
+	    uint64_t zero = 0;
+	    cfs.write((char *)&zero, sizeof(uint64_t));
+	  }
           prev_k = this_k;
 	      }, !params.cortex, kmer_colors);
     printf("color %llx\n", kmer_colors[0]);
@@ -358,9 +368,6 @@ int main(int argc, char * argv[]) {
   ofs.flush();
   ofs.close();
 
-  ofstream cfs;
-  cfs.open(outfilename + ".colors", ios::out | ios::binary);
-  cfs.write((char *)kmer_colors, sizeof(uint64_t) * num_kmers * revcomp_factor);
   cfs.close();
 
   free(kmer_blocks);

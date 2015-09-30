@@ -21,6 +21,7 @@ struct parameters_t {
   std::string input_filename = "";
   std::string color_filename = "";
   std::string output_prefix = "";
+  std::string exclude_color = "";
 };
 
 void parse_arguments(int argc, char **argv, parameters_t & params);
@@ -35,11 +36,15 @@ void parse_arguments(int argc, char **argv, parameters_t & params)
   TCLAP::ValueArg<std::string> output_prefix_arg("o", "output_prefix",
             "Output prefix. Graph will be written to [" + output_short_form + "]" + extension + ". " +
             "Default prefix: basename(input_file).", false, "", output_short_form, cmd);
+  string exclude_color = "exclude_color";
+  TCLAP::ValueArg<std::string> exclude_color_arg("x", "exclude_color",
+	    "Excluding from bubble, color [" + exclude_color + "]", false, "", exclude_color, cmd);
   cmd.parse( argc, argv );
 
   params.input_filename  = input_filename_arg.getValue();
   params.color_filename  = color_filename_arg.getValue();
   params.output_prefix   = output_prefix_arg.getValue();
+  params.exclude_color   = exclude_color_arg.getValue();
 }
 
 static char base[] = {'?','A','C','G','T'};
@@ -59,22 +64,28 @@ void test_symmetry(debruijn_graph<> dbg) {
   }
 }
 
-int follow(debruijn_graph<> dbg, size_t i);
-int follow(debruijn_graph<> dbg, size_t pos) {
+int follow(debruijn_graph<> dbg, uint64_t * colors, size_t pos, bool exclude, int exclude_color);
+int follow(debruijn_graph<> dbg, uint64_t * colors, size_t pos, bool exclude, int exclude_color) {
   int len = 1;
+  bool valid = false;
+  uint64_t mask = 1 << exclude_color;
   while (dbg.indegree(pos) == 1) {
     for (unsigned long x = 1; x<dbg.sigma+1;x++) {
       // find the next
       ssize_t next = dbg.outgoing(pos, x);
       if (next == -1)
 	continue;
-      cout << base[x];
+      if (exclude && !(colors[dbg._node_to_edge(pos)] & mask))
+	valid = true;
+      cout << base[x] << ":c" << colors[dbg._node_to_edge(pos)];
       pos = next;
     }
     len++;
     if (len > 40)
       break;
   }
+  if (valid)
+    cout << "This bubble is not only in reference\n";
   if (len <= 40)
     cout << "\nEnd flank on " << dbg.node_label(pos) << "\n";
   return len;
@@ -94,23 +105,25 @@ void dump_edges(debruijn_graph<> dbg) {
   }
 }
 
-void find_bubbles(debruijn_graph<> dbg, uint64_t * colors);
-void find_bubbles(debruijn_graph<> dbg, uint64_t * colors) {
-  printf("Got colors %llx \n", *colors);
+void find_bubbles(debruijn_graph<> dbg, uint64_t * colors, bool exclude, int exclude_color);
+void find_bubbles(debruijn_graph<> dbg, uint64_t * colors, bool exclude, int exclude_color) {
+  uint64_t mask = 1 << exclude_color;
+  cout << "Mask: " << mask;
   // walk mers skipping over the first one which is always start kmer "$$$$$$$$$$$$$$$$$"
   for (size_t i = 1; i < dbg.num_nodes(); i++) {
-    //cout << dbg.edge_node(i) << "\n";
+    //cout << "Node " + dbg.node_label(i) << " color: " << colors[i] << "\n";
     if (dbg.outdegree(i) > 1) {
+      if (exclude && (mask == colors[dbg._node_to_edge(i)]))
+	continue;
       // start of a bubble
-      cout << "\nStart flank: " << dbg.node_label(i) << "\n";
-      
+      cout << "\n≈oStart flank: " << dbg.node_label(i) << " c: "<< colors[dbg._node_to_edge(i)] << "\n";
       for (unsigned long x = 1; x<dbg.sigma+1;x++) {
 	// follow each strand
 	ssize_t pos = dbg.outgoing(i, x);
 	if (pos == -1)
 	  continue;
-	cout << "Branch: " << base[x];
-	int len = follow(dbg, pos);
+	cout << "Branch: " << base[x] << " c: "<< colors[dbg._node_to_edge(pos)];
+	int len = follow(dbg, colors, pos, exclude, exclude_color);
 	printf("Found bubble from %zu to %zu with %d length\n", i, pos, len); 
       }
     }
@@ -127,7 +140,7 @@ int main(int argc, char* argv[]) {
   debruijn_graph<> dbg = debruijn_graph<>::load_from_packed_edges(input, "$ACGT"/*, &minus_positions*/);
   input.close();
 
-  ifstream colorfile(p.color_filename, ios::in|ios::binary|ios::ate);
+  ifstream colorfile(p.color_filename, ios::in|ios::binary);
   uint64_t * colors = (uint64_t *) malloc(dbg.num_edges() * sizeof(uint64_t));
   colorfile.read((char *)colors, dbg.num_edges() * sizeof(uint64_t));
   colorfile.close();
@@ -138,7 +151,7 @@ int main(int argc, char* argv[]) {
   cerr << "Total size    : " << size_in_mega_bytes(dbg) << " MB" << endl;
   cerr << "Bits per edge : " << bits_per_element(dbg) << " Bits" << endl;
 
-  find_bubbles(dbg, colors);
+  find_bubbles(dbg, colors, true, atoi(p.exclude_color.c_str()));
 
   // The parameter should be const... On my computer the parameter
   // isn't const though, yet it doesn't modify the string...
