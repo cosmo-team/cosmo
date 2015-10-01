@@ -163,7 +163,7 @@ size_t dsk_read_kmers(int handle, uint32_t kmer_num_bits, uint64_t * kmers_outpu
 size_t cortex_read_kmers(int handle, uint32_t kmer_num_bits, uint32_t num_colors, uint32_t k, uint64_t * kmers_output, uint64_t * kmer_colors) {
   // TODO: Add a parameter to specify a limit to how many records we read (eventually multipass merge-sort?)
   (void) k;
-  int next_slot = 0;
+  size_t next_slot = 0;
   int coverage[100]; // hack
   while (1) {
     unsigned int i;
