@@ -1,7 +1,7 @@
 # NOTE: needs boost, tclap, and sdsl
 
 CXX=clang++ # g++
-CPP_FLAGS=-m64 -std=c++0x -pedantic-errors -W -Wall -Wextra -Wshadow -Wpointer-arith -Wcast-qual \
+CPP_FLAGS=-m64 -std=c++0x -pedantic-errors -W -Wall -Wextra -Wpointer-arith -Wcast-qual \
 					-Wunused -Wstrict-prototypes -Wmissing-prototypes -Wwrite-strings \
 					-Wbool-conversions -Wshift-overflow -Wliteral-conversion \
 					-Werror
@@ -62,7 +62,7 @@ io.o: io.hpp io.cpp debug.h dummies.hpp kmer.hpp
 
 # TODO: Roll these all into one... "cosmo"
 cosmo-pack: cosmo-pack.cpp $(PACK_REQS)
-		$(CXX) $(CPP_FLAGS) -o $@ $< io.o
+		$(CXX) $(CPP_FLAGS) -o $@ $< io.o $(DEP_FLAGS) 
 
 cosmo-build: cosmo-build.cpp $(BUILD_REQS)
 		$(CXX) $(CPP_FLAGS) -o $@ $< io.o $(DEP_FLAGS) 

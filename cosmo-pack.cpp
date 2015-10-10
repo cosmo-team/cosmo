@@ -338,7 +338,6 @@ int main(int argc, char * argv[]) {
 	  }
           prev_k = this_k;
 	      }, !params.cortex, kmer_colors);
-    printf("color %llx\n", kmer_colors[0]);
   }
   else if (kmer_num_bits == 128) {
     typedef uint128_t kmer_t;
