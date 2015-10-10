@@ -15,6 +15,24 @@
 using namespace std;
 using namespace sdsl;
 
+#include <sys/timeb.h>
+
+int getMilliCount();
+int getMilliCount(){
+  timeb tb;
+  ftime(&tb);
+  int nCount = tb.millitm + (tb.time & 0xfffff) * 1000;
+  return nCount;
+}
+
+int getMilliSpan(int nTimeStart);
+int getMilliSpan(int nTimeStart){
+  int nSpan = getMilliCount() - nTimeStart;
+  if(nSpan < 0)
+    nSpan += 0x100000 * 1000;
+  return nSpan;
+}
+
 string extension = ".dbg";
 
 struct parameters_t {
@@ -108,6 +126,7 @@ void dump_edges(debruijn_graph<> dbg) {
 
 void find_bubbles(debruijn_graph<> dbg, uint64_t * colors, bool exclude, int exclude_color);
 void find_bubbles(debruijn_graph<> dbg, uint64_t * colors, bool exclude, int exclude_color) {
+  int t = getMilliCount();
   uint64_t mask = 1 << exclude_color;
   bit_vector visited = bit_vector(dbg.num_nodes(), 0);
   cout << "Starting to look for bubbles\n";
@@ -131,6 +150,7 @@ void find_bubbles(debruijn_graph<> dbg, uint64_t * colors, bool exclude, int exc
       }
     }
   }
+  cout << "Find bubbles time: " << getMilliSpan(t) << "\n";
 }
 
 int main(int argc, char* argv[]) {
