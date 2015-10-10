@@ -64,8 +64,8 @@ void test_symmetry(debruijn_graph<> dbg) {
   }
 }
 
-int follow(debruijn_graph<> dbg, uint64_t * colors, size_t pos, bool exclude, int exclude_color);
-int follow(debruijn_graph<> dbg, uint64_t * colors, size_t pos, bool exclude, int exclude_color) {
+int follow(debruijn_graph<> dbg, uint64_t * colors, size_t pos, bool exclude, int exclude_color, bit_vector & visited);
+int follow(debruijn_graph<> dbg, uint64_t * colors, size_t pos, bool exclude, int exclude_color, bit_vector & visited) {
   int len = 1;
   bool valid = false;
   uint64_t mask = 1 << exclude_color;
@@ -75,9 +75,10 @@ int follow(debruijn_graph<> dbg, uint64_t * colors, size_t pos, bool exclude, in
       ssize_t next = dbg.outgoing(pos, x);
       if (next == -1)
 	continue;
+      visited[next] = 1;
       if (exclude && !(colors[dbg._node_to_edge(pos)] & mask))
 	valid = true;
-      cout << base[x] << ":c" << colors[dbg._node_to_edge(pos)];
+      cout << base[x];
       pos = next;
     }
     len++;
@@ -108,11 +109,13 @@ void dump_edges(debruijn_graph<> dbg) {
 void find_bubbles(debruijn_graph<> dbg, uint64_t * colors, bool exclude, int exclude_color);
 void find_bubbles(debruijn_graph<> dbg, uint64_t * colors, bool exclude, int exclude_color) {
   uint64_t mask = 1 << exclude_color;
-  cout << "Mask: " << mask;
+  bit_vector visited = bit_vector(dbg.num_nodes(), 0);
+  cout << "Starting to look for bubbles\n";
   // walk mers skipping over the first one which is always start kmer "$$$$$$$$$$$$$$$$$"
   for (size_t i = 1; i < dbg.num_nodes(); i++) {
     //cout << "Node " + dbg.node_label(i) << " color: " << colors[i] << "\n";
-    if (dbg.outdegree(i) > 1) {
+    if (dbg.outdegree(i) == 2 && !visited[i]) {
+      visited[i] = 1;
       if (exclude && (mask == colors[dbg._node_to_edge(i)]))
 	continue;
       // start of a bubble
@@ -123,7 +126,7 @@ void find_bubbles(debruijn_graph<> dbg, uint64_t * colors, bool exclude, int exc
 	if (pos == -1)
 	  continue;
 	cout << "Branch: " << base[x] << " c: "<< colors[dbg._node_to_edge(pos)];
-	int len = follow(dbg, colors, pos, exclude, exclude_color);
+	int len = follow(dbg, colors, pos, exclude, exclude_color, visited);
 	printf("Found bubble from %zu to %zu with %d length\n", i, pos, len); 
       }
     }
