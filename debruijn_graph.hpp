@@ -187,7 +187,10 @@ class debruijn_graph {
     size_t last  = get<1>(range);
     // Try both with and without a flag
     for (symbol_type c = _with_edge_flag(x,false); c <= _with_edge_flag(x, true); c++) {
-      size_t most_recent = m_edges.select(m_edges.rank(last+1, c), c);
+      size_t rnk = m_edges.rank(last+1, c);
+      if (rnk == 0)
+	return -1;
+      size_t most_recent = m_edges.select(rnk, c);
       // if within range, follow forward
       if (first <= most_recent && most_recent <= last) {
         // Don't have to check fwd for -1 since we checked for $ above
