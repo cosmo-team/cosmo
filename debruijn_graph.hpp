@@ -185,14 +185,17 @@ class debruijn_graph {
     auto range = _node_range(u);
     size_t first = get<0>(range);
     size_t last  = get<1>(range);
-    size_t rnk = m_edges.rank(last+1, x);
-    if (rnk == 0)
-      return -1;
-    size_t most_recent = m_edges.select(rnk, x);
-    // if within range, follow forward
-    if (first <= most_recent && most_recent <= last) {
-      // Don't have to check fwd for -1 since we checked for $ above
-      return _edge_to_node(_forward(most_recent));
+    // Try both with and without a flag
+    for (symbol_type c = _with_edge_flag(x,false); c <= _with_edge_flag(x, true); c++) {
+      size_t rnk = m_edges.rank(last+1, c);
+      if (rnk == 0)
+	return -1;
+      size_t most_recent = m_edges.select(rnk, c);
+      // if within range, follow forward
+      if (first <= most_recent && most_recent <= last) {
+        // Don't have to check fwd for -1 since we checked for $ above
+        return _edge_to_node(_forward(most_recent));
+      }
     }
     return -1;
   }
