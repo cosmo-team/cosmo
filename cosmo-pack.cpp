@@ -155,7 +155,7 @@ int main(int argc, char* argv[])
       #ifdef VERBOSE // print each kmer to stderr for testing
       if (tag == out_dummy) cout << kmer_to_string(get_start_node(x), k-1, k-1) << "$";
       else                  cout << kmer_to_string(x, k, this_k);
-      cout << " " << lcs_len << " " << first_end_node << endl;
+      cout << " " << (lcs_len != k-1) << " " << lcs_len << " " << first_end_node << endl;
       #endif
     });
 
