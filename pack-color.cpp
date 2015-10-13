@@ -97,10 +97,8 @@ int main(int argc, char * argv[]) {
   bit_vector bv(b);
   sysTime = getMilliCount();
   cout << "BV Creation Time: " << getMilliSpan(sysTime) << endl;
-  for (size_t i=0; i < num_edges; i++) {
-    for (size_t j=0; j < num_color; j++) {
-      bv[i + j];
-    }
+  for (size_t i=0; i < num_edges*num_color; i++) {
+    bv[i];
   }
   cout << "BV Access Time: " << getMilliSpan(sysTime) << endl;
   cout << "BV Size (MB): " << size_in_mega_bytes(b) << endl;
@@ -109,10 +107,8 @@ int main(int argc, char * argv[]) {
   rrr_vector<63> rrrb(b);
   cout << "RRR Creation Time: " << getMilliSpan(sysTime) << endl;
   sysTime = getMilliCount();
-  for (size_t i=0; i < num_edges; i++) {
-    for (size_t j=0; j < num_color; j++) {
-      rrrb[i + j];
-    }
+  for (size_t i=0; i < num_edges*num_color; i++) {
+    rrrb[i];
   }
   cout << "RRR AccessTime: " << getMilliSpan(sysTime) << endl;
   cout << "RRR Size (MB): " << size_in_mega_bytes(rrrb) << endl;
@@ -121,11 +117,19 @@ int main(int argc, char * argv[]) {
   sd_vector<> sdb(b);
   cout << "SD Creation Time: " << getMilliSpan(sysTime) << endl;
   sysTime = getMilliCount();
-  for (size_t i=0; i < num_edges; i++) {
-    for (size_t j=0; j < num_color; j++) {
-      sdb[i + j];
-    }
+  for (size_t i=0; i < num_edges*num_color; i++) {
+    sdb[i];
   }
   cout << "SD Access Time: " << getMilliSpan(sysTime) << endl;
   cout << "SD Size (MB): " << size_in_mega_bytes(sdb) << endl;
+
+  sysTime = getMilliCount();
+  hyb_vector<> hyb(b);
+  cout << "Hyb Creation Time: " << getMilliSpan(sysTime) << endl;
+  sysTime = getMilliCount();
+  for (size_t i=0; i < num_edges*num_color; i++) {
+    hyb[i];
+  }
+  cout << "Hyb Access Time: " << getMilliSpan(sysTime) << endl;
+  cout << "Hyb Size (MB): " << size_in_mega_bytes(hyb) << endl;
 }
