@@ -119,9 +119,6 @@ class debruijn_graph {
         auto x = unpack_to_tuple(get_packed_edge_from_block(block, i));
         first[current_edge] = bool(1-get<1>(x)); // convert 0s to 1s so we can have a sparse bit vector
         edges[current_edge] = (get<0>(x) << 1) | !bool(get<2>(x));
-	#ifdef VERBOSE
-        cerr << bool(1-get<1>(x)) << " " << "$acgt"[get<0>(x)] << " " << !bool(get<2>(x)) << endl;
-	#endif
       }
     }
 
@@ -138,6 +135,11 @@ class debruijn_graph {
     cerr << "Cleaning up..." << endl;
     sdsl::remove(temp_file_name);
     cerr << "Constructing de Bruijn graph..." << endl;
+    #ifdef VERBOSE
+      for (size_t i = 0; i < num_edges; i++) {
+        cout << "01"[bv[i]] << " " << "$acgt"[wt[i]>>1] << endl;
+      }
+    #endif
     return debruijn_graph(k, bv, wt, counts, alphabet);
   }
 
@@ -435,13 +437,14 @@ class debruijn_graph {
 
   size_t _first_edge_of_node(size_t v) const {
     assert(v < num_nodes());
-    // select is 1-based, but nodes are 0-based
+    // Why +1? because select is 1-based, but nodes are 0-based
     return m_node_select(v+1);
   }
 
   size_t _last_edge_of_node(size_t v) const {
     // find the *next* node's first edge and decrement
     // as long as a next node exists!
+    // TODO - test this
     assert(v + 1 <= num_nodes());
     if (v+1 == num_nodes()) return num_edges() - 1;
     else return _first_edge_of_node(v+1) - 1;
