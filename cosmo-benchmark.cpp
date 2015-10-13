@@ -88,52 +88,55 @@ int main(int argc, char* argv[]) {
   dbh h(g, lcs);
   #endif
 
-
-  int num_queries = 1e5;
-  size_t min_k = 8;
+  int num_queries = 1e6;
+  size_t min_k = 0;
   size_t max_k = g.k-1;
+
+  // Make RNG source
   typedef boost::mt19937 rng_type;
   rng_type rng(time(0));
-  boost::uniform_int<size_t> node_distribution(0,g.num_nodes()-1); // make go up to size of graph
-  boost::uniform_int<size_t> k_distribution(min_k, max_k); // make go up to size of graph
-  boost::uniform_int<size_t> symbol_distribution(1, 4); // make go up to size of graph
-  boost::variate_generator<rng_type, boost::uniform_int<size_t>> random_node(rng, node_distribution);
-  boost::variate_generator<rng_type, boost::uniform_int<size_t>> random_k(rng, k_distribution);
-  boost::variate_generator<rng_type, boost::uniform_int<size_t>> random_symbol(rng, symbol_distribution);
 
+  // Define random distributions
+  boost::uniform_int<size_t> node_distribution(0,g.num_nodes()-1); // inclusive range
+  boost::uniform_int<size_t> k_distribution(min_k, max_k);
+  boost::uniform_int<size_t> symbol_distribution(1, 4);
+
+  // Create generators
+  // & is used so they all share the same random source (they usually make copies)
+  // I didnt want the k value to be dependant on the node id at all, for example
+  boost::variate_generator<rng_type &, boost::uniform_int<size_t>> random_node(rng, node_distribution);
+  boost::variate_generator<rng_type &, boost::uniform_int<size_t>> random_k(rng, k_distribution);
+  boost::variate_generator<rng_type &, boost::uniform_int<size_t>> random_symbol(rng, symbol_distribution);
+
+  // Generate random vars
   vector<size_t> query_nodes(boost::make_function_input_iterator(random_node,0),
                              boost::make_function_input_iterator(random_node,num_queries));
   vector<size_t> query_syms(boost::make_function_input_iterator(random_symbol,0),
                             boost::make_function_input_iterator(random_symbol,num_queries));
-  #ifdef VAR_ORDER
-  auto random_higher_k = [&](size_t low)  { 
-    return boost::uniform_int<size_t>(low,max_k)(rng);
-  }; // make go up to size of graph
-  auto random_lower_k  = [&](size_t high) {
-    return boost::uniform_int<size_t>(min_k,high)(rng);
-  }; // make go up to size of graph
 
+  #ifdef VAR_ORDER
   // Convert to variable order nodes
   vector<size_t> query_ks(boost::make_function_input_iterator(random_k,0),
                           boost::make_function_input_iterator(random_k,num_queries));
   vector<size_t> maxlen_syms(boost::make_function_input_iterator(random_symbol,0),
                             boost::make_function_input_iterator(random_symbol,num_queries));
-  vector<size_t> lower_ks(num_queries);
-  transform(query_ks.begin(),query_ks.end(),lower_ks.begin(),random_lower_k);
-  vector<size_t> higher_ks(num_queries);
-  transform(query_ks.begin(),query_ks.end(),higher_ks.begin(),random_higher_k);
 
   vector<node_type> query_varnodes;
-  //transform(query_nodes.begin(), query_nodes.end(), query_varnodes.begin(),[&](size_t v){ return h.get_node(v); });
+  // Get the nodes (max k)
   for (auto u:query_nodes) {
-    query_varnodes.push_back(h.get_node(u));
+    // TODO: Check this
+    auto temp = h.get_node(u);
+    query_varnodes.push_back(temp);
+    cerr << u << "->" << get<0>(temp) << ", " << get<1>(temp) << ", " << get<2>(temp) << endl;
   }
 
-  // set shorter for each one that has a shorter k
+  // set shorter for each one that has a shorter than max k
   for (int i=0;i<num_queries;i++) {
+    // TODO: Check this
     if (query_ks[i] == g.k-1) continue;
     query_varnodes[i] = h.shorter(query_varnodes[i], query_ks[i]);
   }
+  exit(1);
   #else
   vector<debruijn_graph<>::node_type> query_rangenodes;
   //transform(query_nodes.begin(), query_nodes.end(), query_varnodes.begin(),[&](size_t v){ return h.get_node(v); });
@@ -178,7 +181,7 @@ int main(int argc, char* argv[]) {
   auto t1 = chrono::high_resolution_clock::now();
   // backward
   for (auto v : query_varnodes) {
-    cerr << get<0>(v) << " " << get<1>(v) << " " << get<2>(v) << endl;
+    //cerr << get<0>(v) << " " << get<1>(v) << " " << get<2>(v) << endl;
     h.backward(v);
   }
   auto t2 = chrono::high_resolution_clock::now();
@@ -208,30 +211,29 @@ int main(int argc, char* argv[]) {
 
   // shorter
   size_t skipped = 0;
-  //for (size_t k : {1,2,4,8}) {
+  for (size_t k : {1,2,4,8}) {
     t1 = chrono::high_resolution_clock::now();
     for (size_t i=0;i<(size_t)num_queries;i++) {
       auto v = query_varnodes[i];
-      auto k = lower_ks[i];
       if (get<2>(v) <= k) {
         skipped++;
         continue;
       }
-      h.longer(v, k);
+      h.shorter(v, k);
     }
     t2 = chrono::high_resolution_clock::now();
     dur = chrono::duration_cast<unit>(t2-t1).count();
     //cerr << "shorter(v,-"<<k<<") total : " << dur << " ns" <<endl;
+    cerr << "skipped: " << skipped <<endl;
     cerr << "shorter"<<" mean : " << (double)dur/(num_queries-skipped) << unit_s <<endl;
-  //}
+  }
 
   // longer
-  skipped = 0;
-  //for (size_t k : {1,2,4,8}) {
+  skipped = 0; // TODO: test this out out of scope
+  for (size_t k : {1,2,4,8}) {
     t1 = chrono::high_resolution_clock::now();
     for (size_t i=0;i<(size_t)num_queries;i++) {
       auto v = query_varnodes[i];
-      auto k = higher_ks[i];
       if (get<2>(v) >= k) {
         skipped++;
         continue;
@@ -242,8 +244,9 @@ int main(int argc, char* argv[]) {
     t2 = chrono::high_resolution_clock::now();
     dur = chrono::duration_cast<unit>(t2-t1).count();
     //cerr << "longer(v,+"<<k<<") total : " << dur << " ns" <<endl;
+    cerr << "skipped: " << skipped <<endl;
     cerr << "longer"<<" mean  : " << (double)dur/(num_queries-skipped) << unit_s <<endl;
-  //}
+  }
 
   // maxlen with symbol
   t1 = chrono::high_resolution_clock::now();
