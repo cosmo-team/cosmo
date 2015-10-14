@@ -189,7 +189,7 @@ class debruijn_graph {
     for (symbol_type c = _with_edge_flag(x,false); c <= _with_edge_flag(x, true); c++) {
       size_t rnk = m_edges.rank(last+1, c);
       if (rnk == 0)
-	return -1;
+	continue;
       size_t most_recent = m_edges.select(rnk, c);
       // if within range, follow forward
       if (first <= most_recent && most_recent <= last) {
@@ -383,7 +383,7 @@ class debruijn_graph {
     if (x == 0) return -1;
     // if this is flagged, then reset i to the corresponding unflagged symbol and use that as the starting point
     if (m_edges[i] & 1) {
-      i = _node_to_edge(m_edges.select(m_edges.rank(i, fullx) - 1, fullx));
+      i = m_edges.select(m_edges.rank(i, fullx) - 1, fullx);
     }
 
     size_t start = _symbol_start(x);

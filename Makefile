@@ -1,14 +1,14 @@
 # NOTE: needs boost, tclap, and sdsl
 
 CXX=clang++ # g++
-CPP_FLAGS=-m64 -std=c++0x -pedantic-errors -W -Wall -Wextra -Wpointer-arith -Wcast-qual \
-					-Wunused -Wstrict-prototypes -Wmissing-prototypes -Wwrite-strings \
+CPP_FLAGS=-m64 -std=c++0x -W -Wall -Wextra -Wpointer-arith -Wcast-qual \
+					-Wstrict-prototypes -Wmissing-prototypes -Wwrite-strings \
 					-Wbool-conversions -Wshift-overflow -Wliteral-conversion \
 					-Werror
 DEP_PATH=/usr/local
 INC_PATH=$(DEP_PATH)/include
 LIB_PATH=$(DEP_PATH)/lib
-DEP_FLAGS=-I$(INC_PATH)/ -L$(LIB_PATH)/ -lsdsl # -ldivsufsort -ldivsufsort64
+DEP_FLAGS=-I$(HOME)/proot/include -I$(INC_PATH)/ -L$(HOME)/proot/lib -L$(LIB_PATH)/ -lsdsl # -ldivsufsort -ldivsufsort64
 DEBUG_FLAGS=-g
 NDEBUG_FLAGS=-DNDEBUG
 OPT_FLAGS=-O3 -mmmx -msse -msse2 -msse3 -msse4 -msse4.2 -march=native

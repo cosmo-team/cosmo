@@ -66,6 +66,7 @@ void parse_arguments(int argc, char **argv, parameters_t & params)
 }
 
 static char base[] = {'?','A','C','G','T'};
+static const int MAX_SUPERNODE = 40;
 
 void test_symmetry(debruijn_graph<> dbg);
 void test_symmetry(debruijn_graph<> dbg) {
@@ -82,33 +83,6 @@ void test_symmetry(debruijn_graph<> dbg) {
   }
 }
 
-int follow(debruijn_graph<> dbg, uint64_t * colors, size_t pos, bool exclude, int exclude_color, bit_vector & visited);
-int follow(debruijn_graph<> dbg, uint64_t * colors, size_t pos, bool exclude, int exclude_color, bit_vector & visited) {
-  int len = 1;
-  bool valid = false;
-  uint64_t mask = 1 << exclude_color;
-  while (dbg.indegree(pos) == 1) {
-    for (unsigned long x = 1; x<dbg.sigma+1;x++) {
-      // find the next
-      ssize_t next = dbg.outgoing(pos, x);
-      if (next == -1)
-	continue;
-      visited[next] = 1;
-      if (exclude && !(colors[dbg._node_to_edge(pos)] & mask))
-	valid = true;
-      cout << base[x];
-      pos = next;
-    }
-    len++;
-    if (len > 40)
-      break;
-  }
-  if (valid)
-    cout << "This bubble is not only in reference\n";
-  if (len <= 40)
-    cout << "\nEnd flank on " << dbg.node_label(pos) << "\n";
-  return len;
-}
 
 void dump_nodes(debruijn_graph<> dbg);
 void dump_nodes(debruijn_graph<> dbg) {
@@ -121,8 +95,7 @@ void dump_edges(debruijn_graph<> dbg);
 void dump_edges(debruijn_graph<> dbg) {
   for (size_t i = 0; i < dbg.num_edges(); i++) {
     cout << i << "e:" << dbg.edge_label(i) << "\n";
-  }
-}
+  }}
 
 void find_bubbles(debruijn_graph<> dbg, uint64_t * colors, bool exclude, int exclude_color);
 void find_bubbles(debruijn_graph<> dbg, uint64_t * colors, bool exclude, int exclude_color) {
@@ -130,27 +103,43 @@ void find_bubbles(debruijn_graph<> dbg, uint64_t * colors, bool exclude, int exc
   uint64_t mask = 1 << exclude_color;
   bit_vector visited = bit_vector(dbg.num_nodes(), 0);
   cout << "Starting to look for bubbles\n";
-  // walk mers skipping over the first one which is always start kmer "$$$$$$$$$$$$$$$$$"
   for (size_t i = 1; i < dbg.num_nodes(); i++) {
-    //cout << "Node " + dbg.node_label(i) << " color: " << colors[i] << "\n";
+    size_t edge = dbg._node_to_edge(i);
+    //cout << "Node " << i << ":" << dbg.node_label(i) << " color: " << colors[edge] << "\n";
     if (dbg.outdegree(i) == 2 && !visited[i]) {
       visited[i] = 1;
-      if (exclude && (mask == colors[dbg._node_to_edge(i)]))
+      // skip over colors that we are not interested in or kmers with no colors dummies
+      if ((exclude && (mask == colors[edge])) || !colors[edge])
 	continue;
       // start of a bubble
-      cout << "\n≈oStart flank: " << dbg.node_label(i) << " c: "<< colors[dbg._node_to_edge(i)] << "\n";
+      cout << "\nStart flank: " << dbg.node_label(i) << " c: "<< colors[edge] << "\n";
       for (unsigned long x = 1; x<dbg.sigma+1;x++) {
-	// follow each strand
+	// follow each strand or supernode
 	ssize_t pos = dbg.outgoing(i, x);
 	if (pos == -1)
 	  continue;
-	cout << "Branch: " << base[x] << " c: "<< colors[dbg._node_to_edge(pos)];
-	int len = follow(dbg, colors, pos, exclude, exclude_color, visited);
-	printf("Found bubble from %zu to %zu with %d length\n", i, pos, len); 
+	int len = 1;
+	char supernode[MAX_SUPERNODE+1] = {0};
+	supernode[0] = base[x];
+	while (dbg.indegree(pos) == 1 && dbg.outdegree(pos) == 1) {
+	  ssize_t next;
+	  for (unsigned long x2 = 1; x2<dbg.sigma+1;x2++) {
+	    next = dbg.outgoing(pos, x2);
+	    if (next != -1)
+	      break;
+	    supernode[len] = base[x2];
+	  }
+	  if (len++ > MAX_SUPERNODE)
+	    break;
+	  visited[next] = 1;
+	  pos = next;
+	}
+	cout << "Branch: " << supernode << "\n";
       }
+      //cout << "End flank: " << dbg.node_label(i) << " c: "<< colors[edge] << "\n";
     }
   }
-  cout << "Find bubbles time: " << getMilliSpan(t) << "\n";
+  cerr << "Find bubbles time: " << getMilliSpan(t) << "\n";
 }
 
 int main(int argc, char* argv[]) {
