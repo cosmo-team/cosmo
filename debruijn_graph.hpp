@@ -383,7 +383,7 @@ class debruijn_graph {
     if (x == 0) return -1;
     // if this is flagged, then reset i to the corresponding unflagged symbol and use that as the starting point
     if (m_edges[i] & 1) {
-      i = m_edges.select(m_edges.rank(i, fullx) - 1, fullx);
+      i = _node_to_edge(m_edges.select(m_edges.rank(i, fullx) - 1, fullx));
     }
 
     size_t start = _symbol_start(x);
