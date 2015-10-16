@@ -7,8 +7,9 @@ cosmo-benchmark
 # STXXL configs
 .stxxl*
 
-# VIM Swap
+# VIM
 *.swp
+*.swo
 
 # Personal workflow
 *.bak
