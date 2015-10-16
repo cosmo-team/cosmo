@@ -330,7 +330,7 @@ int main(int argc, char * argv[]) {
           out.write(tag, x, this_k, lcs_len, first_end_node);
           #endif
 	  if (tag == standard) {
-            cerr << kmer_to_string(x, k, this_k) << "c" << colors[index] << "\n";
+            // cerr << kmer_to_string(x, k, this_k) << "c" << colors[index] << "\n";
 	    cfs.write((char *)&colors[index++], sizeof(uint64_t));
 	  }
 	  else {
