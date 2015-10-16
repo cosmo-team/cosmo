@@ -150,7 +150,9 @@ void find_bubbles(debruijn_graph<> dbg, uint64_t * colors, uint64_t color_mask1,
 	branch_offset = 0;
       }
       // check if both branches ended on the same kmer and they pass the requested color masks
-      if ((end[0] && end[0] == end[1]) &&
+      // cout << "Trying " << branch_color[0] << ":" << branch_color[1] << " " << end[0] << ":" << end[1] <<"\n";
+      //      if ((end[0] && end[0] == end[1]) &&
+      if ((end[0] && end[1]) &&
 	  ((color_mask1 & branch_color[0] && !(~color_mask1 & branch_color[0]) &&
 	    color_mask2 & branch_color[1] && !(~color_mask2 & branch_color[1])) || 
 	   (color_mask1 & branch_color[1] && !(~color_mask1 & branch_color[1]) &&
