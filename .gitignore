@@ -4,6 +4,15 @@ cosmo-build
 cosmo-assemble
 cosmo-benchmark
 
+# STXXL configs
+.stxxl*
+
+# VIM Swap
+*.swp
+
+# Personal workflow
+*.bak
+
 # Output files
 *.packed*
 *.dbg*
