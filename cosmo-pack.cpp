@@ -71,7 +71,7 @@ void convert(kmer_t * kmers, size_t num_kmers, const uint32_t k, Visitor visit, 
   colex_partial_radix_sort<DNA_RADIX>(table_a, table_b, num_kmers * revcomp_factor, 0, k,
                                       &table_b, &table_a, get_nt_functor<kmer_t>(),
                                       0, 0, 0, 0,
-                                      colors_a, colors_b, &colors_a, &colors_b);
+                                      colors_a, colors_b, &colors_b, &colors_a);
 
   // outgoing dummy edges are output in correct order while merging, whereas incoming dummy edges are not in the correct
   // position, but are sorted relatively, hence can be merged if collected in a previous pass
@@ -319,7 +319,7 @@ int main(int argc, char * argv[]) {
     typedef uint64_t kmer_t;
     size_t prev_k = 0; // for input, k is always >= 1
     size_t index = 0;
-
+    uint64_t *colors = kmer_colors + num_kmers * revcomp_factor;
       convert(kmer_blocks, num_kmers, k,
         [&](edge_tag tag, const kmer_t & x, const uint32_t this_k, size_t lcs_len, bool first_end_node) {
           #ifdef VAR_ORDER
@@ -330,7 +330,8 @@ int main(int argc, char * argv[]) {
           out.write(tag, x, this_k, lcs_len, first_end_node);
           #endif
 	  if (tag == standard) {
-	    cfs.write((char *)&kmer_colors[index++], sizeof(uint64_t));
+            cerr << kmer_to_string(x, k, this_k) << "c" << colors[index] << "\n";
+	    cfs.write((char *)&colors[index++], sizeof(uint64_t));
 	  }
 	  else {
 	    uint64_t zero = 0;

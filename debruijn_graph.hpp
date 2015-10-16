@@ -179,6 +179,18 @@ class debruijn_graph {
   // which is a saturated debruijn graph of k=31. Which is unlikely.
   // Hopefully an iterator-based API (like BGL) will fix this issue
   ssize_t outgoing(size_t u, symbol_type x) const {
+    ssize_t edge = outgoing_edge(u, x);
+    if (edge == -1)
+      return -1;
+    else
+      return _edge_to_node(edge);
+  }
+
+  // The signed return type is worrying, since it halves the possible answers...
+  // but it will only face problems with graphs that have over 2^63 ~= 4^31 edges,
+  // which is a saturated debruijn graph of k=31. Which is unlikely.
+  // Hopefully an iterator-based API (like BGL) will fix this issue
+  ssize_t outgoing_edge(size_t u, symbol_type x) const {
     assert(u < num_nodes());
     assert(x < sigma + 1);
     if (x == 0) return -1;
@@ -194,7 +206,7 @@ class debruijn_graph {
       // if within range, follow forward
       if (first <= most_recent && most_recent <= last) {
         // Don't have to check fwd for -1 since we checked for $ above
-        return _edge_to_node(_forward(most_recent));
+        return _forward(most_recent);
       }
     }
     return -1;

@@ -57,10 +57,10 @@ void parse_arguments(int argc, char **argv, parameters_t & params)
             "Default prefix: basename(input_file).", false, "", output_short_form, cmd);
   string color_mask1 = "color_mask1";
   TCLAP::ValueArg<std::string> color_mask1_arg("a", "color_mask1",
-	    "Excluding from bubble, color1 [" + color_mask1 + "]", false, "65535", color_mask1, cmd);
+	    "Include color in bubble, color1 [" + color_mask1 + "]", false, "65535", color_mask1, cmd);
   string color_mask2 = "color_mask2";
   TCLAP::ValueArg<std::string> color_mask2_arg("b", "color_mask2",
-	    "Excluding from bubble, color2 [" + color_mask2 + "]", false, "65535", color_mask2, cmd);
+	    "Exact match bubble, color2 [" + color_mask2 + "]", false, "65535", color_mask2, cmd);
   cmd.parse( argc, argv );
 
   params.input_filename  = input_filename_arg.getValue();
@@ -89,22 +89,22 @@ void test_symmetry(debruijn_graph<> dbg) {
 }
 
 
-void dump_nodes(debruijn_graph<> dbg);
-void dump_nodes(debruijn_graph<> dbg) {
+void dump_nodes(debruijn_graph<> dbg, uint64_t * colors);
+void dump_nodes(debruijn_graph<> dbg, uint64_t * colors) {
   for (size_t i = 0; i < dbg.num_nodes(); i++) {
-    cout << i << ":" << dbg.node_label(i) << "\n";
+    cout << i << ":" << dbg.node_label(i) << colors[dbg._node_to_edge(i)] << "\n";
   }
 }
 
-void dump_edges(debruijn_graph<> dbg);
-void dump_edges(debruijn_graph<> dbg) {
+void dump_edges(debruijn_graph<> dbg, uint64_t * colors);
+void dump_edges(debruijn_graph<> dbg, uint64_t * colors) {
   for (size_t i = 0; i < dbg.num_edges(); i++) {
-    cout << i << "e:" << dbg.edge_label(i) << "\n";
+    cout << i << "e:" << dbg.edge_label(i) << colors[i] << "\n";
   }
 }
 
-void find_bubbles(debruijn_graph<> dbg, uint64_t * colors, int color_mask1, int color_mask2);
-void find_bubbles(debruijn_graph<> dbg, uint64_t * colors, int color_mask1, int color_mask2) {
+void find_bubbles(debruijn_graph<> dbg, uint64_t * colors, uint64_t color_mask1, uint64_t color_mask2);
+void find_bubbles(debruijn_graph<> dbg, uint64_t * colors, uint64_t color_mask1, uint64_t color_mask2) {
   int t = getMilliCount();
   bit_vector visited = bit_vector(dbg.num_nodes(), 0);
   cout << "Starting to look for bubbles\n";
@@ -130,31 +130,30 @@ void find_bubbles(debruijn_graph<> dbg, uint64_t * colors, int color_mask1, int 
 	ssize_t pos = dbg.outgoing(i, x);
 	if (pos == -1)
 	  continue;
-	if (branch_offset < MAX_BRANCH)
-	  branch[branch_num][branch_offset++] = base[x];
+	branch[branch_num][branch_offset++] = base[x];
 	branch_color[branch_num] = colors[dbg._node_to_edge(pos)];
-	//int len = 1;
-	while (dbg.indegree(pos) == 1 && dbg.outdegree(pos) == 1) {
-	  ssize_t next;
+	while (dbg.indegree(pos) == 1 && dbg.outdegree(pos) == 1 && branch_offset < MAX_BRANCH) {
+	  ssize_t next_edge;
 	  for (unsigned long x2 = 1; x2<dbg.sigma+1;x2++) {
-	    next = dbg.outgoing(pos, x2);
-	    if (next != -1) {
-	      if (branch_offset < MAX_BRANCH)
-		branch[branch_num][branch_offset++] = base[x2];
+	    next_edge = dbg.outgoing_edge(pos, x2);
+	    if (next_edge != -1) {
+	      branch[branch_num][branch_offset++] = base[x2];
 	      break;
 	    }
 	  }
-	  pos = next;
+	  pos = dbg._edge_to_node(next_edge);
 	}
+	if (branch_offset > MAX_BRANCH)
+	  break;
+
 	end[branch_num++] =  (dbg.indegree(pos) == 2) ? pos : 0;
 	branch_offset = 0;
       }
       // check if both branches ended on the same kmer and they pass the requested color masks
       if ((end[0] && end[0] == end[1]) &&
-	  ((color_mask1 & branch_color[0] && color_mask2 & branch_color[1]) || 
-	   (color_mask1 & branch_color[1] && color_mask2 & branch_color[0]))) {
-	cout << branch_color[0] << ":" << branch_color[1];
-	cout << "\nStart flank: " << dbg.node_label(start) << " c: "<< colors[edge] << "\n";
+	  ((color_mask1 & branch_color[0] && color_mask2 == branch_color[1]) || 
+	   (color_mask1 & branch_color[1] && color_mask2 == branch_color[0]))) {
+	cout << "\nStart flank: " << dbg.node_label(start) << " c: " << branch_color[0] << ":" << branch_color[1] << "\n";
 	cout << "Branch: " << branch[0] << "\n";
 	cout << "Branch: " << branch[1] << "\n";
 	cout << "End flank: " << dbg.node_label(end[0]) << "\n";
@@ -186,6 +185,8 @@ int main(int argc, char* argv[]) {
   cerr << "Total size    : " << size_in_mega_bytes(dbg) << " MB" << endl;
   cerr << "Bits per edge : " << bits_per_element(dbg) << " Bits" << endl;
 
+  //dump_nodes(dbg, colors);
+  //dump_edges(dbg, colors);
   find_bubbles(dbg, colors, atoi(p.color_mask1.c_str()), atoi(p.color_mask2.c_str()));
 
   // The parameter should be const... On my computer the parameter
