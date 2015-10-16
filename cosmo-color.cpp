@@ -57,10 +57,10 @@ void parse_arguments(int argc, char **argv, parameters_t & params)
             "Default prefix: basename(input_file).", false, "", output_short_form, cmd);
   string color_mask1 = "color_mask1";
   TCLAP::ValueArg<std::string> color_mask1_arg("a", "color_mask1",
-	    "Include color in bubble, color1 [" + color_mask1 + "]", false, "65535", color_mask1, cmd);
+	    "Color mask 1, color1 [" + color_mask1 + "]", false, "65535", color_mask1, cmd);
   string color_mask2 = "color_mask2";
   TCLAP::ValueArg<std::string> color_mask2_arg("b", "color_mask2",
-	    "Exact match bubble, color2 [" + color_mask2 + "]", false, "65535", color_mask2, cmd);
+	    "Color mask 2, color2 [" + color_mask2 + "]", false, "65535", color_mask2, cmd);
   cmd.parse( argc, argv );
 
   params.input_filename  = input_filename_arg.getValue();
@@ -151,8 +151,10 @@ void find_bubbles(debruijn_graph<> dbg, uint64_t * colors, uint64_t color_mask1,
       }
       // check if both branches ended on the same kmer and they pass the requested color masks
       if ((end[0] && end[0] == end[1]) &&
-	  ((color_mask1 & branch_color[0] && color_mask2 == branch_color[1]) || 
-	   (color_mask1 & branch_color[1] && color_mask2 == branch_color[0]))) {
+	  ((color_mask1 & branch_color[0] && !(~color_mask1 & branch_color[0]) &&
+	    color_mask2 & branch_color[1] && !(~color_mask2 & branch_color[1])) || 
+	   (color_mask1 & branch_color[1] && !(~color_mask1 & branch_color[1]) &&
+	    color_mask2 & branch_color[0] && !(~color_mask2 & branch_color[0])))) {
 	cout << "\nStart flank: " << dbg.node_label(start) << " c: " << branch_color[0] << ":" << branch_color[1] << "\n";
 	cout << "Branch: " << branch[0] << "\n";
 	cout << "Branch: " << branch[1] << "\n";
