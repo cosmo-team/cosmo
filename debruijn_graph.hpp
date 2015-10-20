@@ -393,9 +393,10 @@ class debruijn_graph {
     // if x == 0 ($) then we can't follow the edge
     // (should maybe make backward consistent with this, but using the edge 0 loop for node label generation).
     if (x == 0) return -1;
+
     // if this is flagged, then reset i to the corresponding unflagged symbol and use that as the starting point
     if (m_edges[i] & 1) {
-      i = _node_to_edge(m_edges.select(m_edges.rank(i, fullx) - 1, fullx));
+      i = m_edges.select(m_edges.rank(i, fullx), fullx);
     }
 
     size_t start = _symbol_start(x);
