@@ -17,19 +17,23 @@ using namespace boost::adaptors;
 
 enum edge_tag { standard, in_dummy, out_dummy };
 
-template <typename InputRange1, typename InputRange2, typename OutputIterator>
-void find_incoming_dummy_nodes(const InputRange1 a_range, const InputRange2 b_range, uint32_t k, OutputIterator out) {
-  typedef typename InputRange1::value_type kmer_t;
-  typedef typename OutputIterator::value_type pair_t;
+template <typename kmer_t, typename InputRange1, typename InputRange2, typename Func>
+void find_incoming_dummy_nodes(const InputRange1 a_range, const InputRange2 b_range, uint32_t k, Func out) {
+  //typedef decltype(*a_range.begin()) kmer_t;
+  //typedef typename OutputIterator::value_type pair_t;
   auto a_lam   = std::function<kmer_t(kmer_t)>([](kmer_t x) -> kmer_t {return get_start_node(x);});
   auto b_lam   = std::function<kmer_t(kmer_t)>([k](kmer_t x) -> kmer_t {return get_end_node(x,k);});
+  // TODO: remove the uniqued adaptors. Kinda slow.
   auto a = a_range | transformed(a_lam) | uniqued;
   auto b = b_range | transformed(b_lam) | uniqued;
 
   //auto pairer  = std::function<pair_t(kmer_t)>([&](kmer_t x) -> )
-  auto pairer  = [&](kmer_t x) { *out++ = std::make_pair(x, k-1); };
-  auto paired_out = boost::make_function_output_iterator(pairer);
+  //auto pairer  = [&](kmer_t x) { *out++ = std::make_pair(x, k-1); };
+  auto paired_out = boost::make_function_output_iterator(out);
+  // TODO: check out std::experimental::parallel?
+  // TODO: check order
   boost::set_difference(a, b, paired_out);
+  //std::experimental::parallel(a.begin(), a.end(), b.begin(), b.end(), paired_out);
 }
 
 template <typename kmer_t, typename OutputIterator>
@@ -50,23 +54,22 @@ void prepare_incoming_dummy_edge_shifts(InputRange dummy_nodes, OutputIterator1 
   //prepare_k_values(k_values, num_dummies, k);
 }
 
-template <typename InputRange1, typename InputRange2, typename OutputContainer>
+/*
+template <typename kmer_t, typename InputRange1, typename InputRange2, typename OutputContainer>
 void find_incoming_dummy_edges(const InputRange1 a_range, const InputRange2 b_range, uint32_t k, OutputContainer & incoming_dummies) {
-  typedef typename InputRange1::value_type kmer_t;
+  //typedef typename InputRange1::value_type kmer_t;
   typedef typename OutputContainer::value_type pair_t;
 
   // Find unique nodes that need dummy edges
-  find_incoming_dummy_nodes(a_range, b_range, k, std::back_inserter(incoming_dummies));
+  find_incoming_dummy_nodes<kmer_t>(a_range, b_range, k, std::back_inserter(incoming_dummies));
 
   // Generate dummy edges (all shifts prepended with $)
-  /*
-  size_t num_dummy_edges = incoming_dummies.size() * (k-1); // non-unique
-  incoming_dummies.reserve(num_dummy_edges);
+  //size_t num_dummy_edges = incoming_dummies.size() * (k-1); // non-unique
+  //incoming_dummies.reserve(num_dummy_edges);
 
   prepare_incoming_dummy_edge_shifts(incoming_dummies, std::back_inserter(incoming_dummies), k-1);
-  */
 }
-
+*/
 
 template <class Visitor>
 class Unique {
@@ -189,9 +192,10 @@ auto add_first_end_node_flag(Visitor v, uint32_t k) -> FirstEndNodeFlagger<declt
 // first to make parsing easy)
 //
 // This really needs a refactor...
+// TODO: rewrite using http://www.boost.org/doc/libs/1_48_0/libs/range/doc/html/range/reference/algorithms/mutating/merge.html
 template <typename InputRange1, typename InputRange2, class Visitor>
 void merge_dummies(const InputRange1 table_a, const InputRange1 table_b, const InputRange2 in_dummies, size_t k, Visitor visitor_f) {
-  typedef typename InputRange1::value_type kmer_t;
+  typedef decltype(*table_a.begin()) kmer_t;
 
   // runtime speed: O(num_records) (since num_records >= num_incoming_dummies)
   auto visit = uniquify(add_first_start_node_flag(add_first_end_node_flag(visitor_f, k),k));

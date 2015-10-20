@@ -3,6 +3,20 @@
 
 #include "kmer.hpp"
 
+/*
+template <class KeyAccessor, typename record_t>
+struct record_wrap {
+  KeyAccessor k;
+  typedef typename KeyAccessor::key_type key_type;
+  key_type operator() (const record_t & obj) const {
+    return k(get<0>(obj));
+  }
+  // TODO: hacky if we want to extend it to different record types.
+  record_t min_value() const { return record_t(k.min_value(), 0); }
+  record_t max_value() const { return record_t(k.max_value(), 0xFFFFFFFFFFFFFFFF); }
+};
+*/
+
 template <typename kmer_t>
 struct get_key_colex_node {
   typedef kmer_t key_type;
@@ -22,6 +36,26 @@ struct get_key_colex_edge {
   key_type operator() (const kmer_t & obj) const { return obj; }
   key_type min_value() const { return std::numeric_limits<key_type>::min(); }
   key_type max_value() const { return std::numeric_limits<key_type>::max(); }
+};
+
+template <typename kmer_t>
+struct kmer_less {
+  typedef kmer_t value_type;
+  bool operator() (const value_type & a, const value_type & b) const {
+    return (a < b);
+  }
+  value_type min_value() const { return std::numeric_limits<value_type>::min(); }
+  value_type max_value() const { return std::numeric_limits<value_type>::max(); }
+};
+
+template <typename kmer_t>
+struct node_less {
+  typedef kmer_t value_type;
+  bool operator() (const value_type & a, const value_type & b) const {
+    return get_start_node(a) < get_start_node(b);
+  }
+  value_type min_value() const { return std::numeric_limits<value_type>::min(); }
+  value_type max_value() const { return std::numeric_limits<value_type>::max(); }
 };
 
 template <typename dummy_t>
