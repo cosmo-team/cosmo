@@ -103,24 +103,32 @@ void dump_edges(debruijn_graph<> dbg, uint64_t * colors) {
   }
 }
 
-void find_bubbles(debruijn_graph<> dbg, uint64_t * colors, uint64_t color_mask1, uint64_t color_mask2);
-void find_bubbles(debruijn_graph<> dbg, uint64_t * colors, uint64_t color_mask1, uint64_t color_mask2) {
+void find_bubbles(debruijn_graph<> dbg, rrr_vector<63> &colors, uint64_t color_mask1, uint64_t color_mask2);
+void find_bubbles(debruijn_graph<> dbg, rrr_vector<63> &colors, uint64_t color_mask1, uint64_t color_mask2) {
   int t = getMilliCount();
-  uint64_t combined_mask = color_mask1 | color_mask2;
+  int num_colors = colors.size() / dbg.num_edges();
+  //uint64_t combined_mask = color_mask1 | color_mask2;
   bit_vector visited = bit_vector(dbg.num_nodes(), 0);
   cout << "Starting to look for bubbles\n";
-  for (size_t i = 1; i < dbg.num_nodes(); i++) {
-    //cout << "Node " << i << ":" << dbg.node_label(i) << " color: " << colors[edge] << "\n";
-    if (dbg.outdegree(i) == 2 && !visited[i] && colors[dbg._node_to_edge(i)] & combined_mask) {
-      visited[i] = 1;
+  for (size_t i = 0; i < dbg.num_nodes(); i++) {
+    // cout << "Node " << i << ":" << dbg.node_label(i) << " color: " << color_mask << "\n";
+    if (!visited[i] && dbg.outdegree(i) == 2) {
+      // initialize bubble tracking variables
       int branch_num = 0;
       ssize_t end[2]; // place to store end of branch kmer
-      #define MAX_BRANCH 3000
+      #define MAX_BRANCH 6000
       char branch[2][MAX_BRANCH+1] = {{0}, {0}}; // the branch sequence for printing out later
       int branch_offset = 0;
       uint64_t branch_color[2];
       ssize_t start = i; // place to store start of branch kmer
-      // start of a bubble
+
+      // build color mask
+      ssize_t edge = dbg._node_to_edge(i);
+      uint64_t color_mask = 0;
+      for (int c = 0; c < num_colors; c++)
+	color_mask |= colors[edge * num_colors + c] << c;
+
+      // start of a bubble handling
       for (unsigned long x = 1; x<dbg.sigma+1;x++) {
 	// follow each strand or supernode
 	ssize_t pos = dbg.outgoing(i, x);
@@ -129,6 +137,7 @@ void find_bubbles(debruijn_graph<> dbg, uint64_t * colors, uint64_t color_mask1,
 	branch[branch_num][branch_offset++] = base[x];
 	branch_color[branch_num] = colors[dbg._node_to_edge(pos)];
 	while (dbg.indegree(pos) == 1 && dbg.outdegree(pos) == 1 && branch_offset < MAX_BRANCH) {
+	  visited[pos] = 1;
 	  ssize_t next_edge;
 	  for (unsigned long x2 = 1; x2<dbg.sigma+1;x2++) {
 	    next_edge = dbg.outgoing_edge(pos, x2);
@@ -138,13 +147,13 @@ void find_bubbles(debruijn_graph<> dbg, uint64_t * colors, uint64_t color_mask1,
 	    }
 	  }
 	  pos = dbg._edge_to_node(next_edge);
-	  // cout << pos << ":" << dbg.node_label(pos) << "\n";
+	  //cout << pos << ":" << dbg.node_label(pos) << "\n";
 	}
-	//cout << "Stopped due to : " << dbg.indegree(pos) << ":" << dbg.outdegree(pos) << ":" << branch_offset << "\n";
+	// cout << "Stopped due to : " << dbg.indegree(pos) << ":" << dbg.outdegree(pos) << ":" << branch_offset << "\n";
 	if (branch_offset > MAX_BRANCH)
 	  break;
 
-	end[branch_num++] =  (dbg.indegree(pos) == 2) ? pos : 0;
+	end[branch_num++] =  (dbg.indegree(pos) > 1) ? pos : 0;
 	branch_offset = 0;
       }
       // check if both branches ended on the same kmer and they pass the requested color masks
@@ -152,7 +161,6 @@ void find_bubbles(debruijn_graph<> dbg, uint64_t * colors, uint64_t color_mask1,
       //cout << color_mask1 << ":" << color_mask2 << "\n";
       //cout << "PutativeStart flank: " << dbg.node_label(start) << " c: " << branch_color[0] << ":" << branch_color[1] << "\n";
 
-      //      if ((end[0] && end[0] == end[1]) &&
       if ((end[0] && end[0] == end[1]) &&
 	  ((color_mask1 & branch_color[0] && !(~color_mask1 & branch_color[0]) &&
 	    color_mask2 & branch_color[1] && !(~color_mask2 & branch_color[1])) || 
@@ -179,16 +187,16 @@ int main(int argc, char* argv[]) {
   debruijn_graph<> dbg = debruijn_graph<>::load_from_packed_edges(input, "$ACGT"/*, &minus_positions*/);
   input.close();
 
-  ifstream colorfile(p.color_filename, ios::in|ios::binary);
-  uint64_t * colors = (uint64_t *) malloc(dbg.num_edges() * sizeof(uint64_t));
-  colorfile.read((char *)colors, dbg.num_edges() * sizeof(uint64_t));
-  colorfile.close();
+  rrr_vector<63> colors;
+  load_from_file(colors, p.color_filename);
 
   cerr << "k             : " << dbg.k << endl;
   cerr << "num_nodes()   : " << dbg.num_nodes() << endl;
   cerr << "num_edges()   : " << dbg.num_edges() << endl;
+  cerr << "colors        : " << colors.size() / dbg.num_edges() << endl; 
   cerr << "Total size    : " << size_in_mega_bytes(dbg) << " MB" << endl;
   cerr << "Bits per edge : " << bits_per_element(dbg) << " Bits" << endl;
+  cerr << "Color size    : " << size_in_mega_bytes(colors) << " MB" << endl;
 
   //dump_nodes(dbg, colors);
   //dump_edges(dbg, colors);

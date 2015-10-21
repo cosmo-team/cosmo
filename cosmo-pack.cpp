@@ -334,8 +334,8 @@ int main(int argc, char * argv[]) {
 	    cfs.write((char *)&colors[index++], sizeof(uint64_t));
 	  }
 	  else {
-	    uint64_t zero = 0;
-	    cfs.write((char *)&zero, sizeof(uint64_t));
+	    uint64_t ones = -1;
+	    cfs.write((char *)&ones, sizeof(uint64_t));
 	  }
           prev_k = this_k;
 	      }, !params.cortex, kmer_colors);

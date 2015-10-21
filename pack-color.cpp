@@ -39,10 +39,12 @@ int getMilliSpan(int nTimeStart){
   return nSpan;
 }
 
+string extension = ".rrr";
 typedef struct p
 {
   std::string input_filename = "";
   int num_colors;
+  std::string output_prefix = "";
 } parameters_t;
 
 void parse_arguments(int argc, char **argv, parameters_t & params);
@@ -54,9 +56,14 @@ void parse_arguments(int argc, char **argv, parameters_t & params)
   TCLAP::UnlabeledValueArg<std::string> num_colors_arg("num_colors",
             "Number of colors", true, "", "num colors", cmd);
   string output_short_form = "output_prefix";
+  TCLAP::ValueArg<std::string> output_prefix_arg("o", "output_prefix",
+            "Output prefix. Graph will be written to [" + output_short_form + "]" + extension + ". " +
+            "Default prefix: basename(input_file).", false, "", output_short_form, cmd);
   cmd.parse( argc, argv );
   params.input_filename  = input_filename_arg.getValue();
   params.num_colors  = atoi(num_colors_arg.getValue().c_str());
+  params.output_prefix   = output_prefix_arg.getValue();
+
 }
 
 int main(int argc, char * argv[]) {
@@ -83,7 +90,7 @@ int main(int argc, char * argv[]) {
     uint64_t value;
     colorfile.read((char *)&value, sizeof(uint64_t));
     for (size_t j=0; j < num_color; j++) {
-      b[i*num_color + j] = (value & 1 << j) ? 0 : 1;
+      b[i*num_color + j] = (value & 1 << j) ? 1 : 0;
       if (b[i*num_color + j] == 0)
 	cnt0++;
       else
@@ -94,6 +101,7 @@ int main(int argc, char * argv[]) {
   cout << cnt0  << ":" << cnt1 << endl;
 
   int sysTime = getMilliCount();
+  /*
   bit_vector bv(b);
   sysTime = getMilliCount();
   cout << "BV Creation Time: " << getMilliSpan(sysTime) << endl;
@@ -102,7 +110,7 @@ int main(int argc, char * argv[]) {
   }
   cout << "BV Access Time: " << getMilliSpan(sysTime) << endl;
   cout << "BV Size (MB): " << size_in_mega_bytes(b) << endl;
-
+  */
   sysTime = getMilliCount();
   rrr_vector<63> rrrb(b);
   cout << "RRR Creation Time: " << getMilliSpan(sysTime) << endl;
@@ -112,7 +120,11 @@ int main(int argc, char * argv[]) {
   }
   cout << "RRR AccessTime: " << getMilliSpan(sysTime) << endl;
   cout << "RRR Size (MB): " << size_in_mega_bytes(rrrb) << endl;
+  char * base_name = basename(const_cast<char*>(params.input_filename.c_str()));
+  string outfilename = ((params.output_prefix == "")? base_name : params.output_prefix) + extension;
+  store_to_file(rrrb, outfilename);
 
+  /*
   sysTime = getMilliCount();
   sd_vector<> sdb(b);
   cout << "SD Creation Time: " << getMilliSpan(sysTime) << endl;
@@ -132,4 +144,5 @@ int main(int argc, char * argv[]) {
   }
   cout << "Hyb Access Time: " << getMilliSpan(sysTime) << endl;
   cout << "Hyb Size (MB): " << size_in_mega_bytes(hyb) << endl;
+  */
 }
