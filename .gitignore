@@ -4,8 +4,11 @@ cosmo-build
 cosmo-assemble
 cosmo-benchmark
 
-# STXXL configs
+# STXXL
 .stxxl*
+
+# Logs
+*.*log
 
 # VIM
 *.swp
