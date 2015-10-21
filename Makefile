@@ -19,7 +19,7 @@ NOPT_FLAGS=-O0
 VERSION=0.5.1
 CPP_FLAGS+=-DVERSION=\"$(VERSION)\"
 
-k?=64
+k?=32
 CPP_FLAGS+=-DK_LEN=$(k)
 
 ifeq ($(optimise),0)
