@@ -3,6 +3,7 @@
 #include <fstream>
 #include <libgen.h>
 #include <stxxl.h>
+#include <bitset>
 
 #include <stxxl/bits/containers/sorter.h>
 #include <stxxl/bits/parallel.h>
@@ -83,7 +84,7 @@ void parse_arguments(int argc, char **argv, parameters_t & params)
   TCLAP::UnlabeledValueArg<std::string> input_filename_arg("input",
             "Input file. Currently only supports DSK's binary format (for k<=64).", true, "", "input_file", cmd);
   string output_short_form = "output_prefix";
-  TCLAP::ValueArg<size_t> kmer_length_arg("k", "kmer_length", "Length of edges (node is k-1).", true, 0, "length", cmd);
+  TCLAP::ValueArg<size_t> kmer_length_arg("k", "kmer_length", "Length of edges (node is k-1).", false, 0, "length", cmd); // NOTE: made this optional for the cortex input
   size_t default_mem = 4 * 1024;
   TCLAP::ValueArg<size_t> mem_size_arg("m", "mem_size", "Internal memory to use (MB).", false, default_mem, "length", cmd);
 
@@ -137,29 +138,117 @@ int main(int argc, char* argv[])
   // block size vs creator size?
 
   // Open the file
-  stxxl::syscall_file in_file(file_name, stxxl::file::DIRECT | stxxl::file::RDONLY);
+  //stxxl::syscall_file in_file(file_name, stxxl::file::DIRECT | stxxl::file::RDONLY);
+  ifstream in_file(file_name, ios::binary | ios::in);
   //stxxl::syscall_file out_file(file_name + ".boss",
   //stxxl::file::DIRECT | stxxl::file::RDWR | stxxl::file::CREAT);
   typedef stxxl::vector<kmer_t, 1, stxxl::lru_pager<8>, block_size> vector_type;
-  vector_type in_vec(&in_file); 
+
+  // Consume header
+  
+  in_file.ignore(6+sizeof(int));
+  int input_kmer_size;
+  in_file.read((char*)&input_kmer_size,sizeof(int));
+  int number_of_bitfields;
+  int number_of_colours;
+  in_file.read((char*)&number_of_bitfields,sizeof(int));
+  in_file.read((char*)&number_of_colours,sizeof(int));
+  k = input_kmer_size + 1;
+ 
+  COSMO_LOG(info) << "node length (k)     : " << input_kmer_size;
+  COSMO_LOG(info) << "number of bitfields : " << number_of_bitfields;
+  COSMO_LOG(info) << "number of colors    : " << number_of_colours;
+
+  in_file.ignore(number_of_colours*(sizeof(int)+sizeof(long long)));
+  for (int i = 0; i < number_of_colours; i++) {
+    int sample_id_lens;
+    in_file.read((char*)&sample_id_lens, sizeof(int));
+    in_file.ignore(sample_id_lens);
+  }
+  in_file.ignore(number_of_colours*sizeof(long double));
+  for (int i = 0; i < number_of_colours; i++) {
+    int len_name_of_graph;
+    in_file.ignore(4 + 2*sizeof(int));
+    in_file.read((char*)&len_name_of_graph, sizeof(int));
+    in_file.ignore(len_name_of_graph);
+  }
+  in_file.ignore(6);
+  
+
+  // Header consumed. find how many records there are
+  size_t start = in_file.tellg();
+  in_file.seekg (0, in_file.end);
+  size_t length = (size_t)in_file.tellg() - start;
+  size_t size = length/(8 + number_of_colours * sizeof(int) + number_of_colours);
+  in_file.seekg (start, in_file.beg);
+
+  //vector_type in_vec;//(&in_file); 
   //vector_type kmers(&out_file);
   vector_type kmers;
-  kmers.resize(in_vec.size()*2); // x2 for revcomps
+  kmers.resize(size*2); // x2 for revcomps
   vector_type kmers_b;
-  kmers_b.resize(in_vec.size()*2); // x2 for revcomps
+  kmers_b.resize(kmers.size()*2); // x2 for revcomps
   node_sorter_type node_sorter(node_comparator_type(), M/2);
   edge_sorter_type edge_sorter(edge_comparator_type(), M/2);
 
   // Make conversion functors
-  auto swap  = swap_gt<kmer_t>();
+  //auto swap  = swap_gt<kmer_t>();
   auto revnt = reverse_nt<kmer_t>();
   auto rc    = reverse_complement<kmer_t>(k);
 
   // Convert to our format: reverse for colex ordering, swap g/t encoding (DSK)
   COSMO_LOG(trace) << "Creating runs...";
   // TODO: Parallelise? #pragma omp parallel for
+  // TODO: convert to asynch IO
+  for (size_t i = 0; i < size; i++) {
+    kmer_t in_kmer;
+    int * covg = new int[number_of_colours];
+    //vector<bitset<8>>  edges(number_of_colours,bitset<8>(0));
+    // TODO: change these to vectors when I work out wtf is going on with the reading bug
+    char * edges = new char[number_of_colours];
+    vector<bitset<32>> colors_per_edge(5); // 5th is node only
+    
+    in_file.read((char*)&in_kmer,sizeof(kmer_t));
+    in_file.read((char*)covg,number_of_colours*sizeof(int));
+    in_file.read((char*)edges,number_of_colours); 
+
+    // Invert color matrix
+    for (int j = 0; j < number_of_colours; j++) {
+      if (covg[j] == 0) {
+        continue; // skip colours with no coverage
+      }
+      // coverage for kmer but no edges...
+      bool node_only = bitset<8>(edges[j]).none();
+      if (node_only) {
+        colors_per_edge[4][j] = 1;
+        cout << "NODE ONLY (" << j << "): " << kmer_to_string(revnt(in_kmer), input_kmer_size);
+        cout << "$" << endl;
+      }
+      else for (int c : {0,1,2,3}) {
+        colors_per_edge[c][j] = bitset<8>(edges[j])[c];
+      }
+    }
+
+    // add edges + colors
+    for (int c : {0,1,2,3}) {
+      if (colors_per_edge[c].any()) {
+        kmer_t edge = revnt((in_kmer << 2)|c);
+        //cout << kmer_to_string(edge,input_kmer_size+1) << " ";
+        //cout << colors_per_edge[c] << endl;
+      }
+      // TODO: what should we do with the node_only colors? especially if no edges.
+      // by BOSS dBG definition, we can ignore them, so will do that for now.
+      // but maybe later can add outgoing dummies with colours using the 5th row.
+    }
+    delete[] covg;
+    delete[] edges;
+  }
+
+  exit(0);
+  /*
   for (kmer_t record : vector_type::bufreader_type(in_vec)) {
-    auto x = revnt(swap(record));
+    //auto x = revnt(swap(record));
+    auto x = revnt(record);
     auto y = rc(x);
     node_sorter.push(x);
     node_sorter.push(y);
@@ -167,6 +256,7 @@ int main(int argc, char* argv[])
     edge_sorter.push(y);
   }
   COSMO_LOG(info) << "Added " << node_sorter.size()/2 << " kmers, and their reverse complements.";
+  */
 
   // TODO: replace internal sort with nvidia radix sort (cub/thrust)
   // TODO: test simulated B table vs second sort
