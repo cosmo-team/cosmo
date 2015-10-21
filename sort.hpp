@@ -3,19 +3,6 @@
 
 #include "kmer.hpp"
 
-/*
-template <class KeyAccessor, typename record_t>
-struct record_wrap {
-  KeyAccessor k;
-  typedef typename KeyAccessor::key_type key_type;
-  key_type operator() (const record_t & obj) const {
-    return k(get<0>(obj));
-  }
-  // TODO: hacky if we want to extend it to different record types.
-  record_t min_value() const { return record_t(k.min_value(), 0); }
-  record_t max_value() const { return record_t(k.max_value(), 0xFFFFFFFFFFFFFFFF); }
-};
-*/
 
 template <typename kmer_t>
 struct get_key_colex_node {
@@ -82,5 +69,21 @@ struct colex_dummy_less {
   value_type min_value() const { return std::make_pair(colex_node.min_value(), std::numeric_limits<size_t>::min()); }
   value_type max_value() const { return std::make_pair(colex_node.max_value(), std::numeric_limits<size_t>::max()); }
 };
+
+// TODO: refactor to provide key function
+template <typename record_t, typename kmer_t>
+struct record_less {
+  node_less<kmer_t> less;
+  typedef record_t value_type;
+  bool operator() (const value_type & a, const value_type & b) const {
+    return less(get<0>(a), get<0>(b));
+  }
+  // TODO: hacky if we want to extend it to different record types.
+  value_type min_value() const { return record_t(less.min_value(), 0); }
+  value_type max_value() const { return record_t(less.max_value(),
+                                               std::numeric_limits<uint32_t>::max()); }
+};
+
+
 
 #endif

@@ -193,8 +193,9 @@ auto add_first_end_node_flag(Visitor v, uint32_t k) -> FirstEndNodeFlagger<declt
 //
 // This really needs a refactor...
 // TODO: rewrite using http://www.boost.org/doc/libs/1_48_0/libs/range/doc/html/range/reference/algorithms/mutating/merge.html
-template <typename InputRange1, typename InputRange2, class Visitor>
-void merge_dummies(const InputRange1 table_a, const InputRange1 table_b, const InputRange2 in_dummies, size_t k, Visitor visitor_f) {
+template <typename InputRange1, typename InputRange2, typename InputRange3, class Visitor>
+void merge_dummies(InputRange1 table_a, InputRange2 table_b,
+                   InputRange3 in_dummies, size_t k, Visitor visitor_f) {
   typedef decltype(*table_a.begin()) kmer_t;
 
   // runtime speed: O(num_records) (since num_records >= num_incoming_dummies)

@@ -38,11 +38,14 @@ typedef uint64_t kmer_t;
 typedef uint128_t kmer_t;
 #endif // add some static error handling to this
 typedef std::pair<kmer_t, size_t>  dummy_t;
+typedef uint32_t color_t;
+typedef std::tuple<kmer_t, color_t>  record_t;
 const static string extension = ".packed";
 
 const size_t block_size = 2 * 1024 * 1024; // 512 MB -> safe value for cuda?
 
 typedef node_less<kmer_t> node_comparator_type;
+typedef record_less<record_t, kmer_t> record_comparator_type;
 typedef kmer_less<kmer_t> edge_comparator_type;
 typedef colex_dummy_less<dummy_t> dummy_comparator_type;
 
@@ -58,9 +61,9 @@ void sort(Iterator a, Iterator b, node_comparator_type cmp) {
 }
 }
 */
-typedef stxxl::sorter<kmer_t, node_comparator_type, block_size> node_sorter_type;
-typedef stxxl::sorter<kmer_t, edge_comparator_type, block_size> edge_sorter_type;
-typedef stxxl::sorter<dummy_t, dummy_comparator_type, block_size> dummy_sorter_type;
+typedef stxxl::sorter<record_t, record_comparator_type, block_size> record_sorter_type;
+typedef stxxl::sorter<kmer_t,   edge_comparator_type, block_size> edge_sorter_type;
+typedef stxxl::sorter<dummy_t,  dummy_comparator_type, block_size> dummy_sorter_type;
 
 // TODO: output dummy positions instead
 typedef struct p
@@ -142,7 +145,8 @@ int main(int argc, char* argv[])
   ifstream in_file(file_name, ios::binary | ios::in);
   //stxxl::syscall_file out_file(file_name + ".boss",
   //stxxl::file::DIRECT | stxxl::file::RDWR | stxxl::file::CREAT);
-  typedef stxxl::vector<kmer_t, 1, stxxl::lru_pager<8>, block_size> vector_type;
+  typedef stxxl::vector<record_t, 1, stxxl::lru_pager<8>, block_size> record_vector_type;
+  typedef stxxl::vector<kmer_t, 1, stxxl::lru_pager<8>, block_size> kmer_vector_type;
 
   // Consume header
   
@@ -184,11 +188,12 @@ int main(int argc, char* argv[])
 
   //vector_type in_vec;//(&in_file); 
   //vector_type kmers(&out_file);
-  vector_type kmers;
+  record_vector_type kmers;
   kmers.resize(size*2); // x2 for revcomps
-  vector_type kmers_b;
+  kmer_vector_type kmers_b;
   kmers_b.resize(kmers.size()*2); // x2 for revcomps
-  node_sorter_type node_sorter(node_comparator_type(), M/2);
+  //node_sorter_type node_sorter(node_comparator_type(), M/2);
+  record_sorter_type record_sorter(record_comparator_type(), M/2);
   edge_sorter_type edge_sorter(edge_comparator_type(), M/2);
 
   // Make conversion functors
@@ -232,9 +237,14 @@ int main(int argc, char* argv[])
     // add edges + colors
     for (int c : {0,1,2,3}) {
       if (colors_per_edge[c].any()) {
-        kmer_t edge = revnt((in_kmer << 2)|c);
+        kmer_t x = revnt((in_kmer << 2)|c);
         //cout << kmer_to_string(edge,input_kmer_size+1) << " ";
         //cout << colors_per_edge[c] << endl;
+        auto y = rc(x);
+        record_sorter.push(record_t(x,colors_per_edge[c].to_ulong()));
+        record_sorter.push(record_t(y,colors_per_edge[c].to_ulong()));
+        edge_sorter.push(x);
+        edge_sorter.push(y);
       }
       // TODO: what should we do with the node_only colors? especially if no edges.
       // by BOSS dBG definition, we can ignore them, so will do that for now.
@@ -244,7 +254,6 @@ int main(int argc, char* argv[])
     delete[] edges;
   }
 
-  exit(0);
   /*
   for (kmer_t record : vector_type::bufreader_type(in_vec)) {
     //auto x = revnt(swap(record));
@@ -261,15 +270,15 @@ int main(int argc, char* argv[])
   // TODO: replace internal sort with nvidia radix sort (cub/thrust)
   // TODO: test simulated B table vs second sort
   COSMO_LOG(trace) << "Merging runs...";
-  node_sorter.sort();
+  record_sorter.sort();
   edge_sorter.sort();
 
   // TODO: make buffered reader around sorted stream instead
   // Or keep sorting two tables and stream to range for dummy edge finding (then rewind)
   
   COSMO_LOG(trace) << "Writing to temporary storage...";
-  stxxl::stream::materialize(node_sorter, kmers.begin(), kmers.end());
-  node_sorter.finish_clear();
+  stxxl::stream::materialize(record_sorter, kmers.begin(), kmers.end());
+  record_sorter.finish_clear();
   stxxl::stream::materialize(edge_sorter, kmers_b.begin(), kmers_b.end());
   edge_sorter.finish_clear();
 
@@ -301,7 +310,12 @@ int main(int argc, char* argv[])
 
   dummy_sorter_type dummy_sorter(dummy_comparator_type(), M);
   // TODO: redo this so we dont need the dummies (follow up with Travis)
-  find_incoming_dummy_nodes<kmer_t>(a, b, k, [&](kmer_t x) {
+ 
+  std::function<kmer_t(record_t)> record_key([](record_t x) -> kmer_t {
+    return get<0>(x);
+  });
+  
+  find_incoming_dummy_nodes<kmer_t>(a | transformed(record_key), b, k, [&](kmer_t x) {
     //dummy_sorter.push(dummy_t(x, k-1));
     for (int i=0; i<k-1; i++) {
        x <<= i*2;
@@ -325,14 +339,21 @@ int main(int argc, char* argv[])
   ofstream lcs;
   lcs.open(outfilename + extension + ".lcs", ios::out | ios::binary);
   #endif
+  ofstream cols;
+  cols.open(outfilename + extension + ".colors", ios::out | ios::binary);
 
   COSMO_LOG(trace) << "Merging dummies and outputting...";
   // Merge dummies and output
   size_t prev_k = 0;
   // TODO: rewrite to use bufreaders
   // TODO: **** ADD COLOUR PASSTHROUGH **** (check this in first)
+  color_t color;
+  std::function<kmer_t(record_t)> capture_color([&](record_t x){
+    color = get<1>(x);
+    return get<0>(x);
+  });
   auto d = CI_RANGE(incoming_dummies);
-  merge_dummies(a, b, d, k,
+  merge_dummies(a|transformed(capture_color), b, d, k,
     [&](edge_tag tag, const kmer_t & x, size_t this_k, size_t lcs_len, bool first_end_node) {
       #ifdef VAR_ORDER
       out.write(tag, x, this_k, (lcs_len != k-1), first_end_node);
@@ -341,12 +362,20 @@ int main(int argc, char* argv[])
       #else
       out.write(tag, x, this_k, lcs_len, first_end_node);
       #endif
+      cols.write((char*)&color, sizeof(color_t));
       prev_k = this_k;
       
       #ifdef VERBOSE // print each kmer to stderr for testing
       if (tag == out_dummy) cout << kmer_to_string(get_start_node(x), k-1, k-1) << "$";
       else                  cout << kmer_to_string(x, k, this_k);
-      cout << " " << (lcs_len != k-1) << " " << lcs_len << " " << first_end_node << endl;
+      cout << " " << (lcs_len != k-1) << " " << lcs_len << " " << first_end_node;
+      // print color
+      bitset<32> bs;
+      if (tag == standard) bs = color;
+      else bs.set();
+      cout << " ";
+      for (int i = 0; i<number_of_colours;i++) cout << bs[i];
+      cout << endl;
       #endif
     });
 
@@ -356,6 +385,8 @@ int main(int argc, char* argv[])
   lcs.flush();
   lcs.close();
   #endif
+  cols.flush();
+  cols.close();
 
 
   out.close();
