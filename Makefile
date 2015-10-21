@@ -7,9 +7,9 @@ CPP_FLAGS=-m64 -std=c++0x -pedantic-errors -W -Wall -Wextra -Wshadow -Wpointer-a
 #-Wbool-conversions -Wshift-overflow -Wliteral-conversion \
 
 DEP_PATH=/usr/local#$(HOME)#/usr/local
-INC_PATH=$(DEP_PATH)/include
-LIB_PATH=$(DEP_PATH)/lib
-DEP_FLAGS=-I$(INC_PATH)/ -L$(LIB_PATH)/ #-lsdsl # -ldivsufsort -ldivsufsort64
+INC=-I$(DEP_PATH)/include
+LIB=-L$(DEP_PATH)/lib #-L/usr/lib/x86_64-linux-gnu/
+DEP_FLAGS=$(INC) $(LIB) #-lsdsl # -ldivsufsort -ldivsufsort64
 DEBUG_FLAGS=-pg -gstabs
 NDEBUG_FLAGS=-DNDEBUG
 OPT_FLAGS=-O3 -mmmx -msse -msse2 -msse3 -msse4 -msse4.2 -march=native -fno-strict-aliasing
@@ -65,7 +65,8 @@ io.o: io.hpp io.cpp debug.h dummies.hpp kmer.hpp
 
 # TODO: Roll these all into one... "cosmo". Like git started off as multiple programs.
 cosmo-pack: cosmo-pack.cpp $(PACK_REQS)
-		$(CXX) $(CPP_FLAGS) -o $@ $< io.o $(DEP_FLAGS) -lstxxl -fopenmp #-lhpthread
+		$(CXX) $(CPP_FLAGS) -o $@ $< io.o -DBOOST_LOG_DYN_LINK $(DEP_FLAGS) \
+		-lboost_log -lstxxl -fopenmp #-lhpthread
 
 cosmo-build: cosmo-build.cpp $(BUILD_REQS)
 		$(CXX) $(CPP_FLAGS) -o $@ $< io.o $(DEP_FLAGS) -lsdsl

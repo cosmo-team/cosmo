@@ -14,6 +14,9 @@
 #include <boost/iterator/zip_iterator.hpp>
 #include <boost/iterator/transform_iterator.hpp>
 #include <boost/iterator/function_input_iterator.hpp>
+#include <boost/log/trivial.hpp>
+#include <boost/log/core.hpp>
+#include <boost/log/expressions.hpp>
 
 // TCLAP
 #include "tclap/CmdLine.h"
@@ -23,6 +26,10 @@
 #include "io.hpp"
 #include "sort.hpp"
 #include "dummies.hpp"
+
+//#define BOOST_LOG_DYN_LINK 1
+#define COSMO_LOG BOOST_LOG_TRIVIAL
+#define STXXL_FORCE_VERBOSE_LEVEL -10
 
 #if K_LEN <= 32
 typedef uint64_t kmer_t;
@@ -103,9 +110,26 @@ int main(int argc, char* argv[])
   char * base_name = basename(const_cast<char*>(file_name.c_str()));
   size_t k = params.k;
 
+  // TODO: Logging/verbosity flags
+  // TODO: Config file
+  // TODO: ASCII outputter (first and last symbols, option for whole kmer)
+  // TODO: stdin input
+  boost::log::core::get()->set_filter (
+    boost::log::trivial::severity != boost::log::trivial::debug
+  );
+  /*
+  COSMO_LOG(trace)   << "A trace severity message";
+  COSMO_LOG(debug)   << "A debug severity message";
+  COSMO_LOG(info)    << "An informational severity message";
+  COSMO_LOG(warning) << "A warning severity message";
+  COSMO_LOG(error)   << "An error severity message";
+  COSMO_LOG(fatal)   << "A fatal severity message";
+  */
+
+
   // Check k value supported
   if (k > K_LEN) {
-    std::cerr << "This version only supports k <= " << K_LEN << ". Try recompiling." << std::endl;
+    COSMO_LOG(error) << "This version only supports k <= " << K_LEN << ". Try recompiling.";
     exit(1);
   }
 
@@ -132,7 +156,7 @@ int main(int argc, char* argv[])
   auto rc    = reverse_complement<kmer_t>(k);
 
   // Convert to our format: reverse for colex ordering, swap g/t encoding (DSK)
-  cerr << "Creating runs..." << std::endl;
+  COSMO_LOG(trace) << "Creating runs...";
   // TODO: Parallelise? #pragma omp parallel for
   for (kmer_t record : vector_type::bufreader_type(in_vec)) {
     auto x = revnt(swap(record));
@@ -142,17 +166,18 @@ int main(int argc, char* argv[])
     edge_sorter.push(x);
     edge_sorter.push(y);
   }
+  COSMO_LOG(info) << "Added " << node_sorter.size()/2 << " kmers, and their reverse complements.";
 
   // TODO: replace internal sort with nvidia radix sort (cub/thrust)
   // TODO: test simulated B table vs second sort
-  cerr << "Merging runs..." << std::endl;
+  COSMO_LOG(trace) << "Merging runs...";
   node_sorter.sort();
   edge_sorter.sort();
 
   // TODO: make buffered reader around sorted stream instead
   // Or keep sorting two tables and stream to range for dummy edge finding (then rewind)
   
-  cerr << "Writing..." << std::endl;
+  COSMO_LOG(trace) << "Writing to temporary storage...";
   stxxl::stream::materialize(node_sorter, kmers.begin(), kmers.end());
   node_sorter.finish_clear();
   stxxl::stream::materialize(edge_sorter, kmers_b.begin(), kmers_b.end());
@@ -182,18 +207,19 @@ int main(int argc, char* argv[])
   auto b = CI_RANGE(kmers_b);
   // TODO: function output to buffered writer or sorter, for dummy edges
   // or a b-tree if generating all shifts
-  std::cerr << "Searching for nodes requiring incoming dummy edges..." << std::endl;
+  COSMO_LOG(trace) << "Searching for nodes requiring incoming dummy edges...";
 
   dummy_sorter_type dummy_sorter(dummy_comparator_type(), M);
   // TODO: redo this so we dont need the dummies (follow up with Travis)
   find_incoming_dummy_nodes<kmer_t>(a, b, k, [&](kmer_t x) {
-    dummy_sorter.push(dummy_t(x, k-1));
-    // for (int i=1; i<=k; i++) {
-    //   dummy_sorter.push(dummy_t(x<<(i-1),k-i));
-    // }
+    //dummy_sorter.push(dummy_t(x, k-1));
+    for (int i=0; i<k-1; i++) {
+       x <<= i*2;
+       dummy_sorter.push(dummy_t(x,k-i-1));
+    }
   });
-  std::cerr << "Added " << dummy_sorter.size() << " incoming dummy edges." << std::endl;
-  std::cerr << "Sorting dummies..." << std::endl;
+  COSMO_LOG(info)  << "Added " << dummy_sorter.size() << " incoming dummy edges.";
+  COSMO_LOG(trace) << "Sorting dummies...";
   dummy_sorter.sort();
 
   incoming_dummies.resize(dummy_sorter.size());
@@ -210,8 +236,7 @@ int main(int argc, char* argv[])
   lcs.open(outfilename + extension + ".lcs", ios::out | ios::binary);
   #endif
 
-  std::cerr << "Merging dummies and outputting..." << std::endl;
-
+  COSMO_LOG(trace) << "Merging dummies and outputting...";
   // Merge dummies and output
   size_t prev_k = 0;
   // TODO: rewrite to use bufreaders
@@ -255,6 +280,7 @@ int main(int argc, char* argv[])
   ofs.write((char*)&t_k, sizeof(uint64_t));
   ofs.flush();
   ofs.close();
+  COSMO_LOG(trace) << "Done!";
 
   return 0;
 }
