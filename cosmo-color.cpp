@@ -122,20 +122,19 @@ void find_bubbles(debruijn_graph<> dbg, rrr_vector<63> &colors, uint64_t color_m
       uint64_t branch_color[2];
       ssize_t start = i; // place to store start of branch kmer
 
-      // build color mask
-      ssize_t edge = dbg._node_to_edge(i);
-      uint64_t color_mask = 0;
-      for (int c = 0; c < num_colors; c++)
-	color_mask |= colors[edge * num_colors + c] << c;
-
       // start of a bubble handling
       for (unsigned long x = 1; x<dbg.sigma+1;x++) {
 	// follow each strand or supernode
-	ssize_t pos = dbg.outgoing(i, x);
-	if (pos == -1)
+	ssize_t edge = dbg.outgoing_edge(i, x);
+	if (edge == -1)
 	  continue;
 	branch[branch_num][branch_offset++] = base[x];
-	branch_color[branch_num] = colors[dbg._node_to_edge(pos)];
+	// build color mask
+	uint64_t color_mask = 0;
+	for (int c = 0; c < num_colors; c++)
+	  color_mask |= colors[edge * num_colors + c] << c;
+	branch_color[branch_num] = color_mask;
+	ssize_t pos = dbg._edge_to_node(edge);
 	while (dbg.indegree(pos) == 1 && dbg.outdegree(pos) == 1 && branch_offset < MAX_BRANCH) {
 	  visited[pos] = 1;
 	  ssize_t next_edge;
