@@ -38,7 +38,8 @@ typedef uint64_t kmer_t;
 typedef uint128_t kmer_t;
 #endif // add some static error handling to this
 typedef std::pair<kmer_t, size_t>  dummy_t;
-typedef uint32_t color_t;
+typedef uint64_t color_t;
+const size_t max_colors = bitwidth<color_t>::width;
 typedef std::tuple<kmer_t, color_t>  record_t;
 const static string extension = ".packed";
 
@@ -189,9 +190,9 @@ int main(int argc, char* argv[])
   //vector_type in_vec;//(&in_file); 
   //vector_type kmers(&out_file);
   record_vector_type kmers;
-  kmers.resize(size*2); // x2 for revcomps
+  //kmers.resize(size*2); // x2 for revcomps
   kmer_vector_type kmers_b;
-  kmers_b.resize(kmers.size()*2); // x2 for revcomps
+  //kmers_b.resize(kmers.size()*2); // x2 for revcomps
   //node_sorter_type node_sorter(node_comparator_type(), M/2);
   record_sorter_type record_sorter(record_comparator_type(), M/2);
   edge_sorter_type edge_sorter(edge_comparator_type(), M/2);
@@ -211,7 +212,7 @@ int main(int argc, char* argv[])
     //vector<bitset<8>>  edges(number_of_colours,bitset<8>(0));
     // TODO: change these to vectors when I work out wtf is going on with the reading bug
     char * edges = new char[number_of_colours];
-    vector<bitset<32>> colors_per_edge(5); // 5th is node only
+    vector<bitset<max_colors>> colors_per_edge(5); // 5th is node only
     
     in_file.read((char*)&in_kmer,sizeof(kmer_t));
     in_file.read((char*)covg,number_of_colours*sizeof(int));
@@ -224,10 +225,12 @@ int main(int argc, char* argv[])
       }
       // coverage for kmer but no edges...
       bool node_only = bitset<8>(edges[j]).none();
+      // TODO: Parallelise and optimise this
       if (node_only) {
         colors_per_edge[4][j] = 1;
-        cout << "NODE ONLY (" << j << "): " << kmer_to_string(revnt(in_kmer), input_kmer_size);
-        cout << "$" << endl;
+        //cout << "NODE ONLY (" << j << "): " 
+        //     << kmer_to_string(revnt(in_kmer), input_kmer_size);
+        //cout << "$" << endl;
       }
       else for (int c : {0,1,2,3}) {
         colors_per_edge[c][j] = bitset<8>(edges[j])[c];
@@ -253,6 +256,8 @@ int main(int argc, char* argv[])
     delete[] covg;
     delete[] edges;
   }
+  COSMO_LOG(info) << "Added " << record_sorter.size()/2 << " edges, not including revcomps.";
+  exit(0);
 
   /*
   for (kmer_t record : vector_type::bufreader_type(in_vec)) {
@@ -277,8 +282,10 @@ int main(int argc, char* argv[])
   // Or keep sorting two tables and stream to range for dummy edge finding (then rewind)
   
   COSMO_LOG(trace) << "Writing to temporary storage...";
+  kmers.resize(record_sorter.size()*2); // x2 for revcomps
   stxxl::stream::materialize(record_sorter, kmers.begin(), kmers.end());
   record_sorter.finish_clear();
+  kmers_b.resize(edge_sorter.size()*2); // x2 for revcomps
   stxxl::stream::materialize(edge_sorter, kmers_b.begin(), kmers_b.end());
   edge_sorter.finish_clear();
 
@@ -315,6 +322,7 @@ int main(int argc, char* argv[])
     return get<0>(x);
   });
   
+  // TODO: dummies -> b-tree
   find_incoming_dummy_nodes<kmer_t>(a | transformed(record_key), b, k, [&](kmer_t x) {
     //dummy_sorter.push(dummy_t(x, k-1));
     for (int i=0; i<k-1; i++) {
@@ -370,9 +378,9 @@ int main(int argc, char* argv[])
       else                  cout << kmer_to_string(x, k, this_k);
       cout << " " << (lcs_len != k-1) << " " << lcs_len << " " << first_end_node;
       // print color
-      bitset<32> bs;
+      bitset<max_colors> bs(0); // dummy edges -> 0
       if (tag == standard) bs = color;
-      else bs.set();
+      else bs;
       cout << " ";
       for (int i = 0; i<number_of_colours;i++) cout << bs[i];
       cout << endl;
