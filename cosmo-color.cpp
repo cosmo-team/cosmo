@@ -71,7 +71,6 @@ void parse_arguments(int argc, char **argv, parameters_t & params)
 }
 
 static char base[] = {'?','A','C','G','T'};
-//static const int MAX_SUPERNODE = 40;
 
 void test_symmetry(debruijn_graph<> dbg);
 void test_symmetry(debruijn_graph<> dbg) {
@@ -202,20 +201,4 @@ int main(int argc, char* argv[]) {
   uint64_t mask1 = (p.color_mask1.length() > 0) ? atoi(p.color_mask1.c_str()) : -1;
   uint64_t mask2 = (p.color_mask2.length() > 0) ? atoi(p.color_mask2.c_str()) : -1;
   find_bubbles(dbg, colors, mask1, mask2);
-
-  // The parameter should be const... On my computer the parameter
-  // isn't const though, yet it doesn't modify the string...
-  // This is still done AFTER loading the file just in case
-  char * base_name = basename(const_cast<char*>(p.input_filename.c_str()));
-  string outfilename = ((p.output_prefix == "")? base_name : p.output_prefix) + extension;
-  store_to_file(dbg, outfilename);
-
-  #ifdef VAR_ORDER
-  wt_int<rrr_vector<63>> lcs;
-  construct(lcs, base_name + string(".lcs"), 1);
-  cerr << "LCS size      : " << size_in_mega_bytes(lcs) << " MB" << endl;
-  cerr << "LCS bits/edge : " << bits_per_element(lcs) << " Bits" << endl;
-  store_to_file(lcs, outfilename + ".lcs.wt");
-  // TODO: Write compressed LCS
-  #endif
 }

@@ -198,7 +198,7 @@ size_t cortex_read_kmers(int handle, uint32_t kmer_num_bits, uint32_t num_colors
 	color_acc = 0;
 	for (j=0; j<num_colors;j++) {
 	  if (individual_edges_reading_from_binary[j] & mask)
-	    color_acc |= 1 << j % 64;
+	    color_acc |= 1LL << j % 64;
 	  if ((j > 0 && j % 64 == 0) || j == num_colors -1) {
 	    // write out bits when we have filled accumulator
 	    kmer_colors[next_slot] = color_acc;
