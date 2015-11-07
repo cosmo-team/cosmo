@@ -15,6 +15,8 @@
 #define DNA_ALPHA "acgt"
 #define DUMMY_SYM '$'
 
+using namespace cosmo;
+
 // Swaps G (11 -> 10) and T (10 -> 11) representation so radix ordering is lexical
 inline uint64_t _swap_gt_64(const uint64_t x) {
   return (x ^ ((x & 0xAAAAAAAAAAAAAAAA) >> 1));

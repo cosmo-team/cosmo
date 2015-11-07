@@ -1,5 +1,5 @@
-#ifndef IO_H
-#define IO_H
+#ifndef IO_HPP
+#define IO_HPP
 
 #include <fcntl.h>
 #include <unistd.h>
@@ -12,10 +12,12 @@
 #include <fstream>
 
 #include <boost/iterator/iterator_facade.hpp>
+#include <boost/range/iterator_range_core.hpp>
+#include <boost/range/iterator_range.hpp>
 #include "utility.hpp"
 #include "dummies.hpp"
 #include "kmer.hpp"
-#include "debug.h"
+#include "debug.hpp"
 
 static const size_t MAX_BITS_PER_KMER = 128;
 static const size_t BUFFER_SIZE = 1024 * 1024;
@@ -138,44 +140,6 @@ inline edge_tuple unpack_to_tuple(packed_edge x) {
 template <typename BlockIterator>
 inline edge_tuple get_edge(BlockIterator blocks, size_t i) {
   return unpack_to_tuple(get_packed_edge(blocks, i));
-}
-
-template <typename T>
-class typed_input_iterator : public boost::iterator_facade<typed_input_iterator<T>, T const, std::input_iterator_tag> {
-public:
-  typed_input_iterator() : m_eof(true), m_in() {}
-  typed_input_iterator(std::istream & in) : m_in(in) {
-    increment();
-  }
-
-private:
-  friend class boost::iterator_core_access;
-
-  void increment() {
-    if (!m_eof && m_in == std::istreambuf_iterator<char>()) m_eof = true;
-    else for (size_t i = 0; i < sizeof(T); i++) {
-      ((char*)&m_current)[i] = *m_in++;
-    }
-  }
-
-  bool equal(typed_input_iterator const& other) const {
-    return m_in == other.m_in && m_eof == other.m_eof;
-  }
-
-  T const & dereference() const { return m_current; }
-
-  bool                           m_eof{false};
-  T                              m_current;
-  std::istreambuf_iterator<char> m_in;
-};
-
-template <typename kmer_t>
-std::pair<typed_input_iterator<kmer_t>, typed_input_iterator<kmer_t>>
-make_typed_input_range(std::ifstream & in) {
-  auto in_begin = typed_input_iterator<kmer_t>(in);
-  auto in_end   = typed_input_iterator<kmer_t>();
-  auto in_range = std::make_pair(in_begin, in_end);
-  return in_range;
 }
 
 #endif

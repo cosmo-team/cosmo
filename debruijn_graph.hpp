@@ -16,7 +16,7 @@
 #include "algorithm.hpp"
 #include "utility.hpp"
 #include "io.hpp"
-#include "debug.h"
+#include "debug.hpp"
 
 using namespace std;
 using namespace sdsl;

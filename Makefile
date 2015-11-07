@@ -50,9 +50,9 @@ ifeq ($(varord),1)
 CPP_FLAGS+=-DVAR_ORDER
 endif
 
-BUILD_REQS=debruijn_graph.hpp io.hpp io.o debug.h
+BUILD_REQS=debruijn_graph.hpp io.hpp io.o debug.hpp
 ASSEM_REQS=debruijn_graph.hpp algorithm.hpp utility.hpp kmer.hpp
-PACK_REQS=lut.hpp debug.h io.hpp io.o sort.hpp kmer.hpp dummies.hpp
+PACK_REQS=lut.hpp debug.hpp io.hpp io.o sort.hpp kmer.hpp dummies.hpp
 BINARIES=cosmo-pack cosmo-build cosmo-benchmark cosmo-test # cosmo-assemble
 
 default: all
@@ -60,7 +60,7 @@ default: all
 lut.hpp: make_lut.py
 		python make_lut.py > lut.hpp
 
-io.o: io.hpp io.cpp debug.h dummies.hpp kmer.hpp
+io.o: io.hpp io.cpp debug.hpp dummies.hpp kmer.hpp
 		$(CXX) $(CPP_FLAGS) -c io.cpp
 
 # TODO: Roll these all into one... "cosmo". Like git started off as multiple programs.
