@@ -45,29 +45,28 @@ struct node_less {
   value_type max_value() const { return std::numeric_limits<value_type>::max(); }
 };
 
-template <typename dummy_t>
+template <typename dummy_t, typename kmer_t>
 struct colex_dummy_less {
   typedef dummy_t value_type;
-  typedef typename dummy_t::first_type kmer_t;
   get_key_colex_node<kmer_t> colex_node;
 
   bool operator() (const value_type & a, const value_type & b) const {
-    kmer_t   a_node = get_start_node(a.first);
-    kmer_t   b_node = get_start_node(b.first);
-    uint64_t a_edge = get_edge_label(a.first);
-    uint64_t b_edge = get_edge_label(b.first);
+    kmer_t   a_node = get_start_node(get<0>(a));
+    kmer_t   b_node = get_start_node(get<0>(b));
+    uint64_t a_edge = get_edge_label(get<0>(a));
+    uint64_t b_edge = get_edge_label(get<0>(b));
 
     // If string equal then sort by length, else sort by string
     if (a_node == b_node) {
-      if (a.second == b.second) {
+      if (get<1>(a) == get<1>(b)) {
         return a_edge < b_edge;
       }
-      else return (a.second < b.second);
+      else return (get<1>(a) < get<1>(b));
     }
     else return (a_node < b_node);
   }
-  value_type min_value() const { return std::make_pair(colex_node.min_value(), std::numeric_limits<size_t>::min()); }
-  value_type max_value() const { return std::make_pair(colex_node.max_value(), std::numeric_limits<size_t>::max()); }
+  value_type min_value() const { return dummy_t(colex_node.min_value(), std::numeric_limits<size_t>::min()); }
+  value_type max_value() const { return dummy_t(colex_node.max_value(), std::numeric_limits<size_t>::max()); }
 };
 
 // TODO: refactor to provide key function

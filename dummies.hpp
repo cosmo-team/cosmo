@@ -2,6 +2,7 @@
 #ifndef DUMMIES_HPP
 #define DUMMIES_HPP
 
+#include <parallel/algorithm>
 #include <boost/range/adaptor/transformed.hpp>     // Map function to inputs
 #include <boost/range/adaptor/uniqued.hpp>         // Uniquify
 #include <boost/range/algorithm/set_algorithm.hpp> // set_difference
@@ -17,23 +18,44 @@ using namespace boost::adaptors;
 
 enum edge_tag { standard, in_dummy, out_dummy };
 
+template <typename kmer_t>
+struct uniq {
+  kmer_t prev;
+  bool   first = true;
+
+  bool operator()( kmer_t x ) {
+    if (x == prev && !first) {
+      return false;
+    }
+    else {
+      prev = x;
+      first = false;
+      return true;
+    }
+  }
+};
+
 template <typename kmer_t, typename InputRange1, typename InputRange2, typename Func>
-void find_incoming_dummy_nodes(const InputRange1 a_range, const InputRange2 b_range, uint32_t k, Func out) {
+void find_incoming_dummy_nodes(const InputRange1 a_range, const InputRange2 b_range, uint32_t k, Func out_f) {
   //typedef decltype(*a_range.begin()) kmer_t;
   //typedef typename OutputIterator::value_type pair_t;
-  auto a_lam   = std::function<kmer_t(kmer_t)>([](kmer_t x) -> kmer_t {return get_start_node(x);});
+  // TODO: http://www.boost.org/doc/libs/1_58_0/libs/range/doc/html/range/reference/adaptors/reference/indexed.html
+  size_t idx = 0;
+  kmer_t temp;
+  auto a_lam    = std::function<kmer_t(kmer_t)>([&](kmer_t x) -> kmer_t {
+    idx++;
+    temp = x;
+    return get_start_node(x);
+  });
   auto b_lam   = std::function<kmer_t(kmer_t)>([k](kmer_t x) -> kmer_t {return get_end_node(x,k);});
-  // TODO: remove the uniqued adaptors. Kinda slow.
-  auto a = a_range | transformed(a_lam) | uniqued;
-  auto b = b_range | transformed(b_lam) | uniqued;
+  auto a = a_range | transformed(a_lam) | filtered(uniq<kmer_t>()); //| uniqued;
+  auto b = b_range | transformed(b_lam) | filtered(uniq<kmer_t>());// | uniqued;
 
-  //auto pairer  = std::function<pair_t(kmer_t)>([&](kmer_t x) -> )
-  //auto pairer  = [&](kmer_t x) { *out++ = std::make_pair(x, k-1); };
-  auto paired_out = boost::make_function_output_iterator(out);
-  // TODO: check out std::experimental::parallel?
-  // TODO: check order
-  boost::set_difference(a, b, paired_out);
-  //std::experimental::parallel(a.begin(), a.end(), b.begin(), b.end(), paired_out);
+  auto pairer  = [&](kmer_t x) { out_f(std::make_pair(idx-1, temp)); };
+  auto paired_out = boost::make_function_output_iterator(pairer);
+  //boost::set_difference(a, b, paired_out);
+  // GPU: http://thrust.github.io/doc/group__set__operations.html
+  __gnu_parallel::set_difference(a.begin(), a.end(), b.begin(), b.end(), paired_out);
 }
 
 template <typename kmer_t, typename OutputIterator>
@@ -44,32 +66,6 @@ void generate_dummy_edges(const kmer_t & dummy_node, OutputIterator & output, si
     *output++ = std::make_pair(temp <<= NT_WIDTH, k - i - 1);
   }
 }
-
-// Change to take zip iter
-template <typename InputRange, typename OutputIterator1>
-void prepare_incoming_dummy_edge_shifts(InputRange dummy_nodes, OutputIterator1 dummy_edges, size_t k) {//OutputIterator2 k_values, size_t k) {
-  for (auto & dummy : dummy_nodes) {
-    generate_dummy_edges(dummy.first, dummy_edges, k);
-  }
-  //prepare_k_values(k_values, num_dummies, k);
-}
-
-/*
-template <typename kmer_t, typename InputRange1, typename InputRange2, typename OutputContainer>
-void find_incoming_dummy_edges(const InputRange1 a_range, const InputRange2 b_range, uint32_t k, OutputContainer & incoming_dummies) {
-  //typedef typename InputRange1::value_type kmer_t;
-  typedef typename OutputContainer::value_type pair_t;
-
-  // Find unique nodes that need dummy edges
-  find_incoming_dummy_nodes<kmer_t>(a_range, b_range, k, std::back_inserter(incoming_dummies));
-
-  // Generate dummy edges (all shifts prepended with $)
-  //size_t num_dummy_edges = incoming_dummies.size() * (k-1); // non-unique
-  //incoming_dummies.reserve(num_dummy_edges);
-
-  prepare_incoming_dummy_edge_shifts(incoming_dummies, std::back_inserter(incoming_dummies), k-1);
-}
-*/
 
 template <class Visitor>
 class Unique {
@@ -201,12 +197,13 @@ void merge_dummies(InputRange1 table_a, InputRange2 table_b,
   // runtime speed: O(num_records) (since num_records >= num_incoming_dummies)
   auto visit = uniquify(add_first_start_node_flag(add_first_end_node_flag(visitor_f, k),k));
 
-  size_t num_records = table_a.end() - table_a.begin();
-  size_t num_incoming_dummies = in_dummies.end() - in_dummies.begin();
-
-  #define get_a(i) (get_start_node(table_a[(i)]) >> 2)
-  #define get_b(i) (get_end_node(table_b[(i)], k) >> 2) // shifting to give dummy check call consistency
-  #define inc_b() while (b_idx < num_records && get_b(++b_idx) == b) {}
+  //size_t num_records = table_a.end() - table_a.begin();
+  size_t num_incoming_dummies = in_dummies.size();//in_dummies.end() - in_dummies.begin();
+  decltype(table_a.begin())   a_it(table_a.begin());
+  decltype(table_b.begin())   b_it(table_b.begin());
+  #define get_a(i) (get_start_node(*(i)) >> 2)
+  #define get_b(i) (get_end_node(*(i), k) >> 2) // shifting to give dummy check call consistency
+  #define inc_b() while (b_it != table_b.end() && get_b(++b_it) == b) {}
 
   // **Standard edges**: Table a (already sorted by colex(node), then edge).
   // Table a May not be unique (if k is odd and had "palindromic" [in DNA sense] kmer in input)
@@ -214,15 +211,15 @@ void merge_dummies(InputRange1 table_a, InputRange2 table_b,
   // (in the correct order, as B is sorted by last colex(row)).
   // **Incoming Dummies**: in_dummies calculated previously {get_a} - {get_b}, sorted after adding shifts to produce all required $-prefixes
   // e.g. {$acgt, $ccag} -> {$$$$a, $$$$a, $$$ac, $ccag, $$$cc, $$acg, $$cca, $acgt } [note $$$$a is repeated -> not unique]
-  size_t a_idx = 0, b_idx = 0, d_idx = 0;
+  auto d_it = in_dummies.begin();
 
   // Ew macros! I know, I know...
   // (d<=s) because dummies should always sort before anything that is equal to them
   // << 2 to compare node instead. Don't need to compare edge since already sorted
-  #define check_for_in_dummies(s) while (d_idx < num_incoming_dummies){ \
-    kmer_t d = in_dummies[d_idx].first; \
-    uint8_t len  = in_dummies[d_idx].second; \
-    if (d<<2 <= ((s)<<2)) { visit(in_dummy, d, len); ++d_idx; }\
+  #define check_for_in_dummies(s) while (d_it != in_dummies.end()){ \
+    kmer_t d = std::get<0>(*d_it); \
+    uint8_t len  = std::get<1>(*d_it); \
+    if (d<<2 <= ((s)<<2)) { visit(in_dummy, d, len); ++d_it; }\
     else break; \
   }
 
@@ -231,10 +228,10 @@ void merge_dummies(InputRange1 table_a, InputRange2 table_b,
   // then print all remaining if either one is depleted
   // at each print, visit all in_dummies < this
   // visit(standard, table_a[a_idx++], k);
-  while (a_idx < num_records && b_idx < num_records) {
-    kmer_t x = table_a[a_idx];
-    kmer_t a = get_a(a_idx);
-    kmer_t b = get_b(b_idx);
+  while (a_it != table_a.end() && b_it != table_b.end()) {
+    kmer_t x = *a_it;
+    kmer_t a = get_a(a_it);
+    kmer_t b = get_b(b_it);
     // B - A -> dummy out
     if (b < a) {
       check_for_in_dummies(b);
@@ -245,34 +242,35 @@ void merge_dummies(InputRange1 table_a, InputRange2 table_b,
     else if (a < b) {
       check_for_in_dummies(x);
       visit(standard, x, k);
-      ++a_idx;
+      ++a_it;
     }
     else {
       check_for_in_dummies(x);
       visit(standard, x, k);
-      ++a_idx;
+      ++a_it;
       inc_b();
     }
   }
 
   // Might have entries in a even if b is depleted (e.g. if all b < a)
-  while (a_idx < num_records) {
-    kmer_t x = table_a[a_idx++];
+  while (a_it != table_a.end()) {
+    kmer_t x = *a_it; ++a_it;
     check_for_in_dummies(x);
     visit(standard, x, k);
   }
 
   // Might have entries in b even if a is depleted
-  while (b_idx < num_records) {
-    kmer_t b = get_b(b_idx++);
+  while (b_it != table_b.end()) {
+    kmer_t b = get_b(b_it);
+    ++b_it;
     check_for_in_dummies(b);
     visit(out_dummy, b, k);
   }
 
   // Might have in-dummies remaining
-  while (d_idx < num_incoming_dummies) {
-    visit(in_dummy, in_dummies[d_idx].first, in_dummies[d_idx].second);
-    ++d_idx;
+  while (d_it != in_dummies.end()) {
+    visit(in_dummy, std::get<0>(*d_it), std::get<1>(*d_it));
+    ++d_it;
   }
 }
 
