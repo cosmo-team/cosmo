@@ -7,11 +7,10 @@
 #include <string>
 #include "utility.hpp"
 
-// TODO: add support for wider integers
-//#include <boost/multiprecision/cpp_int.hpp>
-
 using std::string;
 
+// TODO: add support for wider integers
+//#include <boost/multiprecision/cpp_int.hpp>
 typedef __uint128_t uint128_t;
 
 namespace cosmo {

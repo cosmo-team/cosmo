@@ -22,7 +22,6 @@
 #include <boost/log/trivial.hpp>
 #include <boost/log/core.hpp>
 #include <boost/log/expressions.hpp>
-#include <boost/filesystem.hpp>
 
 // TCLAP
 #include "tclap/CmdLine.h"
@@ -81,14 +80,19 @@ void parse_arguments(int argc, char **argv, parameters_t & params)
 {
   TCLAP::CmdLine cmd(banner, ' ', version);
   TCLAP::UnlabeledValueArg<std::string> input_filename_arg("input",
-            "Input file. Currently only supports DSK's binary format (for k<=64).", true, "", "input_file", cmd);
-  string output_short_form = "output_prefix";
-  TCLAP::ValueArg<size_t> kmer_length_arg("k", "kmer_length", "Length of edges (node is k-1).", false, 0, "length", cmd); // NOTE: made this optional for the cortex input
-  TCLAP::ValueArg<size_t> mem_size_arg("m", "mem_size", "Internal memory to use (MB).", false, default_mem_size, "mem size", cmd);
-
+    "Input file. Currently only supports DSK's binary format (for k<=64).",
+    true, "", "input_file", cmd);
+  // NOTE: made this optional for the cortex input
+  TCLAP::ValueArg<size_t> kmer_length_arg("k", "kmer_length",
+    "Length of edges (node is k-1).",
+    false, 0, "length", cmd); 
+  TCLAP::ValueArg<size_t> mem_size_arg("m", "mem_size",
+    "Internal memory to use (MB).",
+    false, default_mem_size, "mem size", cmd);
   TCLAP::ValueArg<std::string> output_prefix_arg("o", "output_prefix",
-            "Output prefix. Default prefix: basename(input_file).",
-            false, "", output_short_form, cmd);
+    "Output prefix. Default prefix: basename(input_file).",
+    false, "", "output_prefix", cmd);
+  // TODO: XORed TCLAP::SwitchArg - input format switch
   cmd.parse( argc, argv );
   params.input_filename  = input_filename_arg.getValue();
   params.k               = kmer_length_arg.getValue();
@@ -108,13 +112,25 @@ int main(int argc, char* argv[])
   char * base_name = basename(const_cast<char*>(file_name.c_str()));
   size_t k = params.k;
 
-  // Check format
-
-  // TODO: ASCII outputter (first and last symbols, option for whole kmer)
-  // TODO: stdin input
   boost::log::core::get()->set_filter (
     boost::log::trivial::severity != boost::log::trivial::debug
   );
+
+  // Check format
+  std::size_t ext_position = file_name.find_last_of(".");
+  string extension = file_name.substr(ext_position + 1);
+  bool is_ctx = (extension == "ctx");
+  if (is_ctx) {
+    COSMO_LOG(trace) << "File has .ctx extension. Assuming Cortex format.";
+  }
+  else {
+    COSMO_LOG(trace) << "File doesn't have .ctx extension. Assuming DSK format.";
+  }
+  // TODO: add count parser
+  // TODO: add fastq/fasta input
+
+  // TODO: ASCII outputter (first and last symbols, option for whole kmer)
+  // TODO: stdin input
 
   // Check k value supported
   if (k > K_LEN) {
@@ -132,7 +148,6 @@ int main(int argc, char* argv[])
   //stxxl::file::DIRECT | stxxl::file::RDWR | stxxl::file::CREAT);
 
   // Consume header
-  
   in_file.ignore(6+sizeof(int));
   int input_kmer_size;
   in_file.read((char*)&input_kmer_size,sizeof(int));
