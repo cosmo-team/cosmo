@@ -1,8 +1,8 @@
 # NOTE: needs boost, tclap, and sdsl
 
 CXX=g++#clang++-3.5#g++
-CPP_FLAGS=-m64 -std=c++0x -pedantic-errors -W -Wall -Wextra -Wshadow -Wpointer-arith -Wcast-qual \
-					-Wunused -Wstrict-prototypes -Wmissing-prototypes -Wwrite-strings #\
+CPP_FLAGS=-m64 -std=c++11 -pedantic-errors -W -Wall -Wextra -Wshadow -Wpointer-arith -Wcast-qual \
+					-Wunused -Wwrite-strings #\
 					#-Werror
 #-Wbool-conversions -Wshift-overflow -Wliteral-conversion \
 
@@ -53,7 +53,7 @@ endif
 BUILD_REQS=debruijn_graph.hpp io.hpp io.o debug.h
 ASSEM_REQS=debruijn_graph.hpp algorithm.hpp utility.hpp kmer.hpp
 PACK_REQS=lut.hpp debug.h io.hpp io.o sort.hpp kmer.hpp dummies.hpp
-BINARIES=cosmo-pack cosmo-build cosmo-benchmark # cosmo-assemble
+BINARIES=cosmo-pack cosmo-build cosmo-benchmark cosmo-test # cosmo-assemble
 
 default: all
 
@@ -78,6 +78,13 @@ cosmo-benchmark: cosmo-benchmark.cpp $(ASSEM_REQS) wt_algorithm.hpp debruijn_hyp
 		$(CXX) $(CPP_FLAGS) -o $@ $< $(DEP_FLAGS) -lsdsl
 
 all: $(BINARIES)
+
+catch.hpp:
+	wget https://raw.githubusercontent.com/philsquared/Catch/master/single_include/catch.hpp
+
+cosmo-test: cosmo-test.cpp catch.hpp $(wildcard *_test.cpp) $(subst _test.cpp,.hpp,$(wildcard *_test.cpp))
+	$(CXX) $(CPP_FLAGS) -o $@ $(filter-out %.hpp,$^) -DBOOST_LOG_DYN_LINK $(DEP_FLAGS) \
+	-lstxxl -fopenmp -lsdsl
 
 clean:
 		rm -rf $(BINARIES) *.o *.dSYM
