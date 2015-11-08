@@ -24,7 +24,7 @@ static_assert(K_LEN <= 64 && K_LEN > 0,
 typedef uint64_t kmer_t;
 #elif K_LEN <= 64
 typedef uint128_t kmer_t;
-#endif 
+#endif
 
 typedef uint64_t color_t;
 // For measuring the length of a kmer (LCS and dummies)

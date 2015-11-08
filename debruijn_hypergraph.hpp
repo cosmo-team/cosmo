@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <boost/optional.hpp>
 //#include <sdsl/wt_algorithm.hpp>
+#include <boost/tuple/tuple.hpp>
 #include "wt_algorithm.hpp"
 #include "debruijn_graph.hpp"
 

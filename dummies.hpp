@@ -12,6 +12,7 @@
 #include <functional>                              // function (to avoid errors with the lambdas)
 #include <cstring>                                 // memset
 
+#include "config.hpp"
 #include "kmer.hpp"
 
 using namespace boost::adaptors;
@@ -51,7 +52,7 @@ void find_incoming_dummy_nodes(const InputRange1 a_range, const InputRange2 b_ra
   auto a = a_range | transformed(a_lam) | filtered(uniq<kmer_t>()); //| uniqued;
   auto b = b_range | transformed(b_lam) | filtered(uniq<kmer_t>());// | uniqued;
 
-  auto pairer  = [&](kmer_t x) { out_f(std::make_pair(idx-1, temp)); };
+  auto pairer  = [&](kmer_t x) { out_f(dummy_t(idx-1, temp)); };
   auto paired_out = boost::make_function_output_iterator(pairer);
   //boost::set_difference(a, b, paired_out);
   // GPU: http://thrust.github.io/doc/group__set__operations.html

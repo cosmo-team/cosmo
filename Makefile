@@ -1,4 +1,4 @@
-# NOTE: needs boost, tclap, and sdsl
+# NOTE: needs boost, tclap, STXXL, and sdsl
 
 CXX=g++#clang++-3.5#g++
 CPP_FLAGS=-m64 -std=c++11 -pedantic-errors -W -Wall -Wextra -Wshadow -Wpointer-arith -Wcast-qual \
@@ -6,10 +6,11 @@ CPP_FLAGS=-m64 -std=c++11 -pedantic-errors -W -Wall -Wextra -Wshadow -Wpointer-a
 					#-Werror
 #-Wbool-conversions -Wshift-overflow -Wliteral-conversion \
 
-DEP_PATH=/usr/local#$(HOME)#/usr/local
+DEP_PATH=/usr/local
 INC=-I$(DEP_PATH)/include
-LIB=-L$(DEP_PATH)/lib #-L/usr/lib/x86_64-linux-gnu/
-DEP_FLAGS=$(INC) $(LIB) #-lsdsl # -ldivsufsort -ldivsufsort64
+LIB=-L$(DEP_PATH)/lib
+BOOST_FLAGS=-DBOOST_LOG_DYN_LINK -lboost_log -lboost_system -lboost_filesystem 
+DEP_FLAGS=$(INC) $(LIB) $(BOOST_FLAGS)
 DEBUG_FLAGS=-pg -gstabs
 NDEBUG_FLAGS=-DNDEBUG
 OPT_FLAGS=-O3 -mmmx -msse -msse2 -msse3 -msse4 -msse4.2 -march=native -fno-strict-aliasing
@@ -65,8 +66,8 @@ io.o: io.hpp io.cpp debug.hpp dummies.hpp kmer.hpp
 
 # TODO: Roll these all into one... "cosmo". Like git started off as multiple programs.
 cosmo-pack: cosmo-pack.cpp $(PACK_REQS)
-		$(CXX) $(CPP_FLAGS) -o $@ $< io.o -DBOOST_LOG_DYN_LINK $(DEP_FLAGS) \
-		-lboost_log -lstxxl -fopenmp #-lhpthread
+		$(CXX) $(CPP_FLAGS) -o $@ $< io.o $(DEP_FLAGS) \
+		-lstxxl -fopenmp #-lhpthread
 
 cosmo-build: cosmo-build.cpp $(BUILD_REQS)
 		$(CXX) $(CPP_FLAGS) -o $@ $< io.o $(DEP_FLAGS) -lsdsl
@@ -83,7 +84,7 @@ catch.hpp:
 	wget https://raw.githubusercontent.com/philsquared/Catch/master/single_include/catch.hpp
 
 cosmo-test: cosmo-test.cpp catch.hpp $(wildcard *_test.cpp) $(subst _test.cpp,.hpp,$(wildcard *_test.cpp))
-	$(CXX) $(CPP_FLAGS) -o $@ $(filter-out %.hpp,$^) -DBOOST_LOG_DYN_LINK $(DEP_FLAGS) \
+	$(CXX) $(CPP_FLAGS) -o $@ $(filter-out %.hpp,$^) $(DEP_FLAGS) \
 	-lstxxl -fopenmp -lsdsl
 
 clean:

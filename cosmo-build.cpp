@@ -8,6 +8,7 @@
 #include <sdsl/bit_vectors.hpp>
 #include <sdsl/wavelet_trees.hpp>
 
+#include "config.hpp"
 #include "io.hpp"
 #include "debruijn_graph.hpp"
 #include "algorithm.hpp"
@@ -30,7 +31,7 @@ void parse_arguments(int argc, char **argv, parameters_t & params)
             ".packed edge file (output from pack-edges).", true, "", "input_file", cmd);
   string output_short_form = "output_prefix";
   TCLAP::ValueArg<std::string> output_prefix_arg("o", "output_prefix",
-            "Output prefix. Graph will be written to [" + output_short_form + "]" + extension + ". " +
+            "Output prefix. Graph will be written to [" + output_short_form + "]" + graph_ext + ". " +
             "Default prefix: basename(input_file).", false, "", output_short_form, cmd);
   cmd.parse( argc, argv );
 
@@ -46,7 +47,7 @@ int main(int argc, char* argv[]) {
   // Can add this to save a couple seconds off traversal - not really worth it.
   //vector<size_t> minus_positions;
   char * base_name = basename(const_cast<char*>(p.input_filename.c_str()));
-  string outfilename = ((p.output_prefix == "")? base_name : p.output_prefix) + extension;
+  string outfilename = ((p.output_prefix == "")? base_name : p.output_prefix) + graph_ext;
   {
   debruijn_graph<> dbg = debruijn_graph<>::load_from_packed_edges(input, "$ACGT"/*, &minus_positions*/);
   input.close();
