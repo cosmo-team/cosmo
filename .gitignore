@@ -3,6 +3,7 @@ cosmo-pack
 cosmo-build
 cosmo-assemble
 cosmo-benchmark
+cosmo-test
 
 # STXXL
 .stxxl*
