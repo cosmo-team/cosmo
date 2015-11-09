@@ -4,6 +4,7 @@
 
 #include <parallel/algorithm>
 #include <boost/range/adaptor/transformed.hpp>     // Map function to inputs
+#include <boost/range/adaptors.hpp>
 #include <boost/range/adaptor/uniqued.hpp>         // Uniquify
 #include <boost/range/algorithm/set_algorithm.hpp> // set_difference
 #include <boost/function_output_iterator.hpp>      // for capturing output of set_algorithms
@@ -49,14 +50,14 @@ void find_incoming_dummy_nodes(const InputRange1 a_range, const InputRange2 b_ra
     return get_start_node(x);
   });
   auto b_lam   = std::function<kmer_t(kmer_t)>([k](kmer_t x) -> kmer_t {return get_end_node(x,k);});
-  auto a = a_range | transformed(a_lam) | filtered(uniq<kmer_t>()); //| uniqued;
-  auto b = b_range | transformed(b_lam) | filtered(uniq<kmer_t>());// | uniqued;
+  auto a = a_range | transformed(a_lam) | filtered(uniq<kmer_t>());
+  auto b = b_range | transformed(b_lam) | filtered(uniq<kmer_t>());
 
-  auto pairer  = [&](kmer_t x) { out_f(dummy_t(idx-1, temp)); };
+  auto pairer  = [&](kmer_t x) { out_f(idx-1, temp); };
   auto paired_out = boost::make_function_output_iterator(pairer);
-  //boost::set_difference(a, b, paired_out);
+  boost::set_difference(a, b, paired_out);
   // GPU: http://thrust.github.io/doc/group__set__operations.html
-  __gnu_parallel::set_difference(a.begin(), a.end(), b.begin(), b.end(), paired_out);
+  //__gnu_parallel::set_difference(a.begin(), a.end(), b.begin(), b.end(), paired_out);
 }
 
 template <typename kmer_t, typename OutputIterator>

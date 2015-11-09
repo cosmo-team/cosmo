@@ -1,12 +1,13 @@
-#include <iterator>
-#include <typeinfo>
+//#include <iterator>
+//#include <typeinfo>
 #include <fstream>
-#include <bitset>
-#include <set>
+//#include <bitset>
+//#include <set>
 
 #include <stxxl.h>
-#include <stxxl/bits/containers/sorter.h>
 
+/*
+#include <stxxl/bits/containers/sorter.h>
 #include <boost/range/adaptors.hpp>
 #include <boost/range/adaptor/uniqued.hpp>
 #include <boost/range/algorithm/copy.hpp>
@@ -16,6 +17,7 @@
 #include <boost/iterator/zip_iterator.hpp>
 #include <boost/iterator/transform_iterator.hpp>
 #include <boost/iterator/function_input_iterator.hpp>
+*/
 #include <boost/log/trivial.hpp>
 #include <boost/log/core.hpp>
 #include <boost/log/expressions.hpp>
@@ -31,50 +33,39 @@
 #include "sort.hpp"
 #include "dummies.hpp"
 
-// TODO: make generic way to do this, and make non-key fields be stored somewhere else
-// (use zip iterators) since we ignore them for most of it...
-// so we want to prefetch as many keys as possible
-typedef std::tuple<kmer_t, color_t>  record_t;
 
-typedef node_less<kmer_t> node_comparator_type;
-typedef record_less<record_t, kmer_t> record_comparator_type;
-typedef kmer_less<kmer_t> edge_comparator_type;
-typedef colex_dummy_less<dummy_t, kmer_t> dummy_comparator_type;
-
-typedef stxxl::vector<record_t, 1, stxxl::lru_pager<8>, block_size> record_vector_type;
-typedef stxxl::vector<kmer_t, 1, stxxl::lru_pager<8>, block_size> kmer_vector_type;
-
+/*
 namespace std {
   template<>
-  struct iterator_traits<record_vector_type::bufreader_type::bufreader_iterator> {
+  struct iterator_traits<record_vector_t::bufreader_type::bufreader_iterator> {
     typedef input_iterator_tag iterator_category;
     typedef record_t value_type;
     typedef size_t   difference_type;
-    typedef record_t& reference;
+    typedef record_vector_t& reference;
   };
+
   template<>
-  struct iterator_traits<kmer_vector_type::bufreader_type::bufreader_iterator> {
+  struct iterator_traits<kmer_vector_t::bufreader_type::bufreader_iterator> {
     typedef input_iterator_tag iterator_category;
     typedef kmer_t value_type;
     typedef size_t   difference_type;
     typedef kmer_t& reference;
   };
 }
-
-typedef stxxl::sorter<record_t, record_comparator_type, block_size> record_sorter_type;
-typedef stxxl::sorter<kmer_t,   edge_comparator_type, block_size> edge_sorter_type;
-typedef stxxl::sorter<dummy_t,  dummy_comparator_type, block_size> dummy_sorter_type;
+*/
 
 struct parameters_t {
   std::string input_filename = "";
   std::string output_prefix = "";
   size_t k = 0;
   size_t m = 0;
+  bool swap = true;
   bool variable_order = false;
   bool shift_dummies  = true;
 };
 
-void parse_arguments(int argc, char **argv, parameters_t & params) {
+parameters_t parse_arguments(int argc, char **argv) {
+  parameters_t params;
   TCLAP::CmdLine cmd(banner, ' ', version);
   TCLAP::UnlabeledValueArg<std::string> input_filename_arg("input",
     "Input file (DSK or Cortex output).",
@@ -89,90 +80,86 @@ void parse_arguments(int argc, char **argv, parameters_t & params) {
     "Output prefix. Default prefix: basename(input_file).",
     false, "", "output_prefix", cmd);
   TCLAP::SwitchArg varord_arg("v", "variable_order", "Output .lcs file for variable order support.", cmd, false);
-  TCLAP::SwitchArg shift_arg("d", "shift_dummies", "Shift all incoming dummies (slower, but maintains information).", cmd, true);
+  TCLAP::SwitchArg swap_arg("g", "swap_gt", "Swap g and t representation in kmers (Use if DSK input).", cmd, false);
+  TCLAP::SwitchArg shift_arg("d", "no_shifts", "Don't shift all incoming dummies (faster, but loses some information).", cmd, false);
   // TODO: ASCII outputter: -a for last symbol, -aa for whole kmer
   // TODO: XORed forced input format switch
   // TODO: add DSK count parser (-c)
   // TODO: add option to save full sorted kmers (e.g. for iterative dbg)
   // TODO: add option for no reverse complements (e.g. if using bcalm input)
+  // TODO: add option for mutliple files being merged for colour
   cmd.parse( argc, argv );
   params.input_filename  = input_filename_arg.getValue();
   params.k               = kmer_length_arg.getValue();
   params.m               = mem_size_arg.getValue() * mb_to_bytes;
   params.variable_order  = varord_arg.getValue();
-  params.shift_dummies   = shift_arg.getValue();
+  params.swap            = swap_arg.getValue();
+  params.shift_dummies   = !shift_arg.getValue();
   params.output_prefix   = output_prefix_arg.getValue();
+  return params;
 }
 
-template <typename record_t>
-class ebwt_maker {
-};
-
-int main(int argc, char* argv[])
-{
-  boost::log::core::get()->set_filter (
-    boost::log::trivial::severity != boost::log::trivial::debug
-  );
-
+int main(int argc, char* argv[]) {
   using namespace boost::adaptors;
 
   // Parameter extraction
-  parameters_t params;
-  parse_arguments(argc, argv, params);
+  auto params = parse_arguments(argc, argv);
   stxxl::internal_size_type M = params.m;
   std::string file_name = params.input_filename;
   string base_name = basename(file_name);
   size_t k = params.k;
 
+  // Set logging level
+  // TODO: make verbosity parameter
+  boost::log::core::get()->set_filter (
+    boost::log::trivial::severity != boost::log::trivial::debug
+  );
+
   // Check format
   // TODO: add fastq/fasta input, and read from stdin
   bool ctx_input = (extension(file_name) == ".ctx");
   if (ctx_input) {
-    COSMO_LOG(trace) << "File has .ctx extension. Assuming Cortex format.";
+    COSMO_LOG(info) << "Input format: Cortex file";
   }
   else {
-    COSMO_LOG(trace) << "File doesn't have .ctx extension. Assuming raw format.";
+    COSMO_LOG(info) << "Input format: Raw file";
     if (k == 0) {
       COSMO_LOG(error) << "When using raw format, please provide a value for -k flag.";
       exit(1);
     }
-    COSMO_LOG(error) << "Format switching not yet implemented.";
   }
 
   // Check k value supported
-  if (k > K_LEN) {
-    COSMO_LOG(error) << "This version only supports k <= " << K_LEN << ". Try recompiling.";
+  if (k > max_k) {
+    COSMO_LOG(error) << "This version only supports k <= " << max_k << ". Try recompiling.";
     exit(1);
   }
 
-  // Read the file
-  // stxxl::syscall_file out_file(file_name + ".boss",
-  // stxxl::file::DIRECT | stxxl::file::RDWR | stxxl::file::CREAT);
-  //if (ctx_input) {
-    ifstream in_file(file_name, ios::binary | ios::in);
-    record_vector_type kmers;
-    kmer_vector_type kmers_b;
-    record_sorter_type record_sorter(record_comparator_type(), M/2);
-    edge_sorter_type edge_sorter(edge_comparator_type(), M/2);
+  if (ctx_input) {
+    //ifstream in_file(file_name, ios::binary | ios::in);
+    COSMO_LOG(error) << "Cortex input not yet supported.";
+    exit(1);
+  }
+  else {
+    // stxxl::syscall_file out_file(file_name + ".boss", stxxl::file::DIRECT | stxxl::file::RDWR | stxxl::file::CREAT);
+    typedef kmer_sorter<kmer_t> kmer_sorter_t;
+    typedef kmer_sorter_t::record_t record_t;
+    typedef kmer_sorter_t::record_vector_t record_vector_t;
+    typedef kmer_sorter_t::kmer_vector_t kmer_vector_t;
 
-    // typedef tuple<kmer_t> record_type;
-    // make_boss(in_file, params, visitor);
-  //}
-  //else {
-    //stxxl::syscall_file in_file(file_name, stxxl::file::DIRECT | stxxl::file::RDONLY);
-    //kmer_vector_type in_vec(&in_file);
-  //}
-  //
+    stxxl::syscall_file in_file(file_name, stxxl::file::DIRECT | stxxl::file::RDONLY);
+    record_vector_t in_vec(&in_file);
+    kmer_sorter_t sort_input;
+    record_vector_t::bufreader_type br(in_vec);
+    sort_input.sort(br, params, [](){return 0;});
+  }
+
   //node_sorter_type node_sorter(node_comparator_type(), M/2);
   //typedef set<dummy_t> set_t;
   //set_t temp_set;
   //size_t max_temp_dummies = (M/2)/sizeof(dummy_t);
 
-  // Make conversion functors
-  //auto swap  = swap_gt<kmer_t>();
-  auto revnt = reverse_nt<kmer_t>();
-  auto rc    = reverse_complement<kmer_t>(k);
-
+  /*
   size_t number_of_bitfields, number_of_colours;
   tie(k, number_of_colours, number_of_bitfields) = ctx_read_header(in_file);
   // Convert to our format: reverse for colex ordering, swap g/t encoding (DSK)
@@ -188,39 +175,8 @@ int main(int argc, char* argv[])
       edge_sorter.push(y);
     });
   COSMO_LOG(info) << "Added " << record_sorter.size()/2 << " edges, not including revcomps.";
-
-  /*
-  for (kmer_t record : vector_type::bufreader_type(in_vec)) {
-    //auto x = revnt(swap(record));
-    auto x = revnt(record);
-    auto y = rc(x);
-    node_sorter.push(x);
-    node_sorter.push(y);
-    edge_sorter.push(x);
-    edge_sorter.push(y);
-  }
-  COSMO_LOG(info) << "Added " << node_sorter.size()/2 << " kmers, and their reverse complements.";
   */
 
-  // TODO: replace internal sort with nvidia radix sort (cub/thrust)
-  // TODO: test simulated B table vs second sort
-  COSMO_LOG(trace) << "Merging runs...";
-  record_sorter.sort();
-  edge_sorter.sort();
-
-  // TODO: make buffered reader around sorted stream instead
-  COSMO_LOG(trace) << "Writing to temporary storage...";
-  kmers.resize(record_sorter.size());
-  //edge_sorter.set_merger_memory_to_use (0);
-  //record_sorter.set_merger_memory_to_use (M);
-  stxxl::stream::materialize(record_sorter, kmers.begin(), kmers.end());
-  record_sorter.finish_clear();
-  //edge_sorter.set_merger_memory_to_use (M);
-  kmers_b.resize(edge_sorter.size());
-  stxxl::stream::materialize(edge_sorter, kmers_b.begin(), kmers_b.end());
-  edge_sorter.finish_clear();
-
-  // TODO: read about STXXL_PARALLEL_MULTIWAY_MERGE and other defs
   // Find nodes that require incoming dummy edges
   /*
   vector_type::bufreader_type br(kmers);
@@ -238,16 +194,13 @@ int main(int argc, char* argv[])
   // TODO: Make iterator adapter for stream/bufreader (*, ++)
   // Might not have worked before because of RAII?
   // TODO: Make range that takes two ranges and calculates set difference
-  stxxl::vector<dummy_t> incoming_dummies;
+  /*
   #define CI_RANGE(x) (boost::make_iterator_range((x).cbegin(),(x).cend()))
   auto a = CI_RANGE(kmers);
   auto b = CI_RANGE(kmers_b);
   // TODO: function output to buffered writer or sorter, for dummy edges
   // or a b-tree if generating all shifts
-  COSMO_LOG(trace) << "Searching for nodes requiring incoming dummy edges...";
 
-  dummy_sorter_type dummy_sorter(dummy_comparator_type(), M/2);
-  // TODO: redo this so we dont need the dummies (follow up with Travis)
   std::function<kmer_t(record_t)> record_key([](record_t x) -> kmer_t {
     return get<0>(x);
   });
@@ -363,6 +316,8 @@ int main(int argc, char* argv[])
   ofs.write((char*)&t_k, sizeof(uint64_t));
   ofs.flush();
   ofs.close();
+  */
+
   COSMO_LOG(trace) << "Done!";
 
   return 0;

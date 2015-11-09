@@ -23,6 +23,13 @@ T & deconst(const T & x) {
   return const_cast<T&>(x);
 }
 
+template <typename T>
+struct identity {
+  const T& operator()(const T& value) {
+    return value;
+  }
+};
+
 template <typename value_type, class IndexFunction>
 ssize_t function_binary_search(size_t lo, size_t hi, value_type key, IndexFunction f) {
   while ( lo <= hi ) {

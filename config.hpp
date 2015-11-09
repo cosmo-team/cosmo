@@ -5,6 +5,7 @@
 // And any other config stuff
 
 #include <string>
+#include <boost/tuple/tuple.hpp>
 #include "utility.hpp"
 
 using std::string;
@@ -29,15 +30,15 @@ typedef uint128_t kmer_t;
 typedef uint64_t color_t;
 // For measuring the length of a kmer (LCS and dummies)
 typedef uint8_t length_t;
-typedef std::pair<kmer_t, length_t> dummy_t;
+typedef boost::tuple<kmer_t, length_t> dummy_t;
 
 const string version = VERSION;
 const string banner  = "Cosmo Copyright (c) Alex Bowe 2015";
-const size_t k_max = (K_LEN <= 32)? 32 : 64;
+const size_t max_k = (K_LEN <= 32)? 32 : 64;
 const size_t max_colors = bitwidth<color_t>::width;
 const size_t mb_to_bytes = 1024 * 1024;
 const size_t block_size       = 2 * 1024 * 1024; // KB
-const size_t default_mem_size = 4 * 1024; // MB
+const size_t default_mem_size = 2 * 1024; // MB
 
 // File extensions
 const string graph_ext     = ".dbg";
