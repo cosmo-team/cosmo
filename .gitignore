@@ -42,6 +42,7 @@ test_data/*
 # C stuff
 *.o
 *.dSYM
+core
 
 # Python stuff
 .ipynb_checkpoints
