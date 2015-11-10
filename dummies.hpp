@@ -60,6 +60,26 @@ void find_incoming_dummy_nodes(const InputRange1 a_range, const InputRange2 b_ra
   //__gnu_parallel::set_difference(a.begin(), a.end(), b.begin(), b.end(), paired_out);
 }
 
+template <typename kmer_t, typename InputRange1, typename InputRange2, typename Func>
+void find_outgoing_dummy_nodes(const InputRange1 a_range, const InputRange2 b_range, uint32_t k, Func out_f) {
+  //typedef decltype(*a_range.begin()) kmer_t;
+  //typedef typename OutputIterator::value_type pair_t;
+  // TODO: http://www.boost.org/doc/libs/1_58_0/libs/range/doc/html/range/reference/adaptors/reference/indexed.html
+  kmer_t temp;
+  auto a_lam    = std::function<kmer_t(kmer_t)>([](kmer_t x) -> kmer_t {
+    return get_start_node(x);
+  });
+  auto b_lam = std::function<kmer_t(kmer_t)>([&](kmer_t x) -> kmer_t {return get_end_node((temp = x),k);});
+  auto a = a_range | transformed(a_lam) | filtered(uniq<kmer_t>());
+  auto b = b_range | transformed(b_lam) | filtered(uniq<kmer_t>());
+
+  auto pairer  = [&](kmer_t x) { out_f(temp); };
+  auto paired_out = boost::make_function_output_iterator(pairer);
+  boost::set_difference(b, a, paired_out);
+  // GPU: http://thrust.github.io/doc/group__set__operations.html
+  //__gnu_parallel::set_difference(a.begin(), a.end(), b.begin(), b.end(), paired_out);
+}
+
 template <typename kmer_t, typename OutputIterator>
 void generate_dummy_edges(const kmer_t & dummy_node, OutputIterator & output, size_t k) {
   // until k-1 because we need at least one symbol left

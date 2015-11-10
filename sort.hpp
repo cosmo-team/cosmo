@@ -184,7 +184,7 @@ struct kmer_sorter {
     // Find dummies
     // TODO: test idea where we use a bitvector to show dummy positions (ask travis)
     // Possibly: save labels too (it should be about the same size, right?)
-    COSMO_LOG(trace) << "Searching for nodes requiring incoming dummy edges...";
+    COSMO_LOG(trace) << "Searching for nodes requiring dummy edges...";
     dummy_sorter_t dummy_sorter(dummy_comparator_t(), M);
 
     std::function<kmer_t(record_t)> record_key([](record_t x) -> kmer_t {
@@ -192,7 +192,10 @@ struct kmer_sorter {
     });
 
     // Scoped so I can reuse a and b in the final merge
-    {
+    //size_t num_incoming_dummies = 0;
+    dummy_vector_t incoming_dummies;
+    /*
+    std::thread t3([&](){
     typename record_vector_t::bufreader_type a_reader(kmers_a);
     typename kmer_vector_t::bufreader_type b_reader(kmers_b);
 
@@ -201,23 +204,55 @@ struct kmer_sorter {
                                        | transformed(record_key);
     auto b = boost::make_iterator_range(make_typed_iterator<kmer_t>(b_reader.begin()),
                                         make_typed_iterator<kmer_t>(b_reader.end()));
-    size_t num_dummies = 0;
     find_incoming_dummy_nodes<kmer_t>(a, b, k, [&](size_t idx, kmer_t x) {
-      num_dummies++;
+      num_incoming_dummies++;
       dummy_sorter.push(dummy_t(x,k-1));
     });
-    COSMO_LOG(info)  << "Found " << num_dummies << " nodes requiring incoming dummy edges.";
-    }
+    COSMO_LOG(info)  << "Found " << num_incoming_dummies << " nodes requiring incoming dummy edges.";
 
-    COSMO_LOG(trace) << "Sorting dummies...";
+    COSMO_LOG(trace) << "Sorting incoming dummies...";
     dummy_sorter.sort();
 
-    COSMO_LOG(trace) << "Writing dummies...";
-    dummy_vector_t incoming_dummies(dummy_sorter.size());
+    COSMO_LOG(trace) << "Writing incoming dummies...";
+    incoming_dummies.resize(num_incoming_dummies);
     stxxl::stream::materialize(dummy_sorter, incoming_dummies.begin(), incoming_dummies.end());
     dummy_sorter.finish_clear();
+    });
+    */
+    kmer_vector_t outgoing_dummies;
+    size_t num_dummies = 0;
+    //std::thread t4([&](){
+    typename kmer_vector_t::bufwriter_type writer(outgoing_dummies);
+    typename record_vector_t::bufreader_type a_reader(kmers_a);
+    typename kmer_vector_t::bufreader_type b_reader(kmers_b);
 
-    // TODO: Make table of outgoing dummies in parallel
+    auto a = boost::make_iterator_range(make_typed_iterator<record_t>(a_reader.begin()),
+                                        make_typed_iterator<record_t>(a_reader.end()))
+                                       | transformed(record_key);
+    auto b = boost::make_iterator_range(make_typed_iterator<kmer_t>(b_reader.begin()),
+                                        make_typed_iterator<kmer_t>(b_reader.end()));
+
+    find_outgoing_dummy_nodes<kmer_t>(a, b, k, [&](kmer_t x) {
+      num_dummies++;
+      writer << x;
+      auto y = rc(x);
+      dummy_sorter.push(dummy_t(y<<2, k-1));
+    });
+    outgoing_dummies.resize(num_dummies);
+    COSMO_LOG(trace) << "Found " << num_dummies << " nodes requiring dummy edges.";
+
+    COSMO_LOG(trace) << "Sorting incoming dummies...";
+    dummy_sorter.sort();
+
+    COSMO_LOG(trace) << "Writing incoming dummies...";
+    incoming_dummies.resize(num_dummies);
+    stxxl::stream::materialize(dummy_sorter, incoming_dummies.begin(), incoming_dummies.end());
+    dummy_sorter.finish_clear();
+    //});
+    //t3.join();
+    //t4.join();
+    kmers_b.clear();
+
     // TODO: read about STXXL_PARALLEL_MULTIWAY_MERGE
   }
 };
