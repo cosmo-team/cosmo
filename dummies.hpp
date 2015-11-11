@@ -3,6 +3,7 @@
 #define DUMMIES_HPP
 
 #include <boost/heap/priority_queue.hpp>
+#include <boost/heap/fibonacci_heap.hpp>
 #include <boost/variant.hpp>
 #include <parallel/algorithm>
 #include <boost/range/adaptor/transformed.hpp>     // Map function to inputs
@@ -238,6 +239,8 @@ struct heap_item {
   //typedef first_range:: value_type;
   range_variant m_range;
 
+  typename boost::heap::fibonacci_heap<this_type>::handle_type handle;
+
   //heap_item(range_variant r) : m_range(&r) {}
   template <typename range>
   heap_item(range r) : m_range(r) {}
@@ -259,7 +262,7 @@ struct heap_item {
   }
 
   friend bool operator<(const this_type & l, const this_type & r) {
-    return (r.front()) < (l.front()); // swapped because we want min heap
+    return (r.front() << 2) < (l.front() << 2); // swapped because we want min heap
   }
 };
 
@@ -276,105 +279,32 @@ void merge_dummies(InputRange1 & a, InputRange2 & o, InputRange3 & i, Visitor vi
   // Make min-heap priority queue with elements being the lists
   // TODO: try boost::heap::fibonacci_heap for O(1) update of iterators
   // (although it uses nodes, so the indirection might be slower for a small number of input files)
-  priority_queue<h_t> q;
-  if(!a.empty()) q.push(h_t(&a));
-  if(!o.empty()) q.push(h_t(&o));
-  if(!i.empty()) q.push(h_t(&i));
+  //priority_queue<h_t> q;
+  fibonacci_heap<h_t> q;
+  typedef typename fibonacci_heap<h_t>::handle_type handle_t;
+  if(!a.empty()) {
+    handle_t h = q.push(h_t(&a));
+    (*h).handle = h;
+  }
+  if(!o.empty()) {
+    handle_t h = q.push(h_t(&o));
+    (*h).handle = h;
+  }
+  if(!i.empty()) {
+    handle_t h = q.push(h_t(&i));
+    (*h).handle = h;
+  }
 
   while(!q.empty()) {
     h_t input = q.top();
-    q.pop();
+    //q.pop();
     visit(input.front());
     ++input;
-    if (!input.empty()) q.push(input);
+    if (input.empty()) q.pop();
+    else q.increase(input.handle);
+    //if (!input.empty()) q.push(input);
   }
 }
-/*
-template <typename InputRange1, typename InputRange2, typename InputRange3, class Visitor>
-void merge_dummies(InputRange1 table_a, InputRange2 table_b,
-                   InputRange3 in_dummies, size_t k, Visitor visitor_f) {
-  typedef decltype(*table_a.begin()) kmer_t;
-
-  // runtime speed: O(num_records) (since num_records >= num_incoming_dummies)
-  auto visit = uniquify(add_first_start_node_flag(add_first_end_node_flag(visitor_f, k),k));
-
-  //size_t num_records = table_a.end() - table_a.begin();
-  //size_t num_incoming_dummies = in_dummies.size();//in_dummies.end() - in_dummies.begin();
-  decltype(table_a.begin())   a_it(table_a.begin());
-  decltype(table_b.begin())   b_it(table_b.begin());
-  #define get_a(i) (get_start_node(*(i)) >> 2)
-  #define get_b(i) (get_end_node(*(i), k) >> 2) // shifting to give dummy check call consistency
-  #define inc_b() while (b_it != table_b.end() && get_b(++b_it) == b) {}
-
-  // **Standard edges**: Table a (already sorted by colex(node), then edge).
-  // Table a May not be unique (if k is odd and had "palindromic" [in DNA sense] kmer in input)
-  // **Outgoing dummies**: {get_b} - {get_a} (the difference of the sets constructed by mapping get_a and get_b)
-  // (in the correct order, as B is sorted by last colex(row)).
-  // **Incoming Dummies**: in_dummies calculated previously {get_a} - {get_b}, sorted after adding shifts to produce all required $-prefixes
-  // e.g. {$acgt, $ccag} -> {$$$$a, $$$$a, $$$ac, $ccag, $$$cc, $$acg, $$cca, $acgt } [note $$$$a is repeated -> not unique]
-  auto d_it = in_dummies.begin();
-
-  // Ew macros! I know, I know...
-  // (d<=s) because dummies should always sort before anything that is equal to them
-  // << 2 to compare node instead. Don't need to compare edge since already sorted
-  #define check_for_in_dummies(s) while (d_it != in_dummies.end()){ \
-    kmer_t d = boost::get<0>(*d_it); \
-    uint8_t len  = boost::get<1>(*d_it); \
-    if (d<<2 <= ((s)<<2)) { visit(in_dummy, d, len); ++d_it; }\
-    else break; \
-  }
-
-  // set_difference loop with mixed-in merge (for in_dummies)
-  // visit each a in A, otherwise B if b < a and b not in A (so A U B-A)
-  // then print all remaining if either one is depleted
-  // at each print, visit all in_dummies < this
-  // visit(standard, table_a[a_idx++], k);
-  while (a_it != table_a.end() && b_it != table_b.end()) {
-    kmer_t x = *a_it;
-    kmer_t a = get_a(a_it);
-    kmer_t b = get_b(b_it);
-    // B - A -> dummy out
-    if (b < a) {
-      check_for_in_dummies(b);
-      visit(out_dummy, b, k);
-      inc_b();
-    }
-    // incoming dummy detection, but not the correct position, so just inc a-ptr
-    else if (a < b) {
-      check_for_in_dummies(x);
-      visit(standard, x, k);
-      ++a_it;
-    }
-    else {
-      check_for_in_dummies(x);
-      visit(standard, x, k);
-      ++a_it;
-      inc_b();
-    }
-  }
-
-  // Might have entries in a even if b is depleted (e.g. if all b < a)
-  while (a_it != table_a.end()) {
-    kmer_t x = *a_it; ++a_it;
-    check_for_in_dummies(x);
-    visit(standard, x, k);
-  }
-
-  // Might have entries in b even if a is depleted
-  while (b_it != table_b.end()) {
-    kmer_t b = get_b(b_it);
-    ++b_it;
-    check_for_in_dummies(b);
-    visit(out_dummy, b, k);
-  }
-
-  // Might have in-dummies remaining
-  while (d_it != in_dummies.end()) {
-    visit(in_dummy, boost::get<0>(*d_it), boost::get<1>(*d_it));
-    ++d_it;
-  }
-}
-*/
 
 template <typename kmer_t>
 uint8_t get_w(edge_tag tag, const kmer_t & x) {

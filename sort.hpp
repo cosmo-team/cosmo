@@ -281,12 +281,12 @@ struct kmer_sorter {
 
     COSMO_LOG(trace) << "Merging and writing files...";
     //stxxl::vector<kmer_t> chars;
-    kmer_vector_t output;
+    stxxl::vector<char> output;
     output.resize(kmers_a.size() + outgoing_dummies.size() + incoming_dummies.size());
-    typename kmer_vector_t::bufwriter_type w(output);
+    typename stxxl::vector<char>::bufwriter_type w(output);
 
     merge_dummies(a, o, i, [&](kmer_t x){
-      w << x;
+      w << get_nt(x,0);
     });
     /*
     merge_dummies(a, o, i, k,
