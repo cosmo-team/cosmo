@@ -2,17 +2,23 @@
 #ifndef DUMMIES_HPP
 #define DUMMIES_HPP
 
+#include <boost/heap/priority_queue.hpp>
+#include <boost/variant.hpp>
 #include <parallel/algorithm>
 #include <boost/range/adaptor/transformed.hpp>     // Map function to inputs
 #include <boost/range/adaptors.hpp>
 #include <boost/range/adaptor/uniqued.hpp>         // Uniquify
 #include <boost/range/algorithm/set_algorithm.hpp> // set_difference
 #include <boost/function_output_iterator.hpp>      // for capturing output of set_algorithms
+#include <boost/tuple/tuple.hpp>
+#include <boost/tuple/tuple_comparison.hpp>
+#include <boost/tuple/tuple_io.hpp>
 #include <algorithm>
 #include <utility>                                 // make_pair (for boost ranges)
 #include <functional>                              // function (to avoid errors with the lambdas)
 #include <cstring>                                 // memset
 
+#include "debug.hpp"
 #include "config.hpp"
 #include "kmer.hpp"
 
@@ -203,14 +209,87 @@ auto add_first_end_node_flag(Visitor v, uint32_t k) -> FirstEndNodeFlagger<declt
   return FirstEndNodeFlagger<decltype(v)>(v, k);
 }
 
-// Could be done cleaner: set_difference iterator as outgoing dummies, transform to have tuple with k value, merge + merge again iterator with comp functor.
-// but I think an extra set_difference indirection might make things slower (since we have to access outgoing dummies multiple times),
-// and this was already written and tested from an earlier C implementation.
-// Visitor functor takes 4 params: kmer, size, first flag, edge flag (could also just take kmer and size)
-// first to make parsing easy)
-//
-// This really needs a refactor...
-// TODO: rewrite using http://www.boost.org/doc/libs/1_48_0/libs/range/doc/html/range/reference/algorithms/mutating/merge.html
+struct incrementer : boost::static_visitor<> {
+  template <typename T>
+  void operator()(T & t) const {
+    t->advance_begin(1);
+  }
+};
+
+struct is_empty : boost::static_visitor<bool> {
+  template <typename T>
+  bool operator()(T & t) const {
+    return t->empty();
+  }
+};
+
+template <typename R>
+struct fronter : boost::static_visitor<R> {
+  template <typename T>
+  R operator()(T t) const {
+    return (R)*(t->begin());
+  }
+};
+
+template <typename value_type, typename first_range, typename ... ranges>
+struct heap_item {
+  typedef heap_item<value_type, first_range, ranges...> this_type;
+  typedef boost::variant<first_range, ranges...> range_variant;
+  //typedef first_range:: value_type;
+  range_variant m_range;
+
+  //heap_item(range_variant r) : m_range(&r) {}
+  template <typename range>
+  heap_item(range r) : m_range(r) {}
+  //template <typename range>
+
+  // new incremented heap item
+  this_type & operator++() {
+    boost::apply_visitor(incrementer(), m_range);
+    return *this;
+  }
+
+  bool empty() const {
+    return boost::apply_visitor(is_empty(), m_range);
+  }
+
+  value_type front() const {
+    const auto f = fronter<value_type>{};
+    return boost::apply_visitor(f, m_range);
+  }
+
+  friend bool operator<(const this_type & l, const this_type & r) {
+    return (r.front()) < (l.front()); // swapped because we want min heap
+  }
+};
+
+// TODO: Try a parallell merge (and set difference) on the internal STXXL blocks
+template <typename InputRange1, typename InputRange2, typename InputRange3, class Visitor>
+void merge_dummies(InputRange1 & a, InputRange2 & o, InputRange3 & i, Visitor visit) {
+  using namespace boost::heap;
+  // make non-incoming-dummies dummies with k-length so we can compare them easily
+  //auto a_dummies = a | transformed([](decltype(*a))
+
+  // Make sure queue can hold references to each variant of range
+  typedef heap_item<kmer_t, InputRange1*, InputRange2*, InputRange3*> h_t;
+
+  // Make min-heap priority queue with elements being the lists
+  // TODO: try boost::heap::fibonacci_heap for O(1) update of iterators
+  // (although it uses nodes, so the indirection might be slower for a small number of input files)
+  priority_queue<h_t> q;
+  if(!a.empty()) q.push(h_t(&a));
+  if(!o.empty()) q.push(h_t(&o));
+  if(!i.empty()) q.push(h_t(&i));
+
+  while(!q.empty()) {
+    h_t input = q.top();
+    q.pop();
+    visit(input.front());
+    ++input;
+    if (!input.empty()) q.push(input);
+  }
+}
+/*
 template <typename InputRange1, typename InputRange2, typename InputRange3, class Visitor>
 void merge_dummies(InputRange1 table_a, InputRange2 table_b,
                    InputRange3 in_dummies, size_t k, Visitor visitor_f) {
@@ -220,7 +299,7 @@ void merge_dummies(InputRange1 table_a, InputRange2 table_b,
   auto visit = uniquify(add_first_start_node_flag(add_first_end_node_flag(visitor_f, k),k));
 
   //size_t num_records = table_a.end() - table_a.begin();
-  size_t num_incoming_dummies = in_dummies.size();//in_dummies.end() - in_dummies.begin();
+  //size_t num_incoming_dummies = in_dummies.size();//in_dummies.end() - in_dummies.begin();
   decltype(table_a.begin())   a_it(table_a.begin());
   decltype(table_b.begin())   b_it(table_b.begin());
   #define get_a(i) (get_start_node(*(i)) >> 2)
@@ -239,8 +318,8 @@ void merge_dummies(InputRange1 table_a, InputRange2 table_b,
   // (d<=s) because dummies should always sort before anything that is equal to them
   // << 2 to compare node instead. Don't need to compare edge since already sorted
   #define check_for_in_dummies(s) while (d_it != in_dummies.end()){ \
-    kmer_t d = std::get<0>(*d_it); \
-    uint8_t len  = std::get<1>(*d_it); \
+    kmer_t d = boost::get<0>(*d_it); \
+    uint8_t len  = boost::get<1>(*d_it); \
     if (d<<2 <= ((s)<<2)) { visit(in_dummy, d, len); ++d_it; }\
     else break; \
   }
@@ -291,10 +370,11 @@ void merge_dummies(InputRange1 table_a, InputRange2 table_b,
 
   // Might have in-dummies remaining
   while (d_it != in_dummies.end()) {
-    visit(in_dummy, std::get<0>(*d_it), std::get<1>(*d_it));
+    visit(in_dummy, boost::get<0>(*d_it), boost::get<1>(*d_it));
     ++d_it;
   }
 }
+*/
 
 template <typename kmer_t>
 uint8_t get_w(edge_tag tag, const kmer_t & x) {
@@ -316,6 +396,5 @@ uint8_t get_f(edge_tag tag, const kmer_t & x, const uint32_t k) {
   }
   return sym+1;
 }
-
 
 #endif

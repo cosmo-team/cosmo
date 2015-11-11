@@ -33,27 +33,6 @@
 #include "sort.hpp"
 #include "dummies.hpp"
 
-
-/*
-namespace std {
-  template<>
-  struct iterator_traits<record_vector_t::bufreader_type::bufreader_iterator> {
-    typedef input_iterator_tag iterator_category;
-    typedef record_t value_type;
-    typedef size_t   difference_type;
-    typedef record_vector_t& reference;
-  };
-
-  template<>
-  struct iterator_traits<kmer_vector_t::bufreader_type::bufreader_iterator> {
-    typedef input_iterator_tag iterator_category;
-    typedef kmer_t value_type;
-    typedef size_t   difference_type;
-    typedef kmer_t& reference;
-  };
-}
-*/
-
 struct parameters_t {
   std::string input_filename = "";
   std::string output_prefix = "";

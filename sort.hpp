@@ -9,7 +9,6 @@
 #include <stxxl/bits/containers/sorter.h>
 
 #include <boost/tuple/tuple.hpp>
-//#include <boost/tuple/tuple_comparison.hpp>
 #include <boost/range/iterator_range_core.hpp>
 #include <boost/range/iterator_range.hpp>
 
@@ -36,7 +35,7 @@ typed_iterator<T, iterator> & make_typed_iterator(const iterator & it) {
   return (typed_iterator<T, iterator>&) it;
 }
 
-}
+} // namespace
 
 template <typename kmer_t>
 struct kmer_less {
@@ -64,9 +63,9 @@ struct dummy_less {
   typedef typename std::remove_reference<decltype(get<0>(dummy_t()))>::type kmer_t;
   typedef typename std::remove_reference<decltype(get<1>(dummy_t()))>::type length_t;
 
-  node_less<kmer_t> n_less;
+  //node_less<kmer_t> n_less;
   bool operator() (const value_type & a, const value_type & b) const {
-    return n_less(get<0>(a), get<0>(b)) && (get<1>(a) < get<1>(b));
+    return a < b;//n_less(get<0>(a), get<0>(b)) && (get<1>(a) < get<1>(b));
     /*
     kmer_t   a_node = get_start_node(get<0>(a));
     kmer_t   b_node = get_start_node(get<0>(b));
@@ -191,7 +190,10 @@ struct kmer_sorter {
       return get<0>(x);
     });
 
-    // Scoped so I can reuse a and b in the final merge
+    std::function<kmer_t(dummy_t)> dummy_key([](dummy_t x) -> kmer_t {
+      return get<0>(x);
+    });
+
     //size_t num_incoming_dummies = 0;
     dummy_vector_t incoming_dummies;
     /*
@@ -222,6 +224,9 @@ struct kmer_sorter {
     kmer_vector_t outgoing_dummies;
     size_t num_dummies = 0;
     //std::thread t4([&](){
+
+    // Scoped so I can reuse a and b in the final merge
+    {
     typename kmer_vector_t::bufwriter_type writer(outgoing_dummies);
     typename record_vector_t::bufreader_type a_reader(kmers_a);
     typename kmer_vector_t::bufreader_type b_reader(kmers_b);
@@ -236,8 +241,10 @@ struct kmer_sorter {
       num_dummies++;
       writer << x;
       auto y = rc(x);
-      dummy_sorter.push(dummy_t(y<<2, k-1));
+      //dummy_sorter.push(dummy_t(y<<2, k-1));
+      dummy_sorter.push(dummy_t(y, k-1));
     });
+    }
     outgoing_dummies.resize(num_dummies);
     COSMO_LOG(trace) << "Found " << num_dummies << " nodes requiring dummy edges.";
 
@@ -253,7 +260,49 @@ struct kmer_sorter {
     //t4.join();
     kmers_b.clear();
 
-    // TODO: read about STXXL_PARALLEL_MULTIWAY_MERGE
+    //auto payload = payload_t();
+    //std::function<kmer_t(record_t)> capture_payload([&](record_t x){
+      //payload(x.get_tail()); // might be null_type if only kmers provided, but thats ok
+      //return get<0>(x);
+    //});
+
+    typename record_vector_t::bufreader_type a_reader(kmers_a);
+    typename kmer_vector_t::bufreader_type   o_reader(outgoing_dummies);
+    typename dummy_vector_t::bufreader_type  i_reader(incoming_dummies);
+
+    auto a = boost::make_iterator_range(make_typed_iterator<record_t>(a_reader.begin()),
+                                        make_typed_iterator<record_t>(a_reader.end()))
+                                       | transformed(record_key);
+    auto o = boost::make_iterator_range(make_typed_iterator<kmer_t>(o_reader.begin()),
+                                        make_typed_iterator<kmer_t>(o_reader.end()));
+    auto i = boost::make_iterator_range(make_typed_iterator<dummy_t>(i_reader.begin()),
+                                        make_typed_iterator<dummy_t>(i_reader.end()))
+                                       | transformed(dummy_key);
+
+    COSMO_LOG(trace) << "Merging and writing files...";
+    //stxxl::vector<kmer_t> chars;
+    kmer_vector_t output;
+    output.resize(kmers_a.size() + outgoing_dummies.size() + incoming_dummies.size());
+    typename kmer_vector_t::bufwriter_type w(output);
+
+    merge_dummies(a, o, i, [&](kmer_t x){
+      w << x;
+    });
+    /*
+    merge_dummies(a, o, i, k,
+    [&](edge_tag tag, const kmer_t & x, size_t this_k, size_t lcs_len, bool first_end_node) {
+      char_writer << get_nt(x, 0);
+      #ifdef VAR_ORDER
+      out.write(tag, x, this_k, (lcs_len != k-1), first_end_node);
+      char l(lcs_len);
+      lcs.write((char*)&l, 1);
+      #else
+      out.write(tag, x, this_k, lcs_len, first_end_node);
+      #endif
+      cols.write((char*)&color, sizeof(color_t));
+      prev_k = this_k;
+    });
+    */
   }
 };
 

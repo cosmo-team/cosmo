@@ -1,7 +1,7 @@
 # NOTE: needs boost, tclap, STXXL, and sdsl
 
 CXX=g++#clang++-3.5#g++
-CPP_FLAGS=-m64 -std=c++11 -pedantic-errors -W -Wall -Wextra -Wshadow -Wpointer-arith -Wcast-qual \
+CPP_FLAGS=-pipe -m64 -std=c++11 -pedantic-errors -W -Wall -Wextra -Wshadow -Wpointer-arith -Wcast-qual \
 					-Wunused -Wwrite-strings #\
 					#-Werror
 #-Wbool-conversions -Wshift-overflow -Wliteral-conversion \
