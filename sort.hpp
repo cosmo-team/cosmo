@@ -12,6 +12,8 @@
 #include <boost/range/iterator_range_core.hpp>
 #include <boost/range/iterator_range.hpp>
 
+#include "tbb/tbb.h"
+
 #include "dummies.hpp"
 #include "kmer.hpp"
 #include "debug.hpp"
@@ -20,6 +22,15 @@
 namespace cosmo {
 
 namespace {
+
+template <typename kmer_t>
+void shift_kmer(kmer_t & x, kmer_t * a) {
+  // TODO:templatize, make fast one for 128bit?
+  size_t width = bitwidth<kmer_t>::width / 2;
+  for (size_t i = 0; i < width; ++i) {
+    a[i] = (x << ((i+1)*2));
+  }
+}
 
 template <typename T, typename iterator>
 struct typed_iterator : iterator {
@@ -237,12 +248,19 @@ struct kmer_sorter {
     auto b = boost::make_iterator_range(make_typed_iterator<kmer_t>(b_reader.begin()),
                                         make_typed_iterator<kmer_t>(b_reader.end()));
 
+    kmer_t x = 2;
+
+    kmer_t shifts[64];
     find_outgoing_dummy_nodes<kmer_t>(a, b, k, [&](kmer_t x) {
       num_dummies++;
       writer << x;
       auto y = rc(x);
       //dummy_sorter.push(dummy_t(y<<2, k-1));
-      dummy_sorter.push(dummy_t(y, k-1));
+      shift_kmer(x, shifts);
+      for (size_t i = 0; i < k-13; ++i) {
+        dummy_sorter.push(dummy_t(shifts[i], k-i-1));
+      }
+      //dummy_sorter.push(dummy_t(y, k-1));
     });
     }
     outgoing_dummies.resize(num_dummies);
@@ -252,7 +270,7 @@ struct kmer_sorter {
     dummy_sorter.sort();
 
     COSMO_LOG(trace) << "Writing incoming dummies...";
-    incoming_dummies.resize(num_dummies);
+    incoming_dummies.resize(dummy_sorter.size());
     stxxl::stream::materialize(dummy_sorter, incoming_dummies.begin(), incoming_dummies.end());
     dummy_sorter.finish_clear();
     //});
