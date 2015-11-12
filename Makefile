@@ -8,7 +8,7 @@ CPP_FLAGS=-pipe -m64 -std=c++11 -pedantic-errors -W -Wall -Wextra -Wshadow -Wpoi
 
 DEP_PATH=/usr/local
 INC=-I$(DEP_PATH)/include
-LIB=-L$(DEP_PATH)/lib
+LIB=-L$(DEP_PATH)/lib -L./
 BOOST_FLAGS=-DBOOST_LOG_DYN_LINK -lboost_log -lboost_system -lboost_filesystem 
 DEP_FLAGS=$(INC) $(LIB) $(BOOST_FLAGS)
 DEBUG_FLAGS=-pg -gstabs
@@ -67,7 +67,7 @@ io.o: io.hpp io.cpp debug.hpp dummies.hpp kmer.hpp
 # TODO: Roll these all into one... "cosmo". Like git started off as multiple programs.
 cosmo-pack: cosmo-pack.cpp $(PACK_REQS)
 		$(CXX) $(CPP_FLAGS) -o $@ $< io.o $(DEP_FLAGS) \
-		-ltbb -lstxxl -fopenmp #-lhpthread
+		-lstxxl -fopenmp #-lhpthread
 
 cosmo-build: cosmo-build.cpp $(BUILD_REQS)
 		$(CXX) $(CPP_FLAGS) -o $@ $< io.o $(DEP_FLAGS) -lsdsl
