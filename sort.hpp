@@ -12,8 +12,6 @@
 #include <boost/range/iterator_range_core.hpp>
 #include <boost/range/iterator_range.hpp>
 
-#include "tbb/tbb.h"
-
 #include "dummies.hpp"
 #include "kmer.hpp"
 #include "debug.hpp"
@@ -28,7 +26,7 @@ void shift_kmer(kmer_t & x, kmer_t * a) {
   // TODO:templatize, make fast one for 128bit?
   size_t width = bitwidth<kmer_t>::width / 2;
   for (size_t i = 0; i < width; ++i) {
-    a[i] = (x << ((i+1)*2));
+    a[i] = (x << (i*2));
   }
 }
 
@@ -172,7 +170,7 @@ struct kmer_sorter {
     COSMO_LOG(trace) << "Merging runs...";
     record_vector_t kmers_a; // colex based on node
     kmer_vector_t   kmers_b; // colex based on edge
-    // TODO: Test using sorters directly (wrap in iterator) instead of materializing
+    // TODO: Test using sorters directly (wrap in stream then iterator) instead of materializing
     // to avoid IO
     std::thread t1([&](){
       record_sorter.sort();
@@ -192,10 +190,7 @@ struct kmer_sorter {
     t2.join();
 
     // Find dummies
-    // TODO: test idea where we use a bitvector to show dummy positions (ask travis)
-    // Possibly: save labels too (it should be about the same size, right?)
-    COSMO_LOG(trace) << "Searching for nodes requiring dummy edges...";
-    dummy_sorter_t dummy_sorter(dummy_comparator_t(), M);
+    COSMO_LOG(trace) << "Searching for nodes requiring incoming dummy edges...";
 
     std::function<kmer_t(record_t)> record_key([](record_t x) -> kmer_t {
       return get<0>(x);
@@ -205,78 +200,72 @@ struct kmer_sorter {
       return get<0>(x);
     });
 
-    //size_t num_incoming_dummies = 0;
-    dummy_vector_t incoming_dummies;
-    /*
+    stxxl::syscall_file dum_file(basename(parameters.input_filename) + ".dummies", stxxl::file::DIRECT | stxxl::file::RDWR | stxxl::file::CREAT);
+    kmer_vector_t incoming_dummies(&dum_file);
+    stxxl::vector<size_t> dummy_positions;
+    typename kmer_vector_t::bufwriter_type dum_writer(incoming_dummies);
+    stxxl::vector<size_t>::bufwriter_type position_writer(dummy_positions);
+
+    size_t num_incoming_dummies = 0;
     std::thread t3([&](){
-    typename record_vector_t::bufreader_type a_reader(kmers_a);
-    typename kmer_vector_t::bufreader_type b_reader(kmers_b);
+      typename record_vector_t::bufreader_type a_reader(kmers_a);
+      typename kmer_vector_t::bufreader_type b_reader(kmers_b);
 
-    auto a = boost::make_iterator_range(make_typed_iterator<record_t>(a_reader.begin()),
-                                        make_typed_iterator<record_t>(a_reader.end()))
-                                       | transformed(record_key);
-    auto b = boost::make_iterator_range(make_typed_iterator<kmer_t>(b_reader.begin()),
-                                        make_typed_iterator<kmer_t>(b_reader.end()));
-    find_incoming_dummy_nodes<kmer_t>(a, b, k, [&](size_t idx, kmer_t x) {
-      num_incoming_dummies++;
-      dummy_sorter.push(dummy_t(x,k-1));
+      auto a = boost::make_iterator_range(make_typed_iterator<record_t>(a_reader.begin()),
+                                          make_typed_iterator<record_t>(a_reader.end()))
+                                        | transformed(record_key);
+      auto b = boost::make_iterator_range(make_typed_iterator<kmer_t>(b_reader.begin()),
+                                          make_typed_iterator<kmer_t>(b_reader.end()));
+      find_incoming_dummy_nodes<kmer_t>(a, b, k, [&](size_t idx, kmer_t x) {
+        num_incoming_dummies++;
+        dum_writer << (x<<2);
+        position_writer << idx;
+      });
+      dummy_positions.resize(num_incoming_dummies);
+      incoming_dummies.resize(num_incoming_dummies);
+      COSMO_LOG(info) << "num_incoming_dummies: " << num_incoming_dummies;
     });
-    COSMO_LOG(info)  << "Found " << num_incoming_dummies << " nodes requiring incoming dummy edges.";
 
-    COSMO_LOG(trace) << "Sorting incoming dummies...";
-    dummy_sorter.sort();
-
-    COSMO_LOG(trace) << "Writing incoming dummies...";
-    incoming_dummies.resize(num_incoming_dummies);
-    stxxl::stream::materialize(dummy_sorter, incoming_dummies.begin(), incoming_dummies.end());
-    dummy_sorter.finish_clear();
-    });
-    */
+    COSMO_LOG(trace) << "Searching for nodes requiring outgoing dummy edges...";
     kmer_vector_t outgoing_dummies;
-    size_t num_dummies = 0;
-    //std::thread t4([&](){
+    size_t num_outgoing_dummies = 0;
+    std::thread t4([&](){
+      typename kmer_vector_t::bufwriter_type writer(outgoing_dummies);
+      typename record_vector_t::bufreader_type a_reader(kmers_a);
+      typename kmer_vector_t::bufreader_type b_reader(kmers_b);
 
-    // Scoped so I can reuse a and b in the final merge
-    {
-    typename kmer_vector_t::bufwriter_type writer(outgoing_dummies);
-    typename record_vector_t::bufreader_type a_reader(kmers_a);
-    typename kmer_vector_t::bufreader_type b_reader(kmers_b);
+      auto a = boost::make_iterator_range(make_typed_iterator<record_t>(a_reader.begin()),
+                                          make_typed_iterator<record_t>(a_reader.end()))
+                                         | transformed(record_key);
+      auto b = boost::make_iterator_range(make_typed_iterator<kmer_t>(b_reader.begin()),
+                                          make_typed_iterator<kmer_t>(b_reader.end()));
 
-    auto a = boost::make_iterator_range(make_typed_iterator<record_t>(a_reader.begin()),
-                                        make_typed_iterator<record_t>(a_reader.end()))
-                                       | transformed(record_key);
-    auto b = boost::make_iterator_range(make_typed_iterator<kmer_t>(b_reader.begin()),
-                                        make_typed_iterator<kmer_t>(b_reader.end()));
-
-    kmer_t x = 2;
-
-    kmer_t shifts[64];
-    find_outgoing_dummy_nodes<kmer_t>(a, b, k, [&](kmer_t x) {
-      num_dummies++;
-      writer << x;
-      auto y = rc(x);
-      //dummy_sorter.push(dummy_t(y<<2, k-1));
-      shift_kmer(x, shifts);
-      for (size_t i = 0; i < k-13; ++i) {
-        dummy_sorter.push(dummy_t(shifts[i], k-i-1));
-      }
-      //dummy_sorter.push(dummy_t(y, k-1));
+    //kmer_t shifts[bitwidth<kmer_t>::width/2];
+    //const size_t low_k = 16;
+    //#define sum_pow_4(i) (((1<<(2*((i)+2)))-4)/3)
+    //const size_t  = base(low_k);
+    //std::vector<bool> dums(total);
+      //auto y = rc(x);
+      find_outgoing_dummy_nodes<kmer_t>(a, b, k, [&](kmer_t x) {
+        num_outgoing_dummies++;
+        writer << x;
+      });
+      //shift_kmer(y, shifts);
+      //for (size_t i = 1; i < k - low_k; ++i) {
+      outgoing_dummies.resize(num_outgoing_dummies);
+      COSMO_LOG(info) << "num_outgoing_dummies: " << num_outgoing_dummies;
     });
-    }
-    outgoing_dummies.resize(num_dummies);
-    COSMO_LOG(trace) << "Found " << num_dummies << " nodes requiring dummy edges.";
-
-    COSMO_LOG(trace) << "Sorting incoming dummies...";
-    dummy_sorter.sort();
-
-    COSMO_LOG(trace) << "Writing incoming dummies...";
-    incoming_dummies.resize(dummy_sorter.size());
-    stxxl::stream::materialize(dummy_sorter, incoming_dummies.begin(), incoming_dummies.end());
-    dummy_sorter.finish_clear();
-    //});
-    //t3.join();
-    //t4.join();
+    t3.join();
+    t4.join();
     kmers_b.clear();
+
+    //COSMO_LOG(trace) << "Sorting incoming dummies...";
+    //dummy_sorter.sort();
+
+    //COSMO_LOG(trace) << "Writing incoming dummies...";
+    //incoming_dummies.resize(dummy_sorter.size());
+    //stxxl::stream::materialize(dummy_sorter, incoming_dummies.begin(), incoming_dummies.end());
+    //dummy_sorter.finish_clear();
 
     //auto payload = payload_t();
     //std::function<kmer_t(record_t)> capture_payload([&](record_t x){
@@ -284,6 +273,7 @@ struct kmer_sorter {
       //return get<0>(x);
     //});
 
+    /*
     typename record_vector_t::bufreader_type a_reader(kmers_a);
     typename kmer_vector_t::bufreader_type   o_reader(outgoing_dummies);
     typename dummy_vector_t::bufreader_type  i_reader(incoming_dummies);
@@ -306,6 +296,7 @@ struct kmer_sorter {
     merge_dummies(a, o, i, [&](kmer_t x){
       w << get_nt(x,0);
     });
+    */
     /*
     merge_dummies(a, o, i, k,
     [&](edge_tag tag, const kmer_t & x, size_t this_k, size_t lcs_len, bool first_end_node) {
@@ -324,8 +315,6 @@ struct kmer_sorter {
   }
 };
 
-//template <typename t_kmer_t>
-//using kmer_sorter = kmer_sorter<t_kmer_t, tuples::null_type>;
 
 } // namespace cosmo
 
