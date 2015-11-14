@@ -83,7 +83,7 @@ all: $(BINARIES)
 catch.hpp:
 	wget https://raw.githubusercontent.com/philsquared/Catch/master/single_include/catch.hpp
 
-cosmo-test: cosmo-test.cpp catch.hpp $(wildcard *_test.cpp) $(subst _test.cpp,.hpp,$(wildcard *_test.cpp))
+cosmo-test: cosmo-test.cpp catch.hpp $(wildcard *_test.cpp) $(wildcard $(subst _test.cpp,.hpp,$(wildcard *_test.cpp))) $(wildcard dna_*rs.hpp)
 	$(CXX) $(CPP_FLAGS) -o $@ $(filter-out %.hpp,$^) $(DEP_FLAGS) \
 	-lstxxl -fopenmp -lsdsl
 
