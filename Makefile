@@ -54,7 +54,7 @@ endif
 BUILD_REQS=debruijn_graph.hpp io.hpp io.o debug.hpp
 ASSEM_REQS=debruijn_graph.hpp algorithm.hpp utility.hpp kmer.hpp
 PACK_REQS=lut.hpp debug.hpp io.hpp io.o sort.hpp kmer.hpp dummies.hpp
-BINARIES=cosmo-pack cosmo-build cosmo-benchmark cosmo-test # cosmo-assemble
+BINARIES=cosmo-pack cosmo-build cosmo-benchmark # cosmo-test # cosmo-assemble
 
 default: all
 

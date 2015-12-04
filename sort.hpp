@@ -4,7 +4,7 @@
 
 #include <type_traits>
 #include <thread>
-
+#include <set>
 #include <stxxl.h>
 #include <stxxl/bits/containers/sorter.h>
 
@@ -21,9 +21,9 @@ namespace cosmo {
 
 namespace {
 
+// Should be unrolled and inlined, making good use of registers
 template <typename kmer_t>
-void shift_kmer(kmer_t & x, kmer_t * a) {
-  // TODO:templatize, make fast one for 128bit?
+void kmer_shifts(kmer_t & x, kmer_t * a) {
   size_t width = bitwidth<kmer_t>::width / 2;
   for (size_t i = 0; i < width; ++i) {
     a[i] = (x << (i*2));
@@ -168,8 +168,9 @@ struct kmer_sorter {
     COSMO_LOG(info) << "Added " << record_sorter.size()/2 << " edges, not including revcomps.";
 
     COSMO_LOG(trace) << "Merging runs...";
-    record_vector_t kmers_a; // colex based on node
-    kmer_vector_t   kmers_b; // colex based on edge
+    record_vector_t kmers_a; // colex node
+    kmer_vector_t   kmers_b; // colex edge
+
     // TODO: Test using sorters directly (wrap in stream then iterator) instead of materializing
     // to avoid IO
     std::thread t1([&](){
@@ -189,9 +190,19 @@ struct kmer_sorter {
     t1.join();
     t2.join();
 
-    // Find dummies
-    COSMO_LOG(trace) << "Searching for nodes requiring incoming dummy edges...";
+    cout << "A:" << endl;
+    for (auto x : kmers_a) {
+      cout << kmer_to_string(x, k) << endl;
+    }
+    cout << endl;
 
+    cout << "b:" << endl;
+    for (auto x : kmers_b) {
+      cout << kmer_to_string(x, k) << endl;
+    }
+    cout << endl;
+
+    exit(1);
     std::function<kmer_t(record_t)> record_key([](record_t x) -> kmer_t {
       return get<0>(x);
     });
@@ -200,39 +211,44 @@ struct kmer_sorter {
       return get<0>(x);
     });
 
-    stxxl::syscall_file dum_file(basename(parameters.input_filename) + ".dummies", stxxl::file::DIRECT | stxxl::file::RDWR | stxxl::file::CREAT);
-    kmer_vector_t incoming_dummies(&dum_file);
-    stxxl::vector<size_t> dummy_positions;
-    typename kmer_vector_t::bufwriter_type dum_writer(incoming_dummies);
-    stxxl::vector<size_t>::bufwriter_type position_writer(dummy_positions);
-
+    // Can write dummy labels and positions instead (for non variable order)
+    //stxxl::syscall_file dum_file(basename(parameters.input_filename) + ".dummies", stxxl::file::DIRECT | stxxl::file::RDWR | stxxl::file::CREAT);
+    //stxxl::vector<size_t> dummy_positions;
+    //stxxl::vector<size_t>::bufwriter_type position_writer(dummy_positions);
+    kmer_vector_t incoming_dummies;
+    kmer_vector_t outgoing_dummies;
     size_t num_incoming_dummies = 0;
+    size_t num_outgoing_dummies = 0;
+
+    /*
     std::thread t3([&](){
+      COSMO_LOG(trace) << "Searching for nodes requiring incoming dummy edges...";
+      typename kmer_vector_t::bufwriter_type   writer(incoming_dummies);
       typename record_vector_t::bufreader_type a_reader(kmers_a);
-      typename kmer_vector_t::bufreader_type b_reader(kmers_b);
+      typename kmer_vector_t::bufreader_type   b_reader(kmers_b);
 
       auto a = boost::make_iterator_range(make_typed_iterator<record_t>(a_reader.begin()),
                                           make_typed_iterator<record_t>(a_reader.end()))
                                         | transformed(record_key);
       auto b = boost::make_iterator_range(make_typed_iterator<kmer_t>(b_reader.begin()),
                                           make_typed_iterator<kmer_t>(b_reader.end()));
+
       find_incoming_dummy_nodes<kmer_t>(a, b, k, [&](size_t idx, kmer_t x) {
+        //position_writer << idx;
         num_incoming_dummies++;
-        dum_writer << (x<<2);
-        position_writer << idx;
+        writer << x;
       });
-      dummy_positions.resize(num_incoming_dummies);
+      //dummy_positions.resize(num_incoming_dummies);
       incoming_dummies.resize(num_incoming_dummies);
       COSMO_LOG(info) << "num_incoming_dummies: " << num_incoming_dummies;
     });
+    */
 
-    COSMO_LOG(trace) << "Searching for nodes requiring outgoing dummy edges...";
-    kmer_vector_t outgoing_dummies;
-    size_t num_outgoing_dummies = 0;
     std::thread t4([&](){
-      typename kmer_vector_t::bufwriter_type writer(outgoing_dummies);
+      COSMO_LOG(trace) << "Searching for nodes requiring outgoing dummy edges...";
+      typename kmer_vector_t::bufwriter_type   writer(outgoing_dummies);
       typename record_vector_t::bufreader_type a_reader(kmers_a);
-      typename kmer_vector_t::bufreader_type b_reader(kmers_b);
+      typename kmer_vector_t::bufreader_type   b_reader(kmers_b);
 
       auto a = boost::make_iterator_range(make_typed_iterator<record_t>(a_reader.begin()),
                                           make_typed_iterator<record_t>(a_reader.end()))
@@ -240,23 +256,38 @@ struct kmer_sorter {
       auto b = boost::make_iterator_range(make_typed_iterator<kmer_t>(b_reader.begin()),
                                           make_typed_iterator<kmer_t>(b_reader.end()));
 
-    //kmer_t shifts[bitwidth<kmer_t>::width/2];
-    //const size_t low_k = 16;
-    //#define sum_pow_4(i) (((1<<(2*((i)+2)))-4)/3)
-    //const size_t  = base(low_k);
-    //std::vector<bool> dums(total);
-      //auto y = rc(x);
+      //kmer_t shifts[bitwidth<kmer_t>::width/2];
+      //const size_t low_k = 16;
+      //#define sum_pow_4(i) (((1<<(2*((i)+2)))-4)/3)
       find_outgoing_dummy_nodes<kmer_t>(a, b, k, [&](kmer_t x) {
+        // TODO: generate all shifts
         num_outgoing_dummies++;
+        if (x == 0) {
+          COSMO_LOG(error) << "All A KMER WHYYYY";
+        }
         writer << x;
       });
-      //shift_kmer(y, shifts);
-      //for (size_t i = 1; i < k - low_k; ++i) {
       outgoing_dummies.resize(num_outgoing_dummies);
       COSMO_LOG(info) << "num_outgoing_dummies: " << num_outgoing_dummies;
     });
-    t3.join();
+    //t3.join();
     t4.join();
+
+    /*
+    cout << "incoming dummies:" << endl;
+    for (auto x : incoming_dummies) {
+      cout << kmer_to_string(rc(x), k) << endl;
+    }
+    cout << endl;
+    */
+
+    cout << "outgoing dummies:" << endl;
+    for (auto x : outgoing_dummies) {
+      cout << kmer_to_string(x, k) << endl;
+    }
+    cout << endl;
+
+    // second table no longer needed
     kmers_b.clear();
 
     //COSMO_LOG(trace) << "Sorting incoming dummies...";
