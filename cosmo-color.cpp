@@ -1,6 +1,7 @@
 #include <iostream>
 #include <fstream>
-
+#include <vector>
+#include <string>
 #include <libgen.h> // basename
 
 #include "tclap/CmdLine.h"
@@ -104,74 +105,77 @@ void dump_edges(debruijn_graph<> dbg, uint64_t * colors) {
 
 void find_bubbles(debruijn_graph<> dbg, rrr_vector<63> &colors, uint64_t color_mask1, uint64_t color_mask2);
 void find_bubbles(debruijn_graph<> dbg, rrr_vector<63> &colors, uint64_t color_mask1, uint64_t color_mask2) {
-  int t = getMilliCount();
-  int num_colors = colors.size() / dbg.num_edges();
-  //uint64_t combined_mask = color_mask1 | color_mask2;
-  bit_vector visited = bit_vector(dbg.num_nodes(), 0);
-  cout << "Starting to look for bubbles\n";
-  for (size_t i = 0; i < dbg.num_nodes(); i++) {
-    // cout << "Node " << i << ":" << dbg.node_label(i) << " color: " << color_mask << "\n";
-    if (!visited[i] && dbg.outdegree(i) == 2) {
-      // initialize bubble tracking variables
-      int branch_num = 0;
-      ssize_t end[2]; // place to store end of branch kmer
-      #define MAX_BRANCH 6000
-      char branch[2][MAX_BRANCH+1] = {{0}, {0}}; // the branch sequence for printing out later
-      int branch_offset = 0;
-      uint64_t branch_color[2];
-      ssize_t start = i; // place to store start of branch kmer
+    int t = getMilliCount();
+    int num_colors = colors.size() / dbg.num_edges();
+    //uint64_t combined_mask = color_mask1 | color_mask2;
+    bit_vector visited = bit_vector(dbg.num_nodes(), 0);
+    cout << "Starting to look for bubbles\n";
+    for (size_t i = 0; i < dbg.num_nodes(); i++) {
+        // cout << "Node " << i << ":" << dbg.node_label(i) << " color: " << color_mask << "\n";
+        if (!visited[i] && dbg.outdegree(i) == 2) { //FIXME: why do we only care about outdegree == 2?
+            // initialize bubble tracking variables
+            int branch_num = 0;
+            ssize_t end[2]; // place to store end of branch kmer
+//#define MAX_BRANCH 6000
+            std::vector<std::string> branch(2);
+            //char branch[2][MAX_BRANCH+1] = {{0}, {0}}; // the branch sequence for printing out later
+            int branch_offset = 0;
+            uint64_t branch_color[2];
+            ssize_t start = i; // place to store start of branch kmer
 
-      // start of a bubble handling
-      for (unsigned long x = 1; x<dbg.sigma+1;x++) {
-	// follow each strand or supernode
-	ssize_t edge = dbg.outgoing_edge(i, x);
-	if (edge == -1)
-	  continue;
-	branch[branch_num][branch_offset++] = base[x];
-	// build color mask
-	uint64_t color_mask = 0;
-	for (int c = 0; c < num_colors; c++)
-	  color_mask |= colors[edge * num_colors + c] << c;
-	branch_color[branch_num] = color_mask;
-	ssize_t pos = dbg._edge_to_node(edge);
-	while (dbg.indegree(pos) == 1 && dbg.outdegree(pos) == 1 && branch_offset < MAX_BRANCH) {
-	  visited[pos] = 1;
-	  ssize_t next_edge;
-	  for (unsigned long x2 = 1; x2<dbg.sigma+1;x2++) {
-	    next_edge = dbg.outgoing_edge(pos, x2);
-	    if (next_edge != -1) {
-	      branch[branch_num][branch_offset++] = base[x2];
-	      break;
-	    }
-	  }
-	  pos = dbg._edge_to_node(next_edge);
-	  //cout << pos << ":" << dbg.node_label(pos) << "\n";
-	}
-	// cout << "Stopped due to : " << dbg.indegree(pos) << ":" << dbg.outdegree(pos) << ":" << branch_offset << "\n";
-	if (branch_offset > MAX_BRANCH)
-	  break;
+            // start of a bubble handling
+            for (unsigned long x = 1; x < dbg.sigma + 1; x++) { // iterate through the alphabet of outgoing edges from node i
+                // follow each strand or supernode
+                ssize_t edge = dbg.outgoing_edge(i, x);
+                if (edge == -1)
+                    continue;
+                branch[branch_num] += base[x];
+                // build color mask
+                uint64_t color_mask = 0;
+                for (int c = 0; c < num_colors; c++)
+                    color_mask |= colors[edge * num_colors + c] << c;
+                branch_color[branch_num] = color_mask;
 
-	end[branch_num++] =  (dbg.indegree(pos) > 1) ? pos : 0;
-	branch_offset = 0;
-      }
-      // check if both branches ended on the same kmer and they pass the requested color masks
-      //cout << "Trying " << branch_color[0] << ":" << branch_color[1] << " " << end[0] << ":" << end[1] <<"\n";
-      //cout << color_mask1 << ":" << color_mask2 << "\n";
-      //cout << "PutativeStart flank: " << dbg.node_label(start) << " c: " << branch_color[0] << ":" << branch_color[1] << "\n";
+                // walk along edges until we encounter 
+                ssize_t pos = dbg._edge_to_node(edge);
+                while (dbg.indegree(pos) == 1 && dbg.outdegree(pos) == 1 /*&& branch_offset < MAX_BRANCH*/) {
+                    visited[pos] = 1;
+                    ssize_t next_edge = 0;
+                    for (unsigned long x2 = 1; x2 < dbg.sigma + 1; x2++) { // iterate through the alphabet
+                        next_edge = dbg.outgoing_edge(pos, x2);
+                        if (next_edge != -1) {
+                            branch[branch_num] += base[x2];
+                            break;
+                        }
+                    }
+                    pos = dbg._edge_to_node(next_edge);
+                    //cout << pos << ":" << dbg.node_label(pos) << "\n";
+                }
+                // cout << "Stopped due to : " << dbg.indegree(pos) << ":" << dbg.outdegree(pos) << ":" << branch_offset << "\n";
+                // if (branch_offset > MAX_BRANCH)
+                //     break;
 
-      if ((end[0] && end[0] == end[1]) &&
-	  ((color_mask1 & branch_color[0] && !(~color_mask1 & branch_color[0]) &&
-	    color_mask2 & branch_color[1] && !(~color_mask2 & branch_color[1])) || 
-	   (color_mask1 & branch_color[1] && !(~color_mask1 & branch_color[1]) &&
-	    color_mask2 & branch_color[0] && !(~color_mask2 & branch_color[0])))) {
-	cout << "\nStart flank: " << dbg.node_label(start) << " c: " << branch_color[0] << ":" << branch_color[1] << "\n";
-	cout << "Branch: " << branch[0] << "\n";
-	cout << "Branch: " << branch[1] << "\n";
-	cout << "End flank: " << dbg.node_label(end[0]) << "\n";
-      }
+                end[branch_num++] =  (dbg.indegree(pos) > 1) ? pos : 0;
+                branch_offset = 0;
+            }
+            // check if both branches ended on the same kmer and they pass the requested color masks
+            //cout << "Trying " << branch_color[0] << ":" << branch_color[1] << " " << end[0] << ":" << end[1] <<"\n";
+            //cout << color_mask1 << ":" << color_mask2 << "\n";
+            //cout << "PutativeStart flank: " << dbg.node_label(start) << " c: " << branch_color[0] << ":" << branch_color[1] << "\n";
+
+            if ((end[0] && end[0] == end[1]) &&
+                ((color_mask1 & branch_color[0] && !(~color_mask1 & branch_color[0]) &&
+                  color_mask2 & branch_color[1] && !(~color_mask2 & branch_color[1])) || 
+                 (color_mask1 & branch_color[1] && !(~color_mask1 & branch_color[1]) &&
+                  color_mask2 & branch_color[0] && !(~color_mask2 & branch_color[0])))) {
+                cout << "\nStart flank: " << dbg.node_label(start) << " c: " << branch_color[0] << ":" << branch_color[1] << "\n";
+                cout << "Branch: " << branch[0] << "\n";
+                cout << "Branch: " << branch[1] << "\n";
+                cout << "End flank: " << dbg.node_label(end[0]) << "\n";
+            }
+        }
     }
-  }
-  cerr << "Find bubbles time: " << getMilliSpan(t) << "\n";
+    cerr << "Find bubbles time: " << getMilliSpan(t) << "\n";
 }
 
 
