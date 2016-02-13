@@ -13,6 +13,25 @@ using std::string;
 // TODO: add support for wider integers
 //#include <boost/multiprecision/cpp_int.hpp>
 typedef __uint128_t uint128_t;
+// need to define numeric limits since max() returns 0 on some compilers!!!!
+namespace std {
+  template <>
+  struct numeric_limits<uint128_t> {
+    static const size_t digits = CHAR_BIT*sizeof(uint128_t);
+
+    static uint128_t min() {
+      return 0;
+    }
+
+    constexpr static uint128_t max() {
+      uint64_t max_64 = numeric_limits<uint64_t>::max();
+      uint128_t temp = max_64;
+      temp <<= 64;
+      temp += max_64;
+      return temp;
+    }
+  };
+}
 
 namespace cosmo {
 

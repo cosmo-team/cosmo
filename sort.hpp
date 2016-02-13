@@ -152,6 +152,8 @@ struct kmer_sorter {
 
     //output record_types in sorted order with dummies merged
     COSMO_LOG(trace) << "Creating runs...";
+    size_t input_size = 0;
+    size_t zero_times = 0;
     for ( auto in_rec : s ) {
       auto edge    = in_rec.get_head();
       auto payload = in_rec.get_tail();
@@ -160,12 +162,17 @@ struct kmer_sorter {
       if (parameters.swap) x = swap(x);
       kmer_t y = rc(x);
 
-      record_sorter.push(cons(x, payload));
-      record_sorter.push(cons(y, payload));
+      //record_sorter.push(cons(x, payload));
+      //record_sorter.push(cons(y, payload));
+      if (x == 0 || y == 0) {
+        zero_times++;
+      }
+      input_size += 2;
       edge_sorter.push(x);
       edge_sorter.push(y);
     }
     COSMO_LOG(info) << "Added " << record_sorter.size()/2 << " edges, not including revcomps.";
+    cerr << "Zero encountered " << zero_times << " times" << endl;
 
     COSMO_LOG(trace) << "Merging runs...";
     record_vector_t kmers_a; // colex node
@@ -173,36 +180,53 @@ struct kmer_sorter {
 
     // TODO: Test using sorters directly (wrap in stream then iterator) instead of materializing
     // to avoid IO
-    std::thread t1([&](){
+    //std::thread t1([&](){
+      /*
       record_sorter.sort();
       kmers_a.resize(record_sorter.size());
       COSMO_LOG(trace) << "Writing table A to temporary storage...";
       stxxl::stream::materialize(record_sorter, kmers_a.begin(), kmers_a.end());
       record_sorter.finish_clear();
-    });
-    std::thread t2([&](){
+      */
+    //});
+    //std::thread t2([&](){
       edge_sorter.sort();
-      kmers_b.resize(edge_sorter.size());
-      COSMO_LOG(trace) << "Writing table B to temporary storage...";
-      stxxl::stream::materialize(edge_sorter, kmers_b.begin(), kmers_b.end());
-      edge_sorter.finish_clear();
-    });
-    t1.join();
-    t2.join();
+      //kmers_b.resize(edge_sorter.size());
+      //COSMO_LOG(trace) << "Writing table B to temporary storage...";
+      //stxxl::stream::materialize(edge_sorter, kmers_b.begin(), kmers_b.end());
+      //edge_sorter.finish_clear();
+    //});
+    //t1.join();
+    //t2.join();
 
+    cerr << edge_sorter.size() << endl;
+    cerr << input_size << endl;
+
+    // TODO: try smaller ks from large file? (use dsk) - it might be the uint128
+    /*
     cout << "A:" << endl;
+
     for (auto x : kmers_a) {
       cout << kmer_to_string(x, k) << endl;
     }
     cout << endl;
+    */
 
-    cout << "b:" << endl;
+    cout << "B:" << endl;
+    while (!edge_sorter.empty()) {
+      cout << kmer_to_string(*edge_sorter, k) << endl;
+      ++edge_sorter;
+    }
+
+    /*
     for (auto x : kmers_b) {
       cout << kmer_to_string(x, k) << endl;
     }
     cout << endl;
+    */
 
-    exit(1);
+    return;
+
     std::function<kmer_t(record_t)> record_key([](record_t x) -> kmer_t {
       return get<0>(x);
     });

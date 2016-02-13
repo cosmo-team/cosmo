@@ -97,6 +97,7 @@ int main(int argc, char* argv[]) {
   // Check format
   // TODO: add fastq/fasta input, and read from stdin
   bool ctx_input = (extension(file_name) == ".ctx");
+  COSMO_LOG(info) << "Loading file: " << file_name;
   if (ctx_input) {
     COSMO_LOG(info) << "Input format: Cortex file";
   }
@@ -120,6 +121,14 @@ int main(int argc, char* argv[]) {
     exit(1);
   }
   else {
+    /*
+    COSMO_LOG(trace) << "kmer width : " << sizeof(kmer_t);
+    COSMO_LOG(trace) << "min        : " << kmer_to_string(std::numeric_limits<uint128_t>::min(),64);
+    COSMO_LOG(trace) << "max        : " << kmer_to_string(std::numeric_limits<uint128_t>::max(),64);
+    COSMO_LOG(trace) << "uint64 min : " << std::numeric_limits<uint64_t>::min();
+    COSMO_LOG(trace) << "uint64 max : " << std::numeric_limits<uint64_t>::max();
+    exit(1);
+    */
     // stxxl::syscall_file out_file(file_name + ".boss", stxxl::file::DIRECT | stxxl::file::RDWR | stxxl::file::CREAT);
     typedef kmer_sorter<kmer_t> kmer_sorter_t;
     typedef kmer_sorter_t::record_t record_t;
@@ -129,8 +138,8 @@ int main(int argc, char* argv[]) {
     stxxl::syscall_file in_file(file_name, stxxl::file::DIRECT | stxxl::file::RDONLY);
     record_vector_t in_vec(&in_file);
     kmer_sorter_t sort_input;
-    record_vector_t::bufreader_type br(in_vec);
-    sort_input.sort(br, params, [](){return 0;});
+    record_vector_t::bufreader_type reader(in_vec);
+    sort_input.sort(reader, params, [](){return 0;});
   }
 
   //node_sorter_type node_sorter(node_comparator_type(), M/2);
