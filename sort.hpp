@@ -5,11 +5,12 @@
 // using table_b as the temporary table, and writing the new ptrs to
 // new_a and new_b. new_a will point to the final result, while
 // new_b will be the results of the second-last iteration.
-std::vector<color_bv> dummybv; // created to shut up the compiler about missing default value
+std::vector<color_bv> unusedbv; // created to shut up the compiler about missing default value
+std::vector<color_bv>::iterator unusedbv_end = unusedbv.end();
 template <int base, typename T, typename F>
 void colex_partial_radix_sort(T * a, T * b, size_t num_records, uint32_t lo, uint32_t hi, T ** new_a, T ** new_b, F get_digit,
     uint8_t * lengths_a = 0, uint8_t * lengths_b = 0, uint8_t ** new_lengths_a = 0, uint8_t ** new_lengths_b = 0,
-                              std::vector<color_bv>::iterator colors_a = dummybv.end(), std::vector<color_bv>::iterator colors_b = dummybv.end() /*, uint64_t ** new_colors_a = 0, uint64_t ** new_colors_b = 0*/) {
+                              std::vector<color_bv>::iterator colors_a = unusedbv_end, std::vector<color_bv>::iterator colors_b = unusedbv_end , std::vector<color_bv>::iterator *new_colors_a = &unusedbv_end, std::vector<color_bv>::iterator *new_colors_b = &unusedbv_end) {
   if (hi <= lo) return;
   assert(( lengths_a &&  lengths_b &&  new_lengths_a &&  new_lengths_b)
       || (!lengths_a && !lengths_b && !new_lengths_a && !new_lengths_b));
@@ -42,7 +43,7 @@ void colex_partial_radix_sort(T * a, T * b, size_t num_records, uint32_t lo, uin
       int x = (varlen && lengths_a[i] <= digit_pos)? 0 : get_digit(a[i], digit_pos) + varlen;
       b[--bases[x]] = a[i];
       if (varlen) lengths_b[bases[x]] = lengths_a[i];
-      if (true/*colors_a*/) *(colors_b + bases[x]) = *(colors_a + i);
+      if (colors_a != unusedbv.end()) *(colors_b + bases[x]) = *(colors_a + i);
     }
 
     // swap array ptrs
@@ -54,7 +55,7 @@ void colex_partial_radix_sort(T * a, T * b, size_t num_records, uint32_t lo, uin
       lengths_a = lengths_b;
       lengths_b = temp_lengths;
     }
-    if (true /*colors_a*/) {
+    if (colors_a != unusedbv.end()) {
         std::swap(colors_a, colors_b);
       // uint64_t * temp_colors = colors_a;
       // colors_a = colors_b;
@@ -73,10 +74,10 @@ void colex_partial_radix_sort(T * a, T * b, size_t num_records, uint32_t lo, uin
     *new_lengths_a = lengths_a;
     *new_lengths_b = lengths_b;
   }
-  // if (true /*colors_a*/) {
-  //   *new_colors_a = colors_a;
-  //   *new_colors_b = colors_b;
-  // }
+  if (colors_a != unusedbv.end()) {
+    *new_colors_a = colors_a;
+    *new_colors_b = colors_b;
+  }
 }
 
 #endif

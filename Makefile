@@ -15,10 +15,10 @@ DEBUG_FLAGS=-g
 NDEBUG_FLAGS=-DNDEBUG
 OPT_FLAGS=-O3 -mmmx -msse -msse2 -msse3 -msse4 -msse4.2 -march=native
 NOPT_FLAGS=-O0
-
+NUM_COLS=64
 # Using Semantic Versioning: http://semver.org/
 VERSION=0.5.1
-CPP_FLAGS+=-DVERSION=\"$(VERSION)\"
+CPP_FLAGS+=-DVERSION=\"$(VERSION)\" -DNUM_COLS=$(NUM_COLS)
 
 ifeq ($(optimise),0)
 CPP_FLAGS+=$(NOPT_FLAGS)

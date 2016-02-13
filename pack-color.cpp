@@ -96,7 +96,7 @@ int main(int argc, char * argv[]) {
       color_bv value;
       deserialize_color_bv(colorfile, value);
       for (size_t j=0; j < num_color; j++) {
-          b[i*num_color + j] = (value & 1 << j) ? 1 : 0;
+          b[i*num_color + j] = value[j];
           if (b[i*num_color + j] == 0)
               cnt0++;
           else
