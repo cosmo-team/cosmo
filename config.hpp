@@ -23,7 +23,7 @@ namespace std {
       return 0;
     }
 
-    constexpr static uint128_t max() {
+    static uint128_t max() {
       uint64_t max_64 = numeric_limits<uint64_t>::max();
       uint128_t temp = max_64;
       temp <<= 64;
