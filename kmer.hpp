@@ -16,7 +16,7 @@
 #define DNA_RADIX 4
 #define DNA_ALPHA "acgt"
 #define DUMMY_SYM '$'
-
+typedef uint64_t color_bv;
 // Swaps G (11 -> 10) and T (10 -> 11) representation so radix ordering is lexical
 // (needed because some kmer counters like DSK swap this representation, but we assume G < T
 // in our de bruijn graph implementation)

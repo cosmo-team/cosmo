@@ -102,6 +102,16 @@ int cortex_num_records(int handle, uint32_t kmer_num_bits, size_t * num_records,
   return 0;
 }
 
+void clear_bv(color_bv &bv)
+{
+    bv = 0;
+}
+
+void set_bit(color_bv &bv, uint32_t j)
+{
+    bv |= 1LL << j % 64;
+}
+
 // Only doing this complicated stuff to hopefully get rid of the counts in an efficient way
 // (that is, read a large chunk of the file including the counts, then discard them)
 size_t dsk_read_kmers(int handle, uint32_t kmer_num_bits, uint64_t * kmers_output) {
@@ -160,7 +170,7 @@ size_t dsk_read_kmers(int handle, uint32_t kmer_num_bits, uint64_t * kmers_outpu
 }
 
 
-size_t cortex_read_kmers(int handle, uint32_t kmer_num_bits, uint32_t num_colors, uint32_t k, uint64_t * kmers_output, uint64_t * kmer_colors) {
+size_t cortex_read_kmers(int handle, uint32_t kmer_num_bits, uint32_t num_colors, uint32_t k, uint64_t * kmers_output, std::vector<color_bv>  &kmer_colors) {
     // TODO: Add a parameter to specify a limit to how many records we read (eventually multipass merge-sort?)
     (void) k;
     size_t next_slot = 0;
@@ -182,7 +192,7 @@ size_t cortex_read_kmers(int handle, uint32_t kmer_num_bits, uint32_t num_colors
         }
         kmers_output[next_slot] = kmer;
 
-        uint64_t color_acc;
+        color_bv color_acc;
         uint32_t j;
         // A (0) -> 0001, C (1) -> 0010, G (2) -> 0100, T (3) -> 1000
         for (i=0; i< 4; i++) {
@@ -195,16 +205,19 @@ size_t cortex_read_kmers(int handle, uint32_t kmer_num_bits, uint32_t num_colors
                   }
                 */
                 // now write out whether each color has this kmer edge
-                color_acc = 0;
+                clear_bv(color_acc);
                 for (j=0; j<num_colors;j++) {
                     if (individual_edges_reading_from_binary[j] & mask)
-                        color_acc |= 1LL << j % 64;
-                    if ((j > 0 && j % 64 == 0) || j == num_colors -1) {
+                        set_bit(color_acc, j);
+                        //color_acc |= 1LL << j % 64;
+                    //if ((j > 0 && j % 64 == 0) || j == num_colors -1) {
                         // write out bits when we have filled accumulator
-                        kmer_colors[next_slot] = color_acc;
-                        color_acc = 0;
-                    }
+                    //}
                 }
+                kmer_colors[next_slot] = color_acc;
+                clear_bv(color_acc);
+
+
             }
         }
         next_slot++;

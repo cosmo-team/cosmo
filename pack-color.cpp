@@ -16,6 +16,7 @@
 // Custom Headers
 #include "uint128_t.hpp"
 #include "debug.h"
+#include "kmer.hpp"
 
 using namespace std;
 using namespace sdsl;
@@ -66,6 +67,11 @@ void parse_arguments(int argc, char **argv, parameters_t & params)
 
 }
 
+void deserialize_color_bv(ifstream &colorfile, color_bv &value)
+{
+      colorfile.read((char *)&value, sizeof(color_bv));
+}
+
 int main(int argc, char * argv[]) {
   cout <<"Starting\n";
   parameters_t params;
@@ -82,20 +88,20 @@ int main(int argc, char * argv[]) {
   colorfile.seekg(0, colorfile.beg);
 
   size_t num_color = params.num_colors;
-  size_t num_edges = end / 8;
+  size_t num_edges = end / sizeof(color_bv);
   bit_vector b = bit_vector(num_edges*num_color, 0);
   size_t cnt0 = 0;
   size_t cnt1 = 0;
   for (size_t i=0; i < num_edges; i++) {
-    uint64_t value;
-    colorfile.read((char *)&value, sizeof(uint64_t));
-    for (size_t j=0; j < num_color; j++) {
-      b[i*num_color + j] = (value & 1 << j) ? 1 : 0;
-      if (b[i*num_color + j] == 0)
-	cnt0++;
-      else
-	cnt1++;
-    }
+      color_bv value;
+      deserialize_color_bv(colorfile, value);
+      for (size_t j=0; j < num_color; j++) {
+          b[i*num_color + j] = (value & 1 << j) ? 1 : 0;
+          if (b[i*num_color + j] == 0)
+              cnt0++;
+          else
+              cnt1++;
+      }
   }
   cout << "edges: " << num_edges << " colors: " << num_color << " Total: " << num_edges * num_color << endl;
   cout << cnt0  << ":" << cnt1 << endl;

@@ -37,7 +37,7 @@ using namespace boost::adaptors;
 const static string extension = ".packed";
 
 template <typename kmer_t, class Visitor>
-void convert(kmer_t * kmers, size_t num_kmers, const uint32_t k, Visitor visit, bool swap, uint64_t *colors) {
+void convert(kmer_t * kmers, size_t num_kmers, const uint32_t k, Visitor visit, bool swap, std::vector<color_bv> &colors) {
   // Convert the nucleotide representation to allow tricks
   convert_representation(kmers, kmers, num_kmers, swap);
 
@@ -45,7 +45,8 @@ void convert(kmer_t * kmers, size_t num_kmers, const uint32_t k, Visitor visit, 
   #ifdef ADD_REVCOMPS
   size_t revcomp_factor = 2;
   transform(kmers, kmers + num_kmers, kmers + num_kmers, reverse_complement<kmer_t>(k));
-  memcpy(colors + num_kmers, colors, sizeof(uint64_t) * num_kmers); // copy all of the color masks for the reverse kmers
+  //memcpy(colors + num_kmers, colors, sizeof(uint64_t) * num_kmers); // copy all of the color masks for the reverse kmers
+  std::copy(colors.begin(), colors.begin() + num_kmers, colors.begin() + num_kmers);
   #else
   size_t revcomp_factor = 1;
   #endif
@@ -57,13 +58,13 @@ void convert(kmer_t * kmers, size_t num_kmers, const uint32_t k, Visitor visit, 
   // NOTE: THESE SHOULD NOT BE FREED (the kmers array is freed by the caller)
   kmer_t * table_a = kmers;
   kmer_t * table_b = kmers + num_kmers * revcomp_factor; // x2 because of reverse complements
-  uint64_t * colors_a = colors;
-  uint64_t * colors_b = colors + num_kmers * revcomp_factor;
+  std::vector<color_bv>::iterator colors_a = colors.begin();
+  std::vector<color_bv>::iterator colors_b = colors.begin() + num_kmers * revcomp_factor;
   // Sort by last column to do the edge-sorted part of our <colex(node), edge>-sorted table
   colex_partial_radix_sort<DNA_RADIX>(table_a, table_b, num_kmers * revcomp_factor, 0, 1,
                                       &table_a, &table_b, get_nt_functor<kmer_t>(),
                                       0, 0, 0, 0,
-                                      colors_a, colors_b, &colors_a, &colors_b);
+                                      colors_a, colors_b/*, &colors_a, &colors_b*/);
   // Sort from k to last column (not k to 1 - we need to sort by the edge column a second time to get colex(row) table)
   // Note: The output names are swapped (we want table a to be the primary table and b to be aux), because our desired
   // result is the second last iteration (<colex(node), edge>-sorted) but we still have use for the last iteration (colex(row)-sorted).
@@ -71,7 +72,7 @@ void convert(kmer_t * kmers, size_t num_kmers, const uint32_t k, Visitor visit, 
   colex_partial_radix_sort<DNA_RADIX>(table_a, table_b, num_kmers * revcomp_factor, 0, k,
                                       &table_b, &table_a, get_nt_functor<kmer_t>(),
                                       0, 0, 0, 0,
-                                      colors_a, colors_b, &colors_b, &colors_a);
+                                      colors_a, colors_b/*, &colors_b, &colors_a*/);
 
   // outgoing dummy edges are output in correct order while merging, whereas incoming dummy edges are not in the correct
   // position, but are sorted relatively, hence can be merged if collected in a previous pass
@@ -119,13 +120,13 @@ void convert(kmer_t * kmers, size_t num_kmers, const uint32_t k, Visitor visit, 
   #ifdef ALL_DUMMIES
   kmer_t * dummies_b = incoming_dummies + num_incoming_dummies * (k-1);
   uint8_t * lengths_b = incoming_dummy_lengths + num_incoming_dummies * (k-1);
-  colex_partial_radix_sort<DNA_RADIX>(dummies_a, dummies_b, num_incoming_dummies*(k-1), 0, 1,
-                                      &dummies_a, &dummies_b, get_nt_functor<kmer_t>(),
-                                      lengths_a, lengths_b, &lengths_a, &lengths_b);
-  // Don't need the last iteration (i.e. dont need to go to 0) since we arent doing a set difference like above
-  colex_partial_radix_sort<DNA_RADIX>(dummies_a, dummies_b, num_incoming_dummies*(k-1), 1, k-1,
-                                      &dummies_a, &dummies_b, get_nt_functor<kmer_t>(),
-                                      lengths_a, lengths_b, &lengths_a, &lengths_b);
+  // colex_partial_radix_sort<DNA_RADIX>(dummies_a, dummies_b, num_incoming_dummies*(k-1), 0, 1,
+  //                                     &dummies_a, &dummies_b, get_nt_functor<kmer_t>(),
+  //                                     lengths_a, lengths_b, &lengths_a, &lengths_b);
+  // // Don't need the last iteration (i.e. dont need to go to 0) since we arent doing a set difference like above
+  // colex_partial_radix_sort<DNA_RADIX>(dummies_a, dummies_b, num_incoming_dummies*(k-1), 1, k-1,
+  //                                     &dummies_a, &dummies_b, get_nt_functor<kmer_t>(),
+  //                                     lengths_a, lengths_b, &lengths_a, &lengths_b);
   #endif
   merge_dummies(table_a, table_b, num_kmers*revcomp_factor, k,
                 dummies_a, num_incoming_dummies*all_dummies_factor,
@@ -181,6 +182,10 @@ void parse_arguments(int argc, char **argv, parameters_t & params)
   params.input_filename  = input_filename_arg.getValue();
   params.output_prefix   = output_prefix_arg.getValue();
   params.cortex          = cortex_arg.getValue();
+}
+void serialize_color_bv(std::ofstream &cfs, std::vector<color_bv>::iterator &colors, uint64_t index)
+{
+    ;
 }
 
 int main(int argc, char * argv[])
@@ -265,7 +270,9 @@ int main(int argc, char * argv[])
         exit(1);
     }
 
-    uint64_t * kmer_colors = (uint64_t*)malloc(num_kmers * 2 * revcomp_factor * sizeof(uint64_t));
+    //uint64_t * kmer_colors = (uint64_t*)malloc(num_kmers * 2 * revcomp_factor * sizeof(uint64_t));
+    
+    std::vector<color_bv> *kmer_colors = new std::vector<color_bv>(num_kmers * 2 * revcomp_factor);
     if (!kmer_colors) {
         cerr << "Error allocating space for kmer colors" << endl;
         exit(1);
@@ -276,7 +283,7 @@ int main(int argc, char * argv[])
     size_t num_records_read;
     if (params.cortex) {
         printf("Reading kmers\n");
-        num_records_read = cortex_read_kmers(handle, kmer_num_bits, num_colors, k, kmer_blocks, kmer_colors);
+        num_records_read = cortex_read_kmers(handle, kmer_num_bits, num_colors, k, kmer_blocks, *kmer_colors);
         printf("num_kmers = %zu and num_records_read=%zu\n", num_kmers, num_records_read);
         num_kmers = num_records_read;
     }
@@ -320,7 +327,8 @@ int main(int argc, char * argv[])
         typedef uint64_t kmer_t;
         size_t prev_k = 0; // for input, k is always >= 1
         size_t index = 0;
-        uint64_t *colors = kmer_colors + num_kmers * revcomp_factor;
+//        uint64_t *colors = kmer_colors + num_kmers * revcomp_factor;
+        std::vector<color_bv>::iterator colors = kmer_colors->begin() + num_kmers * revcomp_factor; 
         convert(kmer_blocks, num_kmers, k,
                 [&](edge_tag tag, const kmer_t & x, const uint32_t this_k, size_t lcs_len, bool first_end_node) {
 #ifdef VAR_ORDER
@@ -331,15 +339,16 @@ int main(int argc, char * argv[])
                     out.write(tag, x, this_k, lcs_len, first_end_node);
 #endif
                     if (tag == standard) {
-                        // cerr << kmer_to_string(x, k, this_k) << "c" << colors[index] << "\n";
-                        cfs.write((char *)&colors[index++], sizeof(uint64_t));
+    // cerr << kmer_to_string(x, k, this_k) << "c" << colors[index] << "\n";
+                        serialize_color_bv(cfs, colors, index++);
+                        //cfs.write((char *)&colors[index++], sizeof(uint64_t));
                     }
                     else {
                         uint64_t ones = -1;
                         cfs.write((char *)&ones, sizeof(uint64_t));
                     }
                     prev_k = this_k;
-                }, !params.cortex, kmer_colors);
+                }, !params.cortex, *kmer_colors);
     }
     else if (kmer_num_bits == 128) {
         typedef uint128_t kmer_t;
@@ -355,7 +364,7 @@ int main(int argc, char * argv[])
                     out.write(tag, x, this_k, lcs_len, first_end_node);
 #endif
                     prev_k = this_k;
-                }, !params.cortex, kmer_colors);
+                }, !params.cortex, *kmer_colors);
     }
 
     out.close();
