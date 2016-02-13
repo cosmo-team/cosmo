@@ -7,6 +7,7 @@
 #include <set>
 #include <stxxl.h>
 #include <stxxl/bits/containers/sorter.h>
+#include <stxxl/deque>
 
 #include <boost/tuple/tuple.hpp>
 #include <boost/range/iterator_range_core.hpp>
@@ -162,8 +163,8 @@ struct kmer_sorter {
       if (parameters.swap) x = swap(x);
       kmer_t y = rc(x);
 
-      //record_sorter.push(cons(x, payload));
-      //record_sorter.push(cons(y, payload));
+      record_sorter.push(cons(x, payload));
+      record_sorter.push(cons(y, payload));
       if (x == 0 || y == 0) {
         zero_times++;
       }
@@ -172,60 +173,44 @@ struct kmer_sorter {
       edge_sorter.push(y);
     }
     COSMO_LOG(info) << "Added " << record_sorter.size()/2 << " edges, not including revcomps.";
-    cerr << "Zero encountered " << zero_times << " times" << endl;
 
     COSMO_LOG(trace) << "Merging runs...";
     record_vector_t kmers_a; // colex node
     kmer_vector_t   kmers_b; // colex edge
 
-    // TODO: Test using sorters directly (wrap in stream then iterator) instead of materializing
-    // to avoid IO
-    //std::thread t1([&](){
-      /*
+    // TODO: Work out way to not materialize table (use sorters directly? wrap stream in iterator)
+    // Ask Timo...
+    std::thread t1([&](){
       record_sorter.sort();
       kmers_a.resize(record_sorter.size());
-      COSMO_LOG(trace) << "Writing table A to temporary storage...";
+      COSMO_LOG(trace) << "Materializing table A...";
       stxxl::stream::materialize(record_sorter, kmers_a.begin(), kmers_a.end());
       record_sorter.finish_clear();
-      */
-    //});
-    //std::thread t2([&](){
+    });
+    std::thread t2([&](){
       edge_sorter.sort();
-      //kmers_b.resize(edge_sorter.size());
-      //COSMO_LOG(trace) << "Writing table B to temporary storage...";
-      //stxxl::stream::materialize(edge_sorter, kmers_b.begin(), kmers_b.end());
-      //edge_sorter.finish_clear();
-    //});
-    //t1.join();
-    //t2.join();
+      kmers_b.resize(edge_sorter.size());
+      COSMO_LOG(trace) << "Materializing table B...";
+      stxxl::stream::materialize(edge_sorter, kmers_b.begin(), kmers_b.end());
+      edge_sorter.finish_clear();
+    });
+    t1.join();
+    t2.join();
 
-    cerr << edge_sorter.size() << endl;
-    cerr << input_size << endl;
-
-    // TODO: try smaller ks from large file? (use dsk) - it might be the uint128
     /*
     cout << "A:" << endl;
-
     for (auto x : kmers_a) {
       cout << kmer_to_string(x, k) << endl;
     }
     cout << endl;
     */
 
-    cout << "B:" << endl;
-    while (!edge_sorter.empty()) {
-      cout << kmer_to_string(*edge_sorter, k) << endl;
-      ++edge_sorter;
-    }
-
     /*
+    cout << "B:" << endl;
     for (auto x : kmers_b) {
       cout << kmer_to_string(x, k) << endl;
     }
-    cout << endl;
     */
-
-    return;
 
     std::function<kmer_t(record_t)> record_key([](record_t x) -> kmer_t {
       return get<0>(x);
@@ -240,11 +225,12 @@ struct kmer_sorter {
     //stxxl::vector<size_t> dummy_positions;
     //stxxl::vector<size_t>::bufwriter_type position_writer(dummy_positions);
     kmer_vector_t incoming_dummies;
-    kmer_vector_t outgoing_dummies;
-    size_t num_incoming_dummies = 0;
-    size_t num_outgoing_dummies = 0;
+    //kmer_vector_t outgoing_dummies;
+    stxxl::deque<kmer_t> outgoing_dummies_q;
+
 
     /*
+    size_t num_incoming_dummies = 0;
     std::thread t3([&](){
       COSMO_LOG(trace) << "Searching for nodes requiring incoming dummy edges...";
       typename kmer_vector_t::bufwriter_type   writer(incoming_dummies);
@@ -260,17 +246,18 @@ struct kmer_sorter {
       find_incoming_dummy_nodes<kmer_t>(a, b, k, [&](size_t idx, kmer_t x) {
         //position_writer << idx;
         num_incoming_dummies++;
-        writer << x;
+        //writer << x;
       });
       //dummy_positions.resize(num_incoming_dummies);
-      incoming_dummies.resize(num_incoming_dummies);
+      //incoming_dummies.resize(num_incoming_dummies);
       COSMO_LOG(info) << "num_incoming_dummies: " << num_incoming_dummies;
     });
     */
 
+    //size_t num_outgoing_dummies = 0;
     std::thread t4([&](){
       COSMO_LOG(trace) << "Searching for nodes requiring outgoing dummy edges...";
-      typename kmer_vector_t::bufwriter_type   writer(outgoing_dummies);
+      //typename kmer_vector_t::bufwriter_type   writer(outgoing_dummies);
       typename record_vector_t::bufreader_type a_reader(kmers_a);
       typename kmer_vector_t::bufreader_type   b_reader(kmers_b);
 
@@ -284,17 +271,14 @@ struct kmer_sorter {
       //const size_t low_k = 16;
       //#define sum_pow_4(i) (((1<<(2*((i)+2)))-4)/3)
       find_outgoing_dummy_nodes<kmer_t>(a, b, k, [&](kmer_t x) {
-        // TODO: generate all shifts
-        num_outgoing_dummies++;
-        if (x == 0) {
-          COSMO_LOG(error) << "All A KMER WHYYYY";
-        }
-        writer << x;
+        // TODO: generate all shifts and output...
+        outgoing_dummies_q.push_back(x);
       });
-      outgoing_dummies.resize(num_outgoing_dummies);
-      COSMO_LOG(info) << "num_outgoing_dummies: " << num_outgoing_dummies;
+      COSMO_LOG(info) << "# outgoing dummies: " << outgoing_dummies_q.size();
     });
-    //t3.join();
+    //t3.join(); // Disabled since outgoing dummies are incoming dummies if we added reverse complements
+    // TODO: add flags to turn off adding revcomps and instead find unary dBG paths (ala bcalm)
+    // TODO: add flag to output bitvector marking incoming dummies instead
     t4.join();
 
     /*
@@ -305,11 +289,14 @@ struct kmer_sorter {
     cout << endl;
     */
 
+    /*
     cout << "outgoing dummies:" << endl;
     for (auto x : outgoing_dummies) {
       cout << kmer_to_string(x, k) << endl;
     }
     cout << endl;
+    */
+    return;
 
     // second table no longer needed
     kmers_b.clear();
