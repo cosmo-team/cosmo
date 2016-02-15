@@ -24,7 +24,7 @@ namespace {
 
 // Should be unrolled and inlined, making good use of registers
 template <typename kmer_t>
-void kmer_shifts(kmer_t & x, kmer_t * a) {
+void kmer_shifts(const kmer_t & x, kmer_t * a) {
   size_t width = bitwidth<kmer_t>::width / 2;
   for (size_t i = 0; i < width; ++i) {
     a[i] = (x << (i*2));
@@ -165,10 +165,6 @@ struct kmer_sorter {
 
       record_sorter.push(cons(x, payload));
       record_sorter.push(cons(y, payload));
-      if (x == 0 || y == 0) {
-        zero_times++;
-      }
-      input_size += 2;
       edge_sorter.push(x);
       edge_sorter.push(y);
     }
@@ -222,18 +218,19 @@ struct kmer_sorter {
 
     // Can write dummy labels and positions instead (for non variable order)
     //stxxl::syscall_file dum_file(basename(parameters.input_filename) + ".dummies", stxxl::file::DIRECT | stxxl::file::RDWR | stxxl::file::CREAT);
-    //stxxl::vector<size_t> dummy_positions;
-    //stxxl::vector<size_t>::bufwriter_type position_writer(dummy_positions);
-    kmer_vector_t incoming_dummies;
+    //stxxl::vector<size_t> dummy_positions; // Use Queue instead
+
+    dummy_vector_t incoming_dummies;
+    dummy_sorter_t incoming_dummy_sorter(dummy_comparator_t(), M);
+
     //kmer_vector_t outgoing_dummies;
     stxxl::deque<kmer_t> outgoing_dummies_q;
-
+    // TODO: Make sorter for incoming dummies
 
     /*
     size_t num_incoming_dummies = 0;
     std::thread t3([&](){
       COSMO_LOG(trace) << "Searching for nodes requiring incoming dummy edges...";
-      typename kmer_vector_t::bufwriter_type   writer(incoming_dummies);
       typename record_vector_t::bufreader_type a_reader(kmers_a);
       typename kmer_vector_t::bufreader_type   b_reader(kmers_b);
 
@@ -245,19 +242,14 @@ struct kmer_sorter {
 
       find_incoming_dummy_nodes<kmer_t>(a, b, k, [&](size_t idx, kmer_t x) {
         //position_writer << idx;
-        num_incoming_dummies++;
-        //writer << x;
+        incoming_dummy_sorter.push(dummy_t(x<<2, k-1));
       });
-      //dummy_positions.resize(num_incoming_dummies);
-      //incoming_dummies.resize(num_incoming_dummies);
-      COSMO_LOG(info) << "num_incoming_dummies: " << num_incoming_dummies;
     });
     */
 
-    //size_t num_outgoing_dummies = 0;
     std::thread t4([&](){
-      COSMO_LOG(trace) << "Searching for nodes requiring outgoing dummy edges...";
-      //typename kmer_vector_t::bufwriter_type   writer(outgoing_dummies);
+      COSMO_LOG(trace) << "Searching for nodes requiring dummy edges...";
+
       typename record_vector_t::bufreader_type a_reader(kmers_a);
       typename kmer_vector_t::bufreader_type   b_reader(kmers_b);
 
@@ -267,24 +259,44 @@ struct kmer_sorter {
       auto b = boost::make_iterator_range(make_typed_iterator<kmer_t>(b_reader.begin()),
                                           make_typed_iterator<kmer_t>(b_reader.end()));
 
-      //kmer_t shifts[bitwidth<kmer_t>::width/2];
-      //const size_t low_k = 16;
+      kmer_t shifts[bitwidth<kmer_t>::width/2];
+      const size_t low_k = 12;
       //#define sum_pow_4(i) (((1<<(2*((i)+2)))-4)/3)
       find_outgoing_dummy_nodes<kmer_t>(a, b, k, [&](kmer_t x) {
-        // TODO: generate all shifts and output...
         outgoing_dummies_q.push_back(x);
+
+        auto y = rc(x);
+
+        // generate all shifts up to k=12, then push to sorter
+        /*
+        kmer_shifts(y, shifts);
+        for (int i = 1; i <= k - low_k; ++i) {
+          incoming_dummy_sorter.push(dummy_t(shifts[i], k-i));
+        }
+        */
+        // TODO: use LCPs of lex-sorted dummies to add shifts? (or equiv LCS of colex sorted revcomps?)
       });
-      COSMO_LOG(info) << "# outgoing dummies: " << outgoing_dummies_q.size();
+      COSMO_LOG(info) << "# dummies: " << outgoing_dummies_q.size();
+      COSMO_LOG(info) << "# inc dummies incl shifts: " << incoming_dummy_sorter.size();
     });
     //t3.join(); // Disabled since outgoing dummies are incoming dummies if we added reverse complements
     // TODO: add flags to turn off adding revcomps and instead find unary dBG paths (ala bcalm)
     // TODO: add flag to output bitvector marking incoming dummies instead
     t4.join();
 
+    // second table no longer needed
+    kmers_b.clear();
+
+    incoming_dummy_sorter.sort();
+    incoming_dummies.resize(incoming_dummy_sorter.size());
+    COSMO_LOG(trace) << "Materializing incoming dummies...";
+    stxxl::stream::materialize(incoming_dummy_sorter, incoming_dummies.begin(), incoming_dummies.end());
+    incoming_dummy_sorter.finish_clear();
+
     /*
     cout << "incoming dummies:" << endl;
     for (auto x : incoming_dummies) {
-      cout << kmer_to_string(rc(x), k) << endl;
+      cout << kmer_to_string(get<0>(x), k, get<1>(x)) << endl;
     }
     cout << endl;
     */
@@ -297,9 +309,6 @@ struct kmer_sorter {
     cout << endl;
     */
     return;
-
-    // second table no longer needed
-    kmers_b.clear();
 
     //COSMO_LOG(trace) << "Sorting incoming dummies...";
     //dummy_sorter.sort();
