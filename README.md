@@ -37,13 +37,14 @@ $ cosmo-color  [-b <color_mask2>] [-a <color_mask1>] [-o <output_prefix>] [--] [
 
 ```
 practical example:
+```sh
 $ cd /s/oak/b/nobackup/muggli/src/CORTEX_release_v1.0.5.21/demo/example4_using_reference_genome_to_exclude_paralogs
 $ ../../bin/cortex_var_31_c2 --kmer_size 17 --colour_list colours  --dump_binary both.ctx
 $ cd ~/git/cosmo
 $ ./cosmo-pack -c /s/oak/b/nobackup/muggli/src/CORTEX_release_v1.0.5.21/demo/example4_using_reference_genome_to_exclude_paralogs/both.ctx
 $ ./pack-color both.ctx.colors 2
 $ ./cosmo-color both.ctx.packed both.ctx.colors.rrr
-
+```
 
 
 

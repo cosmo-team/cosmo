@@ -104,12 +104,12 @@ int cortex_num_records(int handle, uint32_t kmer_num_bits, size_t * num_records,
 
 void clear_bv(color_bv &bv)
 {
-    bv = 0;
+    bv.reset();
 }
 
 void set_bit(color_bv &bv, uint32_t j)
 {
-    bv |= 1LL << j % 64;
+    bv[j] = 1; // |= 1LL << j % 64;
 }
 
 // Only doing this complicated stuff to hopefully get rid of the counts in an efficient way

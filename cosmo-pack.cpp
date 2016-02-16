@@ -248,7 +248,7 @@ int main(int argc, char * argv[])
             exit(EXIT_FAILURE);
         }
         printf("Got num record %zu \n", num_kmers);
-        printf("Got num colors %zu \n", num_colors);
+        printf("Got num colors %d \n", num_colors);
         // printf("NUM_COLS=%zu\n", NUM_COLS);
         // printf("Each entry in .colors file will occupy %d bytes.\n", sizeof(color_bv));
     }
