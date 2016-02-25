@@ -38,8 +38,14 @@ int dsk_num_records(int handle, uint32_t kmer_num_bits, size_t * num_records) {
   return 0;
 }
 
-int cortex_num_records(int handle, uint32_t kmer_num_bits, size_t * num_records, uint32_t * num_colors) {
-  int number_of_colours;
+
+// Compute the number of records by:
+// 1. Compute record size
+// 2. Reading the color table which follows the header
+// 3. Compute EOF position - file position bytes
+// 4. Divide remaining bytes by record size
+int cortex_num_records(const int handle, const uint32_t kmer_num_bits, size_t &num_records, uint32_t &number_of_colours)
+{
   off_t original_pos = -1;
   off_t end_pos = -1;
   int rc;
@@ -47,48 +53,50 @@ int cortex_num_records(int handle, uint32_t kmer_num_bits, size_t * num_records,
   size_t record_size = kmer_num_bits / 8 + number_of_colours * 5;
 
   // skip over per color header info
-  int i;
+  uint32_t i;
   int  max_tot = 0;
-  for (i=0; i<number_of_colours;i++) {
+  // read in (mean, total) read length column
+  for (i=0; i<number_of_colours; i++) {
     int mean_read_len=0;
-    rc = read(handle,&mean_read_len, sizeof(int));
+    rc = read(handle, &mean_read_len, sizeof(int));
     long long tot=0;
     rc = read(handle, &tot, sizeof(long long));
     if (tot > max_tot)
       max_tot = (int) tot;
   }
-  for (i=0; i<number_of_colours;i++) {
+  // read in ID column
+  for (i=0; i<number_of_colours; i++) {
     int sample_id_lens; 
-    rc = read(handle,&sample_id_lens,sizeof(int));
+    rc = read(handle, &sample_id_lens, sizeof(int));
     char tmp_name[100]; // hack // should null this out to avoid extra stack junk being printed
-		rc = read(handle,tmp_name,sizeof(char) * sample_id_lens);
+		rc = read(handle, tmp_name, sizeof(char) * sample_id_lens);
   }
-
-  for (i=0; i<number_of_colours;i++) {
+  // read in seq_err column
+  for (i=0; i<number_of_colours; i++) {
     long double seq_err;
-    rc = read(handle,&seq_err,sizeof(long double));
+    rc = read(handle, &seq_err, sizeof(long double));
   }
-
-  for (i=0; i<number_of_colours;i++) {
+  // read in other stats??? and baseline graph name
+  for (i=0; i<number_of_colours; i++) {
     char dummy;
     int d;
 
-    rc = read(handle,&dummy,sizeof(char));
-    rc = read(handle,&dummy,sizeof(char));
-    rc = read(handle,&dummy,sizeof(char));
-    rc = read(handle,&dummy,sizeof(char));
-    rc = read(handle,&d,sizeof(int));
-    rc = read(handle,&d,sizeof(int));
+    rc = read(handle, &dummy, sizeof(char));
+    rc = read(handle, &dummy, sizeof(char));
+    rc = read(handle, &dummy, sizeof(char));
+    rc = read(handle, &dummy, sizeof(char));
+    rc = read(handle, &d, sizeof(int));
+    rc = read(handle, &d, sizeof(int));
     int len_name_of_graph;
-    rc = read(handle,&len_name_of_graph,sizeof(int));
+    rc = read(handle, &len_name_of_graph, sizeof(int));
     char name_of_graph_against_which_was_cleaned[100]; // hack
-    rc = read(handle,name_of_graph_against_which_was_cleaned,sizeof(char)*len_name_of_graph);
+    rc = read(handle, name_of_graph_against_which_was_cleaned, sizeof(char) * len_name_of_graph);
  }
 
   char magic_number[6];
-  rc = read(handle, magic_number,sizeof(char)*6);
+  rc = read(handle,  magic_number, sizeof(char)*6);
 
-  if ( (original_pos = lseek(handle, 0 ,SEEK_CUR)) == -1 ||
+  if ( (original_pos = lseek(handle, 0 , SEEK_CUR)) == -1 ||
        (end_pos = lseek(handle, 0, SEEK_END)) == -1  ) {
     return -1;
   }
@@ -96,8 +104,8 @@ int cortex_num_records(int handle, uint32_t kmer_num_bits, size_t * num_records,
     return -1;
   }
 
-  *num_records = (end_pos - original_pos)/record_size;
-  *num_colors = number_of_colours;
+  num_records = (end_pos - original_pos)/record_size;
+
 
   return 0;
 }
@@ -170,24 +178,24 @@ size_t dsk_read_kmers(int handle, uint32_t kmer_num_bits, uint64_t * kmers_outpu
 }
 
 
-size_t cortex_read_kmers(int handle, uint32_t kmer_num_bits, uint32_t num_colors, uint32_t k, uint64_t * kmers_output, std::vector<color_bv>  &kmer_colors) {
+size_t cortex_read_kmers(const int handle, const uint32_t kmer_num_bits, const uint32_t num_colors, uint32_t k, uint64_t *const &kmers_output, std::vector<color_bv>  &kmer_colors) {
     // TODO: Add a parameter to specify a limit to how many records we read (eventually multipass merge-sort?)
     (void) k;
     size_t next_slot = 0;
-    int coverage[100]; // hack
+    int coverage[NUM_COLS]; // hack
     while (1) {
         unsigned int i;
         uint64_t kmer;
-        char individual_edges_reading_from_binary[100]; // bit field for which edges enter and leave
+        char individual_edges_reading_from_binary[NUM_COLS]; // bit field for which edges enter and leave
         int rc;
 
-        rc = read(handle, &kmer,sizeof(uint64_t));
+        rc = read(handle, &kmer, sizeof(uint64_t));
         if (rc <= 0)
             break;
         rc = read(handle, &coverage, sizeof(int) * num_colors);
         rc = read(handle, individual_edges_reading_from_binary, sizeof(char) * num_colors);
         char edge = 0;
-        for (i=0; i<num_colors;i++) {
+        for (i=0; i<num_colors; i++) {
             edge |= individual_edges_reading_from_binary[i] & 0xF;
         }
         kmers_output[next_slot] = kmer;
@@ -216,8 +224,6 @@ size_t cortex_read_kmers(int handle, uint32_t kmer_num_bits, uint32_t num_colors
                 }
                 kmer_colors[next_slot] = color_acc;
                 clear_bv(color_acc);
-
-
             }
         }
         next_slot++;

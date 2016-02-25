@@ -239,7 +239,7 @@ int main(int argc, char * argv[])
     uint32_t num_colors = 0;
     if (params.cortex) {
         printf("Num records\n");
-        if ( cortex_num_records(handle, kmer_num_bits, &num_kmers, &num_colors) == -1) {
+        if ( cortex_num_records(handle, kmer_num_bits, num_kmers, num_colors) == -1) {
             fprintf(stderr, "Error seeking cortex file %s\n", file_name);
             exit(EXIT_FAILURE);
         }
@@ -248,7 +248,7 @@ int main(int argc, char * argv[])
             exit(EXIT_FAILURE);
         }
         printf("Got num record %zu \n", num_kmers);
-        printf("Got num colors %d \n", num_colors);
+        printf("Got num colors (capacity, not occupancy) %d \n", num_colors);
         // printf("NUM_COLS=%zu\n", NUM_COLS);
         // printf("Each entry in .colors file will occupy %d bytes.\n", sizeof(color_bv));
     }
