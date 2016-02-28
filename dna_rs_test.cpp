@@ -13,6 +13,7 @@
 
 using namespace cosmo::index;
 
+// TODO: Move this stuff into another test
 /*
 TEST_CASE("Vectorized popcount", "[bithack][vector]") {
   auto popcount_v = vectorized_popcount<popcounter<3>>();
@@ -27,7 +28,7 @@ TEST_CASE("Vectorized popcount", "[bithack][vector]") {
 TEST_CASE("Block manipulation", "[bithack]") {
   typedef uint64_t block_t;
   block_t x = 0;
-  
+
   SECTION("Set symbols", "[set]") {
     // TODO: add test for throwing
     x = set_symbol<3>(x, 0, 2);
@@ -129,15 +130,14 @@ TEST_CASE("Large Query", "[benchmark]") {
   int_vector<8> temp(input.size());
   for (size_t i = 0; i < input.size(); ++i) temp[i] = input[i];
 
-  auto rnk_idxs    = cosmo::random_uints(0, n,   m);
-  auto acc_idxs    = cosmo::random_uints(0, n-1, m);
-  auto sel_idxs    = cosmo::random_uints(1, n,   m);
-  auto queries = cosmo::random_string("$acgtACGT", m);
+  auto rnk_idxs = cosmo::random_uints(0, n,         m);
+  auto acc_idxs = cosmo::random_uints(0, n-1,       m);
+  auto queries  = cosmo::random_string("$acgtACGT", m);
 
   // Construct
   typedef wt_huff<rrr_vector<63>> wt_t;
-  typedef dna_bv_rs<sdsl::hyb_vector<>> rs_t;
-  //typedef dna_bv_rs<> rs_t;
+  //typedef dna_bv_rs<sdsl::hyb_vector<>> rs_t;
+  typedef dna_bv_rs<> rs_t;
 
   auto start = std::chrono::steady_clock::now();
   rs_t rs(input);
@@ -165,7 +165,6 @@ TEST_CASE("Large Query", "[benchmark]") {
   end = std::chrono::steady_clock::now();
   std::cout << "WT Access average time per element: " << std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count()/double(m) << " ns" << std::endl;
 
-
   // Rank
   start = std::chrono::steady_clock::now();
   for (auto i:rnk_idxs) {
@@ -181,15 +180,18 @@ TEST_CASE("Large Query", "[benchmark]") {
   end = std::chrono::steady_clock::now();
   std::cout << "WT Rank average time per element: " << std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count()/double(m) << " ns" << std::endl;
 
-  /*
   // Select
+  // Build select test indices (cant go past end)
+  //typedef decltype(cosmo::random_uints(1, n, m)) select_idx_v;
+  auto sel_idxs = cosmo::random_uints(1, n, m);
+
   start = std::chrono::steady_clock::now();
   for (auto i : sel_idxs) {
     size_t max = rs.rank(rs.size(), queries[i]);
     auto x = rs.select(std::min(i,max), queries[i]);
   }
   end = std::chrono::steady_clock::now();
-  std::cout << "RS Rank average time per element: " << std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count()/double(m) << " ns" << std::endl;
+  std::cout << "RS Select average time per element: " << std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count()/double(m) << " ns" << std::endl;
 
   start = std::chrono::steady_clock::now();
   for (auto i : sel_idxs) {
@@ -197,10 +199,10 @@ TEST_CASE("Large Query", "[benchmark]") {
     auto x = wt.select(std::min(i, max), queries[i]);
   }
   end = std::chrono::steady_clock::now();
-  std::cout << "WT Rank average time per element: " << std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count()/double(m) << " ns" << std::endl;
-  */
+  std::cout << "WT Select average time per element: " << std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count()/double(m) << " ns" << std::endl;
 }
 
+// NOTE: Add index types here in type_list template parameter
 typedef cosmo::type_list<dna_bv_rs<>> rank_types;
 TYPED_TEST_CASE("DNA index queries are answered", "[index][dna_rs]", rank_types) {
   using namespace sdsl;

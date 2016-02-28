@@ -11,6 +11,8 @@
 //#include <gmp.h>
 #include <boost/random.hpp>
 
+#include "debug.hpp"
+
 namespace cosmo {
 
 namespace fs = boost::filesystem;

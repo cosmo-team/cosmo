@@ -22,7 +22,8 @@ using sdsl::bit_vector;
 }
 
 // TODO: make t_symbol_bv, t_minus_bv, t_terminal_bv all parameters
-template <class t_symbol_bv = sd_vector<>> //change to hyb_vector after impl select
+// TODO: test hyb_vector after select is implemented
+template <class t_symbol_bv = sd_vector<>>
 class dna_bv_rs {
 private:
   const static size_t dna_sigma = 8; // DNA + minus flags. $ considered separately
@@ -56,7 +57,7 @@ public:
     // Construct each bit vector
     for (size_t c = 0; c < dna_sigma + 1; ++c) {
       m_bit_vectors[c] = symbol_bv(temp[c]);
-      temp(temp[c]); // free some working mem space
+      temp[c].resize(0); // free some working mem space
       m_rank_supports[c] = rank_1_type(&m_bit_vectors[c]);
       m_select_supports[c] = select_1_type(&m_bit_vectors[c]);
     }
@@ -73,13 +74,6 @@ public:
     size_t c = 0;
     for ( ; (c < dna_sigma + 1) && (m_bit_vectors[c][i] != 1); ++c) { }
     return int_to_nt()(c);
-  }
-
-  size_t member_size() const {
-    size_t size = 0;
-    for (auto v : m_bit_vectors) {
-      size += kk
-    }
   }
 
   size_t rank(size_t i, value_type c) const {
