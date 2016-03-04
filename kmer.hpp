@@ -44,7 +44,7 @@ inline uint8_t get_nt(const uint128_t & block, uint8_t i) {
   uint8_t block_idx = i/nts_per_block;
   // this assumes that the block type is a multiple of 64 bits and has no other data before
   // but should be reusable for larger block types
-  uint64_t block_64 = ((uint64_t*)(&block))[block_idx];
+  uint64_t block_64 = ((const uint64_t*const)(&block))[block_idx];
   return get_nt(block_64, i%nts_per_block);
 }
 
@@ -215,7 +215,7 @@ void convert_representation(const kmer_t * kmers_in, kmer_t * kmers_out, size_t 
   // Swap G and T and reverses the nucleotides so that they can
   // be compared and sorted as integers to give colexicographical ordering
   if (swap)
-    std::transform((uint64_t*)kmers_in, (uint64_t*)(kmers_in + num_kmers), (uint64_t*)kmers_out, swap_gt);
+    std::transform((const uint64_t*const )kmers_in, (const uint64_t*const)(kmers_in + num_kmers), (uint64_t*)kmers_out, swap_gt);
   std::transform(kmers_in, kmers_in + num_kmers, kmers_out, reverse_nt<kmer_t>());
 }
 

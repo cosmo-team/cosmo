@@ -1,4 +1,72 @@
 #include "io.hpp"
+#include "kmer.hpp"
+
+static inline uint64_t nibblet_reverse(const uint64_t &word)
+{
+
+    uint64_t ret_val = word;
+    for (int i=0; i < 16; ++i) {
+        //std::cout <<"************* "<< i << " ************" << std::endl << std::endl;
+        //print_kmers(std::cout, &word , 1, 32);
+
+        uint64_t right_mask = 3ull << (2*i);
+        //print_kmers(std::cout, &right_mask , 1, 32);
+        
+        uint64_t left_mask = (3ull << 62ull) >> (2*i);
+        //print_kmers(std::cout, &left_mask , 1, 32);
+        
+        uint64_t left_val = (word & left_mask) >> (62ull - (2*i));
+        //print_kmers(std::cout, &left_val , 1, 32);
+        
+        uint64_t right_val = (word & right_mask) >> (2*i);
+        //print_kmers(std::cout, &right_val , 1, 32);
+        
+        uint64_t new_left_bits = (right_val << 62ull) >> (2*i);
+        //print_kmers(std::cout, &new_left_bits , 1, 32);
+        
+        uint64_t new_right_bits = left_val << (2*i);
+        //print_kmers(std::cout, &new_right_bits , 1, 32);
+        
+        ret_val = (ret_val & ~left_mask) | new_left_bits;
+        ret_val = (ret_val & ~right_mask) | new_right_bits;
+        //std::cout << std::endl;
+    }
+    return ret_val;
+}
+
+CKMCFile *kmer_data_base; //FIXME: move out of global
+int kmc_read_header(std::string fname, uint32_t &kmer_num_bits, uint32_t &k, uint64 &_total_kmers)
+{
+    kmer_data_base = new CKMCFile;
+    
+
+	if (!kmer_data_base->OpenForListing(fname))
+	{
+
+		return 0;
+	}
+	else
+	{
+		//uint32 _kmer_length;
+		uint32 _mode;
+		uint32 _counter_size;
+		uint32 _lut_prefix_length;
+		uint32 _signature_len;
+		uint32 _min_count;
+		uint64 _max_count;
+
+
+		kmer_data_base->Info(k, _mode, _counter_size, _lut_prefix_length, _signature_len, _min_count, _max_count, _total_kmers);
+        kmer_num_bits = 64 * ((k * 2 - 1) / 64 + 1); // FIXME: double check ceil(quotients) is what we're getting and not more, this may be too conservative
+		
+		//std::string str;
+
+
+        
+    }
+    return 1;
+        
+}
 
 int dsk_read_header(int handle, uint32_t * kmer_num_bits, uint32_t * k) {
   return read(handle, (char*)kmer_num_bits, sizeof(uint32_t)) != -1 &&
@@ -18,6 +86,7 @@ int cortex_read_header(int handle, uint32_t * kmer_num_bits, uint32_t * k) {
 
   read(handle, (char*)k ,sizeof(uint32_t));
   read(handle, (char*)kmer_num_bits, sizeof(uint32_t));
+  std::cerr << "read k=" << k << " kmer_num_bits=" << *kmer_num_bits << " (which will be *64 momentarily) from cortex file." << std::endl;
   *kmer_num_bits *= 64;
   return 1;
 
@@ -177,12 +246,68 @@ size_t dsk_read_kmers(int handle, uint32_t kmer_num_bits, uint64_t * kmers_outpu
   return next_slot / ((kmer_num_bits/8)/sizeof(uint64_t));
 }
 
+size_t kmc_read_kmers(const int handle, const uint32_t kmer_num_bits, const uint32_t num_colors, uint32_t k, uint64_t *const &kmers_output, std::vector<color_bv>  &kmer_colors)
+{
+    unsigned int largest = 0;
+    //uint32 counter_len;
+		
+		CKmerAPI kmer_object(k);
+        uint64 counter, maxcount = 0;
+        int numkmers = 0;
+        
+        while (kmer_data_base->ReadNextKmer(kmer_object, counter)) {
+            std::vector<unsigned long long /*uint64*/> kmer;
+            kmer.push_back(0);
+            assert(k <= 32);
+			//char str[1024];
+            //kmer_object.to_string(str);
+            kmer_object.to_long(kmer);
+            //std::cerr << "got array of " << kmer.size() << " words. highest bit is ";
+            unsigned long long v = kmer[0]; // 32-bit word to find the log base 2 of
+            unsigned int r = 0; // r will be lg(v)
 
+            while (v >>= 1) // unroll for more speed...
+            {
+                r++;
+            }
+            //std::cerr << r << std::endl;
+            if (r > largest)  largest = r;
+            color_bv color = 1;
+            kmer_colors[numkmers] = color;
+            uint64 t = kmer[0];//nibblet_reverse(kmer[0]);
+            //nibblet_reverse(t);
+            kmers_output[numkmers] = t; //kmer[0];
+            if (counter >= 0 /*maxcount*/) {
+                maxcount = counter;
+//                std::cout << counter << "\t" << kmers_output[numkmers] << "\t";
+//                print_kmers(std::cout, kmers_output + numkmers, 1, k);                
+                //              std::cout << counter << "\t" << kmer_object.to_string()  <<  std::endl;
+            }
+            
+
+            // std::cout << counter << "\t" << kmer_object.to_string()  <<  "\t";
+            // print_kmers(std::cout, kmers_output + numkmers, 1, k);
+
+            kmer.pop_back();
+            numkmers++;
+        }
+        std::cerr << "Read " << numkmers << " from KMC file. highest bit value seen was " << largest << std::endl;
+
+		
+	
+
+		kmer_data_base->Close();
+        delete kmer_data_base;
+        return numkmers;
+    
+}
 size_t cortex_read_kmers(const int handle, const uint32_t kmer_num_bits, const uint32_t num_colors, uint32_t k, uint64_t *const &kmers_output, std::vector<color_bv>  &kmer_colors) {
     // TODO: Add a parameter to specify a limit to how many records we read (eventually multipass merge-sort?)
     (void) k;
     size_t next_slot = 0;
     int coverage[NUM_COLS]; // hack
+    unsigned long long maxcount = 0;
+    int covsum = 0;
     while (1) {
         unsigned int i;
         uint64_t kmer;
@@ -194,11 +319,24 @@ size_t cortex_read_kmers(const int handle, const uint32_t kmer_num_bits, const u
             break;
         rc = read(handle, &coverage, sizeof(int) * num_colors);
         rc = read(handle, individual_edges_reading_from_binary, sizeof(char) * num_colors);
+
+        // find the max coverage for this coverage
+        covsum = 0;
+        for (int covit=0; covit < num_colors; ++covit) {
+                covsum += coverage[covit];
+        }
         char edge = 0;
         for (i=0; i<num_colors; i++) {
             edge |= individual_edges_reading_from_binary[i] & 0xF;
         }
         kmers_output[next_slot] = kmer;
+
+        if (covsum >= 0 /*maxcount*/) {
+            maxcount = covsum;
+//            std::cout << maxcount << "\t" << kmers_output[next_slot] << "\t";
+            
+//            print_kmers(std::cout, kmers_output + next_slot, 1, k);
+        }
 
         color_bv color_acc;
         uint32_t j;

@@ -40,11 +40,12 @@ template <typename kmer_t, class Visitor>
 void convert(kmer_t * kmers, size_t num_kmers, const uint32_t k, Visitor visit, bool swap, std::vector<color_bv> &colors) {
   // Convert the nucleotide representation to allow tricks
   convert_representation(kmers, kmers, num_kmers, swap);
-
+  //print_kmers(std::cout, kmers, num_kmers, k);
   // Append reverse complements
   #ifdef ADD_REVCOMPS
   size_t revcomp_factor = 2;
   transform(kmers, kmers + num_kmers, kmers + num_kmers, reverse_complement<kmer_t>(k));
+//  print_kmers(std::cout, kmers, num_kmers * revcomp_factor, k);
   //memcpy(colors + num_kmers, colors, sizeof(uint64_t) * num_kmers); // copy all of the color masks for the reverse kmers
   std::copy(colors.begin(), colors.begin() + num_kmers, colors.begin() + num_kmers);
   #else
@@ -77,7 +78,7 @@ void convert(kmer_t * kmers, size_t num_kmers, const uint32_t k, Visitor visit, 
   // outgoing dummy edges are output in correct order while merging, whereas incoming dummy edges are not in the correct
   // position, but are sorted relatively, hence can be merged if collected in a previous pass
   // count dummies (to allocate space)
-  size_t num_incoming_dummies = count_incoming_dummy_edges(table_a, table_b, num_kmers*revcomp_factor, k);
+  size_t num_incoming_dummies = count_incoming_dummy_edges(table_a, table_b, num_kmers * revcomp_factor, k);
   TRACE("num_incoming_dummies: %zu\n", num_incoming_dummies);
   // allocate space for dummies -> we need to generate all the $-prefixed dummies, so can't just use an iterator for the
   // incoming dummies (the few that we get from the set_difference are the ones we apply $x[0:-1] to, so we need (k-1) more for each
@@ -90,14 +91,14 @@ void convert(kmer_t * kmers, size_t num_kmers, const uint32_t k, Visitor visit, 
   size_t dummy_table_factor = 1;
   #endif
   // Don't have to alloc if we aren't preparing all dummies, but this option is only used for testing. Usually we want them
-  kmer_t * incoming_dummies = (kmer_t*) malloc(num_incoming_dummies*all_dummies_factor*dummy_table_factor*sizeof(kmer_t));
+  kmer_t * incoming_dummies = (kmer_t*) malloc(num_incoming_dummies * all_dummies_factor * dummy_table_factor * sizeof(kmer_t));
   if (!incoming_dummies) {
     cerr << "Error allocating space for incoming dummies" << endl;
     exit(1);
   }
   // We store lengths because the prefix before the <length> symbols on the right will all be $ signs
   // this is a cheaper way than storing all symbols in 3 bits instead (although it means we need a varlen radix sort)
-  uint8_t * incoming_dummy_lengths = (uint8_t*) malloc(num_incoming_dummies*all_dummies_factor*dummy_table_factor*sizeof(uint8_t));
+  uint8_t * incoming_dummy_lengths = (uint8_t*) malloc(num_incoming_dummies * all_dummies_factor * dummy_table_factor * sizeof(uint8_t));
   if (!incoming_dummy_lengths) {
     cerr << "Error allocating space for incoming dummy lengths" << endl;
     exit(1);
@@ -157,6 +158,7 @@ typedef struct p
     std::string input_filename = "";
     std::string output_prefix = "";
     bool cortex = false;
+    bool kmc = false;
 } parameters_t;
 
 void parse_arguments(int argc, char **argv, parameters_t & params);
@@ -177,15 +179,19 @@ void parse_arguments(int argc, char **argv, parameters_t & params)
   TCLAP::SwitchArg cortex_arg("c", "cortex",
             "Input file is cortex binary",
             cmd, false);
+  TCLAP::SwitchArg kmc_arg("k", "KMC",
+            "Input file is a KMC binary",
+            cmd, false);
   cmd.parse( argc, argv );
   //params.ascii         = ascii_arg.getValue();
   params.input_filename  = input_filename_arg.getValue();
   params.output_prefix   = output_prefix_arg.getValue();
-  params.cortex          = cortex_arg.getValue();
+  params.kmc          = kmc_arg.getValue();
+  params.cortex = cortex_arg.getValue();
 }
-void serialize_color_bv(std::ofstream &cfs, std::vector<color_bv>::iterator &colors, uint64_t index)
+void serialize_color_bv(std::ofstream &cfs, const color_bv &color)//std::vector<color_bv>::iterator &colors, uint64_t index)
 {
-    cfs.write((char *)&colors[index], sizeof(color_bv));
+    cfs.write((char *)&color, sizeof(color_bv));
 }
 
 int main(int argc, char * argv[])
@@ -194,14 +200,15 @@ int main(int argc, char * argv[])
     parse_arguments(argc, argv, params);
 
     const char * file_name = params.input_filename.c_str();
-
-    // Open File
     int handle = -1;
-    if ( (handle = open(file_name, O_RDONLY)) == -1 ) {
-        fprintf(stderr, "ERROR: Can't open file: %s\n", file_name);
-        exit(EXIT_FAILURE);
-    }
+    // Open File
+    if (!params.kmc) {
 
+        if ( (handle = open(file_name, O_RDONLY)) == -1 ) {
+            fprintf(stderr, "ERROR: Can't open file: %s\n", file_name);
+            exit(EXIT_FAILURE);
+        }
+    }
     // The parameter should be const... On my computer the parameter
     // isn't const though, yet it doesn't modify the string...
     // This is still done AFTER loading the file just in case
@@ -209,22 +216,34 @@ int main(int argc, char * argv[])
 
     // Read Header
     uint32_t kmer_num_bits = 0;
-    uint32_t k = 0;
+    uint32_t kmer_size = 0;
+    size_t num_kmers = 0;
     if (params.cortex) {
-        if ( !cortex_read_header(handle, &kmer_num_bits, &k) ) {
+        std::cerr << "Reading cortex file " << file_name << std::endl;
+        if ( !cortex_read_header(handle, &kmer_num_bits, &kmer_size) ) {
             fprintf(stderr, "ERROR: Error reading cortex_file %s\n", file_name);
             exit(EXIT_FAILURE);
         }
-    }
-    else {
-        if ( !dsk_read_header(handle, &kmer_num_bits, &k) ) {
+    } else if (params.kmc) {
+        std::cerr << "Reading KMC file " << file_name << std::endl;
+        uint64 _total_kmers;
+        if ( !kmc_read_header(file_name, kmer_num_bits, kmer_size, _total_kmers) ) {
+            fprintf(stderr, "ERROR: Error reading KMC_file %s\n", file_name);
+            exit(EXIT_FAILURE);
+        }
+        num_kmers = _total_kmers;
+        std::cerr << "Will read " << num_kmers << " " << kmer_size << "-mers, each with " << kmer_num_bits << " bits." << std::endl;
+    } else {
+        std::cerr << "Reading DSK file " << file_name << std::endl;
+        if ( !dsk_read_header(handle, &kmer_num_bits, &kmer_size) ) {
             fprintf(stderr, "ERROR: Error reading file %s\n", file_name);
             exit(EXIT_FAILURE);
         }
     }
-    uint32_t kmer_num_blocks = (kmer_num_bits / 8) / sizeof(uint64_t);
+    assert(kmer_num_bits % 64 == 0);
+    uint32_t kmer_num_blocks = (kmer_num_bits  / 8 ) / sizeof(uint64_t) ; 
     TRACE(">> READING DSK FILE\n");
-    TRACE("kmer_num_bits, k = %d, %d\n", kmer_num_bits, k);
+    TRACE("kmer_num_bits, k = %d, %d\n", kmer_num_bits, kmer_size);
     TRACE("kmer_num_blocks = %d\n", kmer_num_blocks);
 
     if (kmer_num_bits > MAX_BITS_PER_KMER) {
@@ -235,7 +254,7 @@ int main(int argc, char * argv[])
     }
 
     // Read how many items there are (for allocation purposes)
-    size_t num_kmers = 0;
+
     uint32_t num_colors = 0;
     if (params.cortex) {
         printf("Num records\n");
@@ -251,8 +270,15 @@ int main(int argc, char * argv[])
         printf("Got num colors (capacity, not occupancy) %d \n", num_colors);
         // printf("NUM_COLS=%zu\n", NUM_COLS);
         // printf("Each entry in .colors file will occupy %d bytes.\n", sizeof(color_bv));
-    }
-    else {
+    } else if (params.kmc) {
+        num_colors = 1;
+        if (num_colors > NUM_COLS) {
+            fprintf(stderr, "KMC file %s contains %d colors which exceeds the compile time limit of %d.  Please recompile with NUM_COLS=%d (or larger).\n", file_name, num_colors, NUM_COLS, num_colors);
+            exit(EXIT_FAILURE);
+        }
+        
+        
+    } else {
         if ( dsk_num_records(handle, kmer_num_bits, &num_kmers) == -1) {
             fprintf(stderr, "Error seeking file %s\n", file_name);
             exit(EXIT_FAILURE);
@@ -271,7 +297,13 @@ int main(int argc, char * argv[])
 #else
     size_t revcomp_factor = 1;
 #endif
-    uint64_t * kmer_blocks = (uint64_t*)malloc(num_kmers * 2 * revcomp_factor * sizeof(uint64_t) * kmer_num_blocks);
+    size_t kmer_blocks_size = num_kmers * 2 * revcomp_factor * sizeof(uint64_t) * kmer_num_blocks;
+    uint64_t * kmer_blocks = (uint64_t*)malloc(kmer_blocks_size);
+#ifndef NDEBUG
+    for (int kmer_block_iter = 0; kmer_block_iter < kmer_blocks_size/sizeof(uint64_t); ++kmer_block_iter)
+        kmer_blocks[kmer_block_iter] = 0;
+#endif
+    std::cerr << "Allocating " << kmer_blocks_size << " bytes for kmer_blocks."  << std::endl;
     if (!kmer_blocks) {
         cerr << "Error allocating space for kmers" << endl;
         exit(1);
@@ -290,21 +322,25 @@ int main(int argc, char * argv[])
     size_t num_records_read;
     if (params.cortex) {
         printf("Reading kmers\n");
-        num_records_read = cortex_read_kmers(handle, kmer_num_bits, num_colors, k, kmer_blocks, kmer_colors);
+        num_records_read = cortex_read_kmers(handle, kmer_num_bits, num_colors, kmer_size, kmer_blocks, kmer_colors);
         printf("num_kmers = %zu and num_records_read=%zu\n", num_kmers, num_records_read);
         num_kmers = num_records_read;
-    }
-    else {
+    } else if (params.kmc) {
+        num_records_read = kmc_read_kmers(handle, kmer_num_bits, num_colors, kmer_size, kmer_blocks, kmer_colors);
+        printf("num_kmers = %zu and num_records_read=%zu\n", num_kmers, num_records_read);
+    } else {
         num_records_read = dsk_read_kmers(handle, kmer_num_bits, kmer_blocks);
     }
-    close(handle);
+    if (!params.kmc) {
+        close(handle);
+    }
     if (num_records_read == 0) {
         fprintf(stderr, "Error reading file %s\n", argv[1]);
         exit(EXIT_FAILURE);
     }
     TRACE("num_records_read = %zu\n", num_records_read);
     assert (num_records_read == num_kmers);
-
+    //print_kmers(std::cout, kmer_blocks , num_kmers, kmer_size);
     //auto ascii_output = std::ostream_iterator<string>(std::cout, "\n");
 
     string outfilename = (params.output_prefix == "")? base_name : params.output_prefix;
@@ -329,14 +365,25 @@ int main(int argc, char * argv[])
     PackedEdgeOutputer out(ofs);
     ofstream cfs;
     cfs.open(outfilename + ".colors", ios::out | ios::binary);
+    color_bv ones;
+    uint64_t blocksum = 0;
+#ifndef NDEBUG
+    for (int kmer_block_iter = 0; kmer_block_iter < kmer_blocks_size/sizeof(uint64_t); ++ kmer_block_iter)
+        blocksum += kmer_blocks[kmer_block_iter];
+    std::cerr << "kmer_blocks sum = " << blocksum << std::endl;
+#endif
 
+    // create an 'all ones' color_bv
+    for (int citer=0; citer < num_colors; ++citer)
+        ones[citer] = 1;
+    
     if (kmer_num_bits == 64) {
         typedef uint64_t kmer_t;
         size_t prev_k = 0; // for input, k is always >= 1
         size_t index = 0;
-//        uint64_t *colors = kmer_colors + num_kmers * revcomp_factor;
+
         std::vector<color_bv>::iterator colors = kmer_colors.begin() + num_kmers * revcomp_factor; 
-        convert(kmer_blocks, num_kmers, k,
+        convert(kmer_blocks, num_kmers, kmer_size,
                 [&](edge_tag tag, const kmer_t & x, const uint32_t this_k, size_t lcs_len, bool first_end_node) {
 #ifdef VAR_ORDER
                     out.write(tag, x, this_k, (lcs_len != k-1), first_end_node);
@@ -346,22 +393,24 @@ int main(int argc, char * argv[])
                     out.write(tag, x, this_k, lcs_len, first_end_node);
 #endif
                     if (tag == standard) {
-    // cerr << kmer_to_string(x, k, this_k) << "c" << colors[index] << "\n";
-                        serialize_color_bv(cfs, colors, index++);
+                        // cerr << kmer_to_string(x, k, this_k) << "c" << colors[index] << "\n";
+                        serialize_color_bv(cfs, colors[index++]);
                         //cfs.write((char *)&colors[index++], sizeof(uint64_t));
                     }
                     else {
-                        uint64_t ones = -1;
-                        cfs.write((char *)&ones, sizeof(uint64_t));
+                        //uint64_t ones = -1;
+                        serialize_color_bv(cfs, ones);
+                            //assert(!"Not converted to color_bv yet!");
+                        //cfs.write((char *)&ones, sizeof(uint64_t));
                     }
                     prev_k = this_k;
-                }, !params.cortex, kmer_colors);
+                }, !(params.cortex || params.kmc), kmer_colors);
     }
     else if (kmer_num_bits == 128) {
         typedef uint128_t kmer_t;
         size_t prev_k = 0;
         kmer_t * kmer_blocks_128 = (kmer_t*)kmer_blocks;
-        convert(kmer_blocks_128, num_kmers, k,
+        convert(kmer_blocks_128, num_kmers, kmer_size,
                 [&](edge_tag tag, const kmer_t & x, const uint32_t this_k, size_t lcs_len, bool first_end_node) {
 #ifdef VAR_ORDER
                     out.write(tag, x, this_k, (lcs_len != k-1), first_end_node);
@@ -379,7 +428,7 @@ int main(int argc, char * argv[])
     lcs.flush();
     lcs.close();
 #endif
-    uint64_t t_k(k); // make uint64_t just to make parsing easier
+    uint64_t t_k(kmer_size); // make uint64_t just to make parsing easier
     // (can read them all at once and take the last 6 values)
     ofs.write((char*)&t_k, sizeof(uint64_t));
     ofs.flush();

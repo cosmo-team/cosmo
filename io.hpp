@@ -13,13 +13,14 @@
 #include "dummies.hpp"
 #include "kmer.hpp"
 #include "debug.h"
-
+#include "kmc_api/kmc_file.h"
 static const size_t MAX_BITS_PER_KMER = 128;
 static const size_t BUFFER_SIZE = 0x8000; // 32Kb data buffer
 
 using namespace std;
 
 #define DSK_FILE_RECORD_SIZE(NBITS) (((NBITS)/8) + 4)
+int kmc_read_header(std::string fname, uint32_t &kmer_num_bits, uint32_t &k, uint64 &_total_kmers);
 
 // Reads the DSK file input header
 int dsk_read_header(int, uint32_t *, uint32_t *);
@@ -33,6 +34,7 @@ int cortex_read_header(int, uint32_t *, uint32_t *);
 // Counts the number of records in the file - for allocation purposes
 int cortex_num_records(const int handle, const uint32_t kmer_num_bits, size_t &num_records, uint32_t &number_of_colours);
 // Read kmers from file into the output array
+size_t kmc_read_kmers(const int handle, const uint32_t kmer_num_bits, const uint32_t num_colors, uint32_t k, uint64_t *const &kmers_output, std::vector<color_bv>  &kmer_colors);
 size_t cortex_read_kmers(const int handle, const uint32_t kmer_num_bits, const uint32_t num_colors, const uint32_t k, uint64_t *const &kmers_output, std::vector<color_bv> &kmer_colors);
 
 //void merge_and_output(FILE * outfile, uint64_t * table_a, uint64_t * table_b, uint64_t * incoming_dummies, size_t num_records, size_t num_incoming_dummies, uint32_t k);
