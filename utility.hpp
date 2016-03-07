@@ -10,8 +10,14 @@
 #include <boost/filesystem.hpp>
 //#include <gmp.h>
 #include <boost/random.hpp>
+#include <sdsl/bit_vectors.hpp> // for size_in_bytes
 
 #include "debug.hpp"
+
+template <typename Container>
+double bits_per_element(const Container & c) {
+  return sdsl::size_in_bytes(c) * 8.0 / c.size();
+}
 
 namespace cosmo {
 

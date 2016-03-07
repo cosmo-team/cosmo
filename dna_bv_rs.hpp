@@ -2,6 +2,7 @@
 #ifndef DNA_BV_RS_H
 #define DNA_BV_RS_H
 
+#include <iostream>
 #include <sdsl/bit_vectors.hpp>
 
 #include "utility.hpp"
@@ -15,10 +16,12 @@ using std::endl;
 using std::vector;
 using std::array;
 using std::bitset;
+using std::string;
 
 using sdsl::sd_vector;
 using sdsl::hyb_vector;
 using sdsl::bit_vector;
+using sdsl::structure_tree_node;
 }
 
 // TODO: make t_symbol_bv, t_minus_bv, t_terminal_bv all parameters
@@ -40,6 +43,10 @@ private:
   array<select_1_type, dna_sigma+1> m_select_supports;
 
 public:
+  typedef size_t size_type;
+
+  dna_bv_rs() {}
+
   template<typename InputIterator>
   dna_bv_rs(InputIterator in, InputIterator end) : m_size(std::distance(in, end)) {
     array<bit_vector, dna_sigma+1> temp;
@@ -92,6 +99,48 @@ public:
   size_t size() const {
     return m_size;
   }
+
+  size_type serialize(std::ostream& out, structure_tree_node* v=NULL, string name="") const {
+    using namespace sdsl;
+
+    structure_tree_node* child = structure_tree::add_child(v, name, util::class_name(*this));
+    size_type written_bytes = 0;
+
+    written_bytes += write_member(m_size, out, child, "m_size");
+    for (int i = 0; i < dna_sigma+1; i++) {
+      written_bytes += m_bit_vectors[i].serialize(out, child, "m_bit_vectors" + i);
+    }
+    for (int i = 0; i < dna_sigma+1; i++) {
+      written_bytes += m_rank_supports[i].serialize(out, child, "m_rank_supports" + i);
+    }
+    for (int i = 0; i < dna_sigma+1; i++) {
+      written_bytes += m_select_supports[i].serialize(out, child, "m_select_supports" + i);
+    }
+
+    structure_tree::add_size(child, written_bytes);
+    return written_bytes;
+  }
+
+  void load(std::istream& in) {
+    using namespace sdsl;
+    read_member(m_size, in);
+
+    for (int i = 0; i < dna_sigma+1; i++) {
+      m_bit_vectors[i].load(in);
+    }
+
+    for (int i = 0; i < dna_sigma+1; i++) {
+      m_rank_supports[i].load(in);
+      m_rank_supports[i].set_vector(&m_bit_vectors[i]);
+    }
+
+    for (int i = 0; i < dna_sigma+1; i++) {
+      m_select_supports[i].load(in);
+      m_select_supports[i].set_vector(&m_bit_vectors[i]);
+    }
+  }
+
+
 };
 
 } // namespace index

@@ -4,9 +4,11 @@
 #include "dna_bv_rs.hpp"
 #include "utility.hpp"
 #include <chrono>
+#include <cstdio>
 #include <sdsl/wavelet_trees.hpp>
 #include <sdsl/vectors.hpp>
 #include <sdsl/bit_vectors.hpp>
+#include <boost/filesystem.hpp>
 #include <boost/mpl/list.hpp>
 #include <boost/mpl/begin_end.hpp>
 #include <boost/mpl/next_prior.hpp>
@@ -122,10 +124,11 @@ template<typename ... types> using type_list = boost::mpl::list<types...>;
   template <typename T> void COSMO_##__LINE__::call()
 
 
+// TODO: move to benchmark program instead
 TEST_CASE("Large Query", "[benchmark]") {
   using namespace sdsl;
-  size_t n = 10e5;
-  size_t m = 10e5;
+  size_t n = 50e3;
+  size_t m = 50e3;
   auto input   = cosmo::random_string("$acgtACGT", n);
   int_vector<8> temp(input.size());
   for (size_t i = 0; i < input.size(); ++i) temp[i] = input[i];
@@ -200,48 +203,68 @@ TEST_CASE("Large Query", "[benchmark]") {
   }
   end = std::chrono::steady_clock::now();
   std::cout << "WT Select average time per element: " << std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count()/double(m) << " ns" << std::endl;
+
+  std::cout << "RS average bits per element : " << bits_per_element(rs) << std::endl;
+  std::cout << "WT average bits per element : " << bits_per_element(wt) << std::endl;
 }
 
 // NOTE: Add index types here in type_list template parameter
 typedef cosmo::type_list<dna_bv_rs<>> rank_types;
-TYPED_TEST_CASE("DNA index queries are answered", "[index][dna_rs]", rank_types) {
+TYPED_TEST_CASE("DNA index", "[index][dna_rs]", rank_types) {
   using namespace sdsl;
+
   const std::string input  = "acgt$acgt$ACGTacgt";
   int_vector<8> temp(input.size());
   for (size_t i = 0; i < input.size(); ++i) temp[i] = input[i];
   wt_blcd<> wt;
   construct_im(wt, temp);
+  vector<T> test_objects;
 
-  T x(input);
+  T a(input);
+  test_objects.push_back(a);
 
-  REQUIRE(x.size() == input.length());
+  // Serialization
+  std::string temp_file = boost::filesystem::unique_path().native();
+  T b;
+  store_to_file(a, temp_file);
+  load_from_file(b, temp_file);
+  boost::filesystem::remove(temp_file);
+  test_objects.push_back(b);
 
-  // Access
-  SECTION("original elements are accessible", "[access]") {
-    for (size_t i = 0; i < x.size(); ++i) {
-      REQUIRE(x[i] == input[i]);
-    }
-  }
+  string storage = "when stored in memory";
+  for (auto & x : test_objects) {
+    SECTION(storage) {
+      REQUIRE(x.size() == input.length());
 
-  // Rank
-  SECTION("ranks are computed for each symbol over [0, i)", "[rank]") {
-    size_t c_i = 0;
-    for (char c : std::string("$acgtACGT")) {
-      for (size_t i = 0; i <= x.size(); ++i) {
-        REQUIRE(x.rank(i,c) == wt.rank(i,c));
+      // Access
+      SECTION("original elements are accessible", "[access]") {
+        for (size_t i = 0; i < x.size(); ++i) {
+          REQUIRE(x[i] == input[i]);
+        }
       }
-      ++c_i;
-    }
-  }
 
-  // Select
-  SECTION("Select is computed for each symbol over [1, m]", "[select]") {
-    size_t c_i = 0;
-    for (char c : std::string("$acgtACGT")) {
-      for (size_t i = 1; i <= x.rank(x.size(), c); ++i) {
-        REQUIRE(x.select(i,c) == wt.select(i,c));
+      // Rank
+      SECTION("ranks are computed for each symbol over [0, i)", "[rank]") {
+        size_t c_i = 0;
+        for (char c : std::string("$acgtACGT")) {
+          for (size_t i = 0; i <= x.size(); ++i) {
+            REQUIRE(x.rank(i,c) == wt.rank(i,c));
+          }
+          ++c_i;
+        }
       }
-      ++c_i;
+
+      // Select
+      SECTION("Select is computed for each symbol over [1, m]", "[select]") {
+        size_t c_i = 0;
+        for (char c : std::string("$acgtACGT")) {
+          for (size_t i = 1; i <= x.rank(x.size(), c); ++i) {
+            REQUIRE(x.select(i,c) == wt.select(i,c));
+          }
+          ++c_i;
+        }
+      }
     }
+    storage = "when loaded from disk";
   }
 }
