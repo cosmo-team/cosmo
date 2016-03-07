@@ -127,15 +127,17 @@ template<typename ... types> using type_list = boost::mpl::list<types...>;
 // TODO: move to benchmark program instead
 TEST_CASE("Large Query", "[benchmark]") {
   using namespace sdsl;
-  size_t n = 50e3;
-  size_t m = 50e3;
-  auto input   = cosmo::random_string("$acgtACGT", n);
+  size_t n = 50e3; // length
+  size_t m = 50e3; // # queries
+  //auto input = cosmo::random_string("$acgtACGT", n);
+  auto input = cosmo::random_uints(0, 8, n);
   int_vector<8> temp(input.size());
   for (size_t i = 0; i < input.size(); ++i) temp[i] = input[i];
 
   auto rnk_idxs = cosmo::random_uints(0, n,         m);
   auto acc_idxs = cosmo::random_uints(0, n-1,       m);
-  auto queries  = cosmo::random_string("$acgtACGT", m);
+  //auto queries  = cosmo::random_string("$acgtACGT", m);
+  auto queries  = cosmo::random_uints(0, 8, m);
 
   // Construct
   typedef wt_huff<rrr_vector<63>> wt_t;
@@ -213,10 +215,12 @@ typedef cosmo::type_list<dna_bv_rs<>> rank_types;
 TYPED_TEST_CASE("DNA index", "[index][dna_rs]", rank_types) {
   using namespace sdsl;
 
-  const std::string input  = "acgt$acgt$ACGTacgt";
+  //const std::string input  = "acgt$acgt$ACGTacgt";
+  const std::vector<int> input  = {1,2,3,4,0,1,2,3,4,0,5,6,7,8,1,2,3,4};
+  const std::vector<int> alphabet = {0,1,2,3,4,5,6,7,8};
   int_vector<8> temp(input.size());
   for (size_t i = 0; i < input.size(); ++i) temp[i] = input[i];
-  wt_blcd<> wt;
+  wt_huff<rrr_vector<63>> wt;
   construct_im(wt, temp);
   vector<T> test_objects;
 
@@ -234,7 +238,7 @@ TYPED_TEST_CASE("DNA index", "[index][dna_rs]", rank_types) {
   string storage = "when stored in memory";
   for (auto & x : test_objects) {
     SECTION(storage) {
-      REQUIRE(x.size() == input.length());
+      REQUIRE(x.size() == input.size());
 
       // Access
       SECTION("original elements are accessible", "[access]") {
@@ -246,7 +250,7 @@ TYPED_TEST_CASE("DNA index", "[index][dna_rs]", rank_types) {
       // Rank
       SECTION("ranks are computed for each symbol over [0, i)", "[rank]") {
         size_t c_i = 0;
-        for (char c : std::string("$acgtACGT")) {
+        for (auto c : alphabet) {
           for (size_t i = 0; i <= x.size(); ++i) {
             REQUIRE(x.rank(i,c) == wt.rank(i,c));
           }
@@ -257,7 +261,7 @@ TYPED_TEST_CASE("DNA index", "[index][dna_rs]", rank_types) {
       // Select
       SECTION("Select is computed for each symbol over [1, m]", "[select]") {
         size_t c_i = 0;
-        for (char c : std::string("$acgtACGT")) {
+        for (auto c : alphabet) {
           for (size_t i = 1; i <= x.rank(x.size(), c); ++i) {
             REQUIRE(x.select(i,c) == wt.select(i,c));
           }

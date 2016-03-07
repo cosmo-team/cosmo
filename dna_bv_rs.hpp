@@ -19,6 +19,7 @@ using std::bitset;
 using std::string;
 
 using sdsl::sd_vector;
+using sdsl::rrr_vector;
 using sdsl::hyb_vector;
 using sdsl::bit_vector;
 using sdsl::structure_tree_node;
@@ -32,7 +33,7 @@ private:
   const static size_t dna_sigma = 8; // DNA + minus flags. $ considered separately
 
   typedef t_symbol_bv symbol_bv;
-  typedef uint8_t value_type;
+  typedef uint64_t value_type;
 
   // Data Members
   size_t m_size;
@@ -48,7 +49,7 @@ public:
   dna_bv_rs() {}
 
   template<typename InputIterator>
-  dna_bv_rs(InputIterator in, InputIterator end) : m_size(std::distance(in, end)) {
+  dna_bv_rs(const InputIterator in, const InputIterator end) : m_size(std::distance(in, end)) {
     array<bit_vector, dna_sigma+1> temp;
     for (size_t c = 0; c < dna_sigma+1; ++c) {
       temp[c] = bit_vector(m_size, 0);
@@ -73,24 +74,26 @@ public:
   template<typename InputRange>
   dna_bv_rs(InputRange input) : dna_bv_rs(input.begin(), input.end()) {}
 
-  dna_bv_rs(const std::string & input) : dna_bv_rs(input | transformed(nt_to_int())) {}
-
-  dna_bv_rs(const value_type * input) : dna_bv_rs(std::string(input)) {}
+  // TODO: set a flag that maps ascii back...
+  //dna_bv_rs(const std::string & input) : dna_bv_rs(input | transformed(nt_to_int())) {}
+  //dna_bv_rs(const char * input) : dna_bv_rs(std::string(input)) {}
 
   value_type operator[](size_t i) const {
-    size_t c = 0;
-    for ( ; (c < dna_sigma + 1) && (m_bit_vectors[c][i] != 1); ++c) { }
-    return int_to_nt()(c);
+    size_t c = 1; // ignore the uncommon symbol $ until end
+    bool not_found = false;
+    // Shave the last iteration off... makes a tiny difference
+    for ( ; (c < dna_sigma+1) && (not_found = m_bit_vectors[c][i] != 1); ++c) { }
+    return not_found?0:c;//int_to_nt()(not_found?0:c);
   }
 
   size_t rank(size_t i, value_type c) const {
-    ssize_t c_i = nt_to_int()(c);
+    ssize_t c_i = c;//nt_to_int()(c);
     if (c_i < 0) return 0;
-    return m_rank_supports[nt_to_int()(c)](i);
+    return m_rank_supports[c_i](i);
   }
 
   size_t select(size_t i, value_type c) const {
-    ssize_t c_i = nt_to_int()(c);
+    ssize_t c_i = c;//nt_to_int()(c);
     if (c_i < 0) return 0;
     COSMO_ASSERT(1 <= i && i <= m_rank_supports[c_i](m_size));
     return m_select_supports[c_i](i);
