@@ -1,6 +1,7 @@
 #include "io.hpp"
 #include "kmer.hpp"
 #include <vector>
+#include <queue>
 
 static inline uint64_t nibblet_reverse(const uint64_t &word)
 {
@@ -52,6 +53,8 @@ int kmc_read_header(std::string db_fname, uint32_t &kmer_num_bits, uint32_t &k, 
         }
         else
         {
+            //TODO : check if the file is sorted FIXME
+            
             //uint32 _kmer_length;
             uint32 _mode;
             uint32 _counter_size;
@@ -260,27 +263,74 @@ size_t dsk_read_kmers(int handle, uint32_t kmer_num_bits, uint64_t * kmers_outpu
   return next_slot / ((kmer_num_bits/8)/sizeof(uint64_t));
 }
 
+
+// code from http://www.cplusplus.com/reference/queue/priority_queue/priority_queue/
+// with the polarity reversed
+// FIXME: don't compare strings!!!
+typedef std::pair<unsigned, CKmerAPI > queue_entry;
+class mycomparison
+{
+    bool reverse;
+public:
+    mycomparison(const bool& revparam=false)
+        {reverse=revparam;}
+    bool operator() (const queue_entry& lhs, const queue_entry&rhs) const
+        {
+            if (reverse) return (const_cast<CKmerAPI*>(&(lhs.second))->to_string() > const_cast<CKmerAPI*>(&(rhs.second))->to_string());
+            else return (const_cast<CKmerAPI*>(&(lhs.second))->to_string() < const_cast<CKmerAPI*>(&(rhs.second))->to_string());
+        }
+};
+
 size_t kmc_read_kmers(const int handle, const uint32_t kmer_num_bits, const uint32_t num_colors, uint32_t k, uint64_t *const &kmers_output, std::vector<color_bv>  &kmer_colors)
 {
-    unsigned int largest = 0;
-    //uint32 counter_len;
-		
-		CKmerAPI kmer_object(k);
-        uint64 counter;
 
-        int numkmers = 0;
-        
-        while (kmer_data_bases[0]->ReadNextKmer(kmer_object, counter)) {
+    typedef std::priority_queue<queue_entry, std::vector<queue_entry>, mycomparison> mypq_type;
+    mypq_type queue;
+    int numkmers = 0;
+    color_bv color = 0;
+    
+    // initialize the queue with a file identifier (as a proxy for the input sequence itself) and the value at the head of the file for peeking
+    for (unsigned i = 0; i < kmer_data_bases.size(); ++i) {
+        CKmerAPI kmer_object(k);
+        uint64 counter;// for coverage
+        if (!kmer_data_bases[i]->ReadNextKmer(kmer_object, counter)) {
+            std::cerr << "ERROR: empty file contains no kmers." << std::endl;
+            assert(false);
+        }
+        queue.push(std::make_pair(i, kmer_object));
+    }
+
+    // pop the first element into 'current' to initialize our state (and init any other state here such as this one's color)
+    queue_entry current = queue.top();
+    queue.pop();
+    color.set(current.first); // FIXME: make sure not using << operator elsewhere!
+    //and replace that streams entry
+    CKmerAPI kmer_object(k);
+    uint64 counter;// for coverage    
+    if (kmer_data_bases[current.first]->ReadNextKmer(kmer_object, counter)) {
+        queue.push(std::make_pair(current.first, kmer_object));
+    }
 
 
+    // 
+    while (!queue.empty()) {
+        if (const_cast<CKmerAPI*>(&(queue.top().second))->to_string() == const_cast<CKmerAPI*>(&(current.second))->to_string()) { // if this is the same kmer we've seen before
+            queue_entry additional_instance = queue.top();
+            queue.pop();
+            CKmerAPI kmer_object(k);
+            uint64 counter;// for coverage
+            color.set(additional_instance.first);
+            if (kmer_data_bases[current.first]->ReadNextKmer(kmer_object, counter)) {
+                queue.push(std::make_pair(additional_instance.first, kmer_object));
+            }
+        } else { // if the top of the queue contains a new instance
 
-
+            // emit our current state
             std::vector<unsigned long long /*uint64*/> kmer;            
-            kmer_object.to_long(kmer);
+            current.second.to_long(kmer);
 
-
-            color_bv color = 1;
             kmer_colors[numkmers] = color;
+            color.reset();
 
             for (int block=0; block < kmer.size(); ++block) {
                 kmers_output[numkmers*kmer.size() + block] = kmer[block]; // FIXME: check if kmer_output is big endian or little endian
@@ -292,18 +342,76 @@ size_t kmc_read_kmers(const int handle, const uint32_t kmer_num_bits, const uint
 
             }
             numkmers++;
-        }
 
+            // now initialize our current state with the top
+            current = queue.top();
+            queue.pop();
+            color.set(current.first); // FIXME: make sure not using << operator elsewhere!
+            //and replace that streams entry
+            CKmerAPI kmer_object(k);
+            uint64 counter;// for coverage    
+            if (kmer_data_bases[current.first]->ReadNextKmer(kmer_object, counter)) {
+                queue.push(std::make_pair(current.first, kmer_object));
+            }
+        }
+    }
+
+    // and finally emit our current state    
+    std::vector<unsigned long long /*uint64*/> kmer;            
+    current.second.to_long(kmer);
+        
+    kmer_colors[numkmers] = color;
+    color.reset();
+        
+    for (int block=0; block < kmer.size(); ++block) {
+        kmers_output[numkmers*kmer.size() + block] = kmer[block]; // FIXME: check if kmer_output is big endian or little endian
+            
+        if (block == 1) {
+            assert(k == 63); //FIXME: the following line is to fix a bug in the kmc2 API where it shifts word[0] << 64 when k=63 which results in "word[1] =  word[0] + word[1]" the next line compensates; not sure how pervasive this is in the k>32 space.
+            kmers_output[numkmers*kmer.size() + block] -=kmer[0];
+        }
+            
+    }
+    numkmers++;
+            
+    
 
 		
-	
-        for (auto kmer_data_base: kmer_data_bases) {
-            kmer_data_base->Close();
-            delete kmer_data_base;
-        }
-        return numkmers;
+    // CKmerAPI kmer_object(k);
+
+
+
+        
+    // while (kmer_data_bases[0]->ReadNextKmer(kmer_object, counter)) {
+
+
+    //     std::vector<unsigned long long /*uint64*/> kmer;            
+    //     kmer_object.to_long(kmer);
+
+
+    //     color_bv color = 1;
+    //     kmer_colors[numkmers] = color;
+
+    //     for (int block=0; block < kmer.size(); ++block) {
+    //         kmers_output[numkmers*kmer.size() + block] = kmer[block]; // FIXME: check if kmer_output is big endian or little endian
+
+    //         if (block == 1) {
+    //             assert(k == 63); //FIXME: the following line is to fix a bug in the kmc2 API where it shifts word[0] << 64 when k=63 which results in "word[1] =  word[0] + word[1]" the next line compensates; not sure how pervasive this is in the k>32 space.
+    //             kmers_output[numkmers*kmer.size() + block] -=kmer[0];
+    //         }
+
+    //     }
+    //     numkmers++;
+    // }
+
+    for (auto kmer_data_base: kmer_data_bases) {
+        kmer_data_base->Close();
+        delete kmer_data_base;
+    }
+    return numkmers;
     
 }
+
 size_t cortex_read_kmers(const int handle, const uint32_t kmer_num_bits, const uint32_t num_colors, uint32_t k, uint64_t *const &kmers_output, std::vector<color_bv>  &kmer_colors) {
     // TODO: Add a parameter to specify a limit to how many records we read (eventually multipass merge-sort?)
     (void) k;
