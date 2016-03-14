@@ -1,0 +1,20 @@
+language: cpp
+compiler:
+  - clang
+  - gcc
+os:
+  - linux
+  - osx
+branches:
+  only:
+  - master
+  - develop
+notifications:
+  email: false
+script: make && make cosmo-test && ./cosmo-test
+
+# Guide: - https://docs.travis-ci.com/user/languages/cpp
+#        - https://docs.travis-ci.com/user/customizing-the-build
+# Good example: https://github.com/rubinius/rubinius/blob/master/.travis.yml
+# TODO: install deps: https://docs.travis-ci.com/user/installing-dependencies
+# TODO: set OMP_NUM_THREADS
