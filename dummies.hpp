@@ -25,7 +25,7 @@
 
 using namespace boost::adaptors;
 
-enum edge_tag { standard, in_dummy, out_dummy };
+enum edge_tag { out_dummy, in_dummy, standard};
 
 template <typename kmer_t>
 struct uniq {
@@ -120,15 +120,13 @@ class Unique {
     }
 };
 
-template <class Visitor>
 class FirstStartNodeFlagger {
-  Visitor _v;
   uint32_t _graph_k;
 
   public:
-    FirstStartNodeFlagger(Visitor v, uint32_t k) : _v(v), _graph_k(k) {}
+    FirstStartNodeFlagger(uint32_t k) : _graph_k(k) {}
     template <typename kmer_t>
-    void operator()(edge_tag tag, const kmer_t & x, const uint32_t k) {
+    bool operator()(const kmer_t & x, const uint32_t k) {
       // Note: for multithreading, this might be dangerous? could make class members instead
       static uint32_t last_k = 0;
 
@@ -152,21 +150,20 @@ class FirstStartNodeFlagger {
       last_start_node  = this_start_node;
 #endif
 
-      _v(tag, x, k, result);
       last_k     = k;
+
+      return result;
     }
 };
 
-template <class Visitor>
 class FirstEndNodeFlagger {
-  Visitor  _v;
   uint32_t _graph_k;
   bool first_iter = true;
 
   public:
-    FirstEndNodeFlagger(Visitor v, uint32_t k) : _v(v), _graph_k(k) {}
+    FirstEndNodeFlagger(uint32_t k) : _graph_k(k) {}
     template <typename kmer_t>
-    void operator()(edge_tag tag, const kmer_t & x, const uint32_t k, uint32_t start_node_flag) {
+    bool operator()(edge_tag tag, const kmer_t & x, const uint32_t k) {
       static kmer_t last_suffix;
       static uint32_t last_k;
       static bool edge_seen[DNA_RADIX];
@@ -188,26 +185,16 @@ class FirstEndNodeFlagger {
         edge_seen[edge] = true;
       }
 
-      _v(tag, x, k, start_node_flag, edge_flag);
-
       last_suffix = this_suffix;
       last_k      = k;
+
+      return edge_flag;
     }
 };
 
 template <class Visitor>
 auto uniquify(Visitor v) -> Unique<decltype(v)> {
   return Unique<decltype(v)>(v);
-}
-
-template <class Visitor>
-auto add_first_start_node_flag(Visitor v, uint32_t k) -> FirstStartNodeFlagger<decltype(v)> {
-  return FirstStartNodeFlagger<decltype(v)>(v, k);
-}
-
-template <class Visitor>
-auto add_first_end_node_flag(Visitor v, uint32_t k) -> FirstEndNodeFlagger<decltype(v)> {
-  return FirstEndNodeFlagger<decltype(v)>(v, k);
 }
 
 struct incrementer : boost::static_visitor<> {
@@ -266,7 +253,34 @@ struct heap_item {
   }
 };
 
+template <typename InputRange1, typename InputRange2, typename InputRange3, class Visitor>
+void merge_dummies(InputRange1 & a_range, InputRange2 & o_range, InputRange3 & i_range, Visitor visit) {
+  typedef typename InputRange1::value_type record_t;
+  typedef typename InputRange2::value_type kmer_t;
+
+  size_t idx    = 0;
+  auto i_next = i_range.cbegin();
+  auto a = a_range | transformed([&](record_t x){
+    bool is_dummy = i_next != i_range.cend() && (idx++ == *(i_next));
+    if (is_dummy) ++i_next;
+    return boost::make_tuple(x, is_dummy?in_dummy:standard);
+  });
+
+  auto o = o_range | transformed([](kmer_t x) {
+    return boost::make_tuple(record_t(x), out_dummy);
+  });
+
+  using boost::get;
+  auto v   = [&](boost::tuple<record_t, edge_tag> x) { visit(boost::get<1>(x), boost::get<0>(x)); };
+  auto out = boost::make_function_output_iterator(v);
+  boost::set_union(a, o, out, [](boost::tuple<record_t, edge_tag> x,
+                                 boost::tuple<record_t, edge_tag> y){
+    return (get<0>(get<0>(x))<<2) < (get<0>(get<0>(y))<<2);
+  });
+}
+
 // TODO: Try a parallell merge (and set difference) on the internal STXXL blocks
+/*
 template <typename InputRange1, typename InputRange2, typename InputRange3, class Visitor>
 void merge_dummies(InputRange1 & a, InputRange2 & o, InputRange3 & i, Visitor visit) {
   using namespace boost::heap;
@@ -305,6 +319,7 @@ void merge_dummies(InputRange1 & a, InputRange2 & o, InputRange3 & i, Visitor vi
     //if (!input.empty()) q.push(input);
   }
 }
+*/
 
 template <typename kmer_t>
 uint8_t get_w(edge_tag tag, const kmer_t & x) {

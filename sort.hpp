@@ -117,11 +117,52 @@ auto cons(A a, B b) -> decltype(boost::tuples::cons<A,B>(a,b)) {
   return boost::tuples::cons<A, B>(a,b);
 }
 
+/*
+template<class InputIt1, class InputIt2, class Visitor>
+OutputIt find_dummies(InputIt1 first1, InputIt1 last1,
+                      InputIt2 first2, InputIt2 last2,
+                      Visitor visit) {
+  // While we still have records in Table A
+  while (first1 != last1) {
+    // If Table B is depleted then
+    if (first2 == last2) {
+      // Rest of Table A not in Table B
+      return std::copy(first1, last1, d_first);
+    // If A_x not in B
+    } else if (*first1 < *first2) {
+      // Output incoming dummy
+      *d_first++ = *first1++;
+    // If B_x not in A
+    } else if (*first2 < *first1) {
+      // Output outgoing dummy
+      *d_first++ = *first2;
+    // A_x == B_x (hence is in both A and B - no dummy needed)
+    } else {
+      // Output record
+      ++first1;
+    }
+    // Progress inner table (outer table is progressed in every above case)
+    ++first2;
+  }
+  // Table A depleted, so rest of Table B not in Table A
+  return std::copy(first2, last2, d_first);
+}
+*/
+
 template <typename t_kmer_t, typename ... t_payload_t>
 struct kmer_sorter {
   typedef t_kmer_t kmer_t;
   typedef boost::tuple<t_payload_t...> payload_t;
   typedef boost::tuple<kmer_t, t_payload_t...> record_t;
+
+  struct output_t {
+    edge_tag tag;
+    record_t record;
+    bool is_first_prefix;
+    bool is_first_suffix;
+    size_t k; // for variable order (when we later have dummy shifts)
+    size_t lcs; // for variable order
+  };
 
   typedef stxxl::vector<record_t, 1, stxxl::lru_pager<8>, block_size> record_vector_t;
   typedef stxxl::vector<kmer_t,   1, stxxl::lru_pager<8>, block_size>   kmer_vector_t;
@@ -217,18 +258,19 @@ struct kmer_sorter {
     });
 
     // Can write dummy labels and positions instead (for non variable order)
-    //stxxl::syscall_file dum_file(basename(parameters.input_filename) + ".dummies", stxxl::file::DIRECT | stxxl::file::RDWR | stxxl::file::CREAT);
-    //stxxl::vector<size_t> dummy_positions; // Use Queue instead
+    // stxxl::syscall_file dum_file(basename(parameters.input_filename) + ".dummies", stxxl::file::DIRECT | stxxl::file::RDWR | stxxl::file::CREAT);
+    stxxl::deque<size_t> incoming_dummy_positions;
 
-    dummy_vector_t incoming_dummies;
-    dummy_sorter_t incoming_dummy_sorter(dummy_comparator_t(), M);
+    // NOTE: need to sort incoming dummies if we want all shifts (currently needed for variable order)
+    //dummy_vector_t incoming_dummies;
+    //dummy_sorter_t incoming_dummy_sorter(dummy_comparator_t(), M);
 
-    //kmer_vector_t outgoing_dummies;
+    // Try with just queue
     stxxl::deque<kmer_t> outgoing_dummies_q;
-    // TODO: Make sorter for incoming dummies
+    edge_sorter_t outgoing_dummy_sorter(edge_comparator_t(), M);
+    kmer_vector_t outgoing_dummies;
 
-    /*
-    size_t num_incoming_dummies = 0;
+    // Detect incoming dummies
     std::thread t3([&](){
       COSMO_LOG(trace) << "Searching for nodes requiring incoming dummy edges...";
       typename record_vector_t::bufreader_type a_reader(kmers_a);
@@ -240,58 +282,29 @@ struct kmer_sorter {
       auto b = boost::make_iterator_range(make_typed_iterator<kmer_t>(b_reader.begin()),
                                           make_typed_iterator<kmer_t>(b_reader.end()));
 
+      // TODO: use set_symmetric_difference with each wrapped with a tag that is ignored during the comparison
+      // TODO: producer consumer queues or streams
       find_incoming_dummy_nodes<kmer_t>(a, b, k, [&](size_t idx, kmer_t x) {
-        //position_writer << idx;
-        incoming_dummy_sorter.push(dummy_t(x<<2, k-1));
+        incoming_dummy_positions.push_back(idx);
+        // We can add reverse complements and sort them to get outgoing dummies
+        auto y = (rc(x) << 2)>>2;
+        outgoing_dummy_sorter.push(y);
       });
+
+      kmers_b.clear();
+
+      COSMO_LOG(trace) << "Sorting outgoing dummies...";
+      outgoing_dummy_sorter.sort();
+      outgoing_dummies.resize(outgoing_dummy_sorter.size());
+      COSMO_LOG(trace) << "Materializing outgoing dummies...";
+      stxxl::stream::materialize(outgoing_dummy_sorter, outgoing_dummies.begin(), outgoing_dummies.end());
+      outgoing_dummy_sorter.finish_clear();
     });
-    */
-
-    std::thread t4([&](){
-      COSMO_LOG(trace) << "Searching for nodes requiring dummy edges...";
-
-      typename record_vector_t::bufreader_type a_reader(kmers_a);
-      typename kmer_vector_t::bufreader_type   b_reader(kmers_b);
-
-      auto a = boost::make_iterator_range(make_typed_iterator<record_t>(a_reader.begin()),
-                                          make_typed_iterator<record_t>(a_reader.end()))
-                                         | transformed(record_key);
-      auto b = boost::make_iterator_range(make_typed_iterator<kmer_t>(b_reader.begin()),
-                                          make_typed_iterator<kmer_t>(b_reader.end()));
-
-      kmer_t shifts[bitwidth<kmer_t>::width/2];
-      const size_t low_k = 12;
-      //#define sum_pow_4(i) (((1<<(2*((i)+2)))-4)/3)
-      find_outgoing_dummy_nodes<kmer_t>(a, b, k, [&](kmer_t x) {
-        outgoing_dummies_q.push_back(x);
-
-        auto y = rc(x);
-
-        // generate all shifts up to k=12, then push to sorter
-        /*
-        kmer_shifts(y, shifts);
-        for (int i = 1; i <= k - low_k; ++i) {
-          incoming_dummy_sorter.push(dummy_t(shifts[i], k-i));
-        }
-        */
-        // TODO: use LCPs of lex-sorted dummies to add shifts? (or equiv LCS of colex sorted revcomps?)
-      });
-      COSMO_LOG(info) << "# dummies: " << outgoing_dummies_q.size();
-      COSMO_LOG(info) << "# inc dummies incl shifts: " << incoming_dummy_sorter.size();
-    });
-    //t3.join(); // Disabled since outgoing dummies are incoming dummies if we added reverse complements
+    t3.join();
     // TODO: add flags to turn off adding revcomps and instead find unary dBG paths (ala bcalm)
-    // TODO: add flag to output bitvector marking incoming dummies instead
-    t4.join();
-
-    // second table no longer needed
-    kmers_b.clear();
-
-    incoming_dummy_sorter.sort();
-    incoming_dummies.resize(incoming_dummy_sorter.size());
-    COSMO_LOG(trace) << "Materializing incoming dummies...";
-    stxxl::stream::materialize(incoming_dummy_sorter, incoming_dummies.begin(), incoming_dummies.end());
-    incoming_dummy_sorter.finish_clear();
+    // TODO: add flag to toggle outputting bitvector marking incoming dummies, or full dummy shifts
+    COSMO_LOG(info) << "# inc dummies: " << incoming_dummy_positions.size();
+    COSMO_LOG(info) << "# out dummies: " << outgoing_dummies.size();
 
     /*
     cout << "incoming dummies:" << endl;
@@ -308,15 +321,6 @@ struct kmer_sorter {
     }
     cout << endl;
     */
-    return;
-
-    //COSMO_LOG(trace) << "Sorting incoming dummies...";
-    //dummy_sorter.sort();
-
-    //COSMO_LOG(trace) << "Writing incoming dummies...";
-    //incoming_dummies.resize(dummy_sorter.size());
-    //stxxl::stream::materialize(dummy_sorter, incoming_dummies.begin(), incoming_dummies.end());
-    //dummy_sorter.finish_clear();
 
     //auto payload = payload_t();
     //std::function<kmer_t(record_t)> capture_payload([&](record_t x){
@@ -324,30 +328,35 @@ struct kmer_sorter {
       //return get<0>(x);
     //});
 
-    /*
     typename record_vector_t::bufreader_type a_reader(kmers_a);
     typename kmer_vector_t::bufreader_type   o_reader(outgoing_dummies);
-    typename dummy_vector_t::bufreader_type  i_reader(incoming_dummies);
+    //typename dummy_vector_t::bufreader_type  i_reader(incoming_dummies);
 
     auto a = boost::make_iterator_range(make_typed_iterator<record_t>(a_reader.begin()),
-                                        make_typed_iterator<record_t>(a_reader.end()))
-                                       | transformed(record_key);
+                                        make_typed_iterator<record_t>(a_reader.end()));
+                                       //| transformed(record_key);
     auto o = boost::make_iterator_range(make_typed_iterator<kmer_t>(o_reader.begin()),
                                         make_typed_iterator<kmer_t>(o_reader.end()));
-    auto i = boost::make_iterator_range(make_typed_iterator<dummy_t>(i_reader.begin()),
-                                        make_typed_iterator<dummy_t>(i_reader.end()))
-                                       | transformed(dummy_key);
+    //auto i = boost::make_iterator_range(make_typed_iterator<dummy_t>(i_reader.begin()),
+    //                                    make_typed_iterator<dummy_t>(i_reader.end()))
+    //                                   | transformed(dummy_key);
 
-    COSMO_LOG(trace) << "Merging and writing files...";
+    COSMO_LOG(trace) << "Merging in dummies...";
     //stxxl::vector<kmer_t> chars;
     stxxl::vector<char> output;
-    output.resize(kmers_a.size() + outgoing_dummies.size() + incoming_dummies.size());
+    output.resize(kmers_a.size() + outgoing_dummies.size());
     typename stxxl::vector<char>::bufwriter_type w(output);
+    // Make table for incoming dummies
 
-    merge_dummies(a, o, i, [&](kmer_t x){
-      w << get_nt(x,0);
+    FirstStartNodeFlagger is_first_start_node(k);
+    FirstEndNodeFlagger   is_first_end_node(k);
+    merge_dummies(a, o, incoming_dummy_positions, [&](edge_tag tag, record_t x){
+      bool is_first_prefix = is_first_start_node(get<0>(x), k);
+      bool is_first_suffix = is_first_end_node(tag, get<0>(x), k);
+      output_t temp{tag, x, is_first_prefix, is_first_suffix};
+      visit(temp);
     });
-    */
+
     /*
     merge_dummies(a, o, i, k,
     [&](edge_tag tag, const kmer_t & x, size_t this_k, size_t lcs_len, bool first_end_node) {
