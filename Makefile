@@ -4,7 +4,7 @@ CXX=g++ #clang++ # g++
 CPP_FLAGS=-g -m64 -std=c++0x -W -Wall -Wextra -Wpointer-arith -Wcast-qual \
 					-Wstrict-prototypes -Wmissing-prototypes -Wwrite-strings \
 #					-Wbool-conversions -Wshift-overflow -Wliteral-conversion \
-					-Werror -W
+					-Werror -W -fno-strict-aliasing
 DEP_PATH=/usr/local
 INC_PATH=$(DEP_PATH)/include
 LIB_PATH=$(DEP_PATH)/lib
@@ -14,7 +14,7 @@ KMC_PATH=/s/chopin/l/grad/muggli/git/KMC
 DEP_FLAGS=-I$(HOME)/proot/include -isystem $(KMC_PATH) -isystem $(MM_PATH)/include -L$(MM_PATH)/lib -I$(INC_PATH)/ -L$(HOME)/proot/lib -L$(LIB_PATH)/ -lsdsl # -ldivsufsort -ldivsufsort64
 DEBUG_FLAGS=-g
 NDEBUG_FLAGS= #-DNDEBUG
-OPT_FLAGS= -O3 -mmmx -msse -msse2 -msse3 -msse4 -msse4.2 -march=native
+OPT_FLAGS= #-O3 -mmmx -msse -msse2 -msse3 -msse4 -msse4.2 -march=native
 NOPT_FLAGS=-O0
 NUM_COLS=64
 # Using Semantic Versioning: http://semver.org/

@@ -27,7 +27,7 @@ int dsk_read_header(int, uint32_t *, uint32_t *);
 // Counts the number of records in the file - for allocation purposes
 int dsk_num_records(int handle, uint32_t kmer_num_bits, size_t * num_records);
 // Read kmers from file into the output array
-size_t dsk_read_kmers(int handle, uint32_t kmer_num_bits, uint64_t * kmers_output);
+size_t dsk_read_kmers(int handle, uint32_t kmer_num_bits, uint64_t * kmers_output, uint32_t k);
 
 // Reads the cortex file input header
 int cortex_read_header(int, uint32_t *, uint32_t *);

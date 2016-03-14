@@ -40,7 +40,7 @@ template <typename kmer_t, class Visitor>
 void convert(kmer_t * kmers, size_t num_kmers, const uint32_t k, Visitor visit, bool swap, std::vector<color_bv> &colors) {
   // Convert the nucleotide representation to allow tricks
   convert_representation(kmers, kmers, num_kmers, swap);
-  //print_kmers(std::cout, kmers, num_kmers, k);
+  print_kmers(std::cout, kmers, num_kmers, k);
   // Append reverse complements
   #ifdef ADD_REVCOMPS
   size_t revcomp_factor = 2;
@@ -239,10 +239,11 @@ int main(int argc, char * argv[])
             fprintf(stderr, "ERROR: Error reading file %s\n", file_name);
             exit(EXIT_FAILURE);
         }
+        TRACE(">> READING DSK FILE\n");
     }
     assert(kmer_num_bits % 64 == 0);
     uint32_t kmer_num_blocks = (kmer_num_bits  / 8 ) / sizeof(uint64_t) ; 
-    TRACE(">> READING DSK FILE\n");
+
     TRACE("kmer_num_bits, k = %d, %d\n", kmer_num_bits, kmer_size);
     TRACE("kmer_num_blocks = %d\n", kmer_num_blocks);
 
@@ -329,7 +330,7 @@ int main(int argc, char * argv[])
         num_records_read = kmc_read_kmers(handle, kmer_num_bits, num_colors, kmer_size, kmer_blocks, kmer_colors);
         printf("num_kmers = %zu and num_records_read=%zu\n", num_kmers, num_records_read);
     } else {
-        num_records_read = dsk_read_kmers(handle, kmer_num_bits, kmer_blocks);
+        num_records_read = dsk_read_kmers(handle, kmer_num_bits, kmer_blocks, kmer_size);
     }
     if (!params.kmc) {
         close(handle);
@@ -339,7 +340,7 @@ int main(int argc, char * argv[])
         exit(EXIT_FAILURE);
     }
     TRACE("num_records_read = %zu\n", num_records_read);
-    assert (num_records_read == num_kmers);
+    assert ((params.cortex || params.kmc) ? num_records_read == num_kmers : true);
     //print_kmers(std::cout, kmer_blocks , num_kmers, kmer_size);
     //auto ascii_output = std::ostream_iterator<string>(std::cout, "\n");
 
@@ -372,17 +373,20 @@ int main(int argc, char * argv[])
         blocksum += kmer_blocks[kmer_block_iter];
     std::cerr << "kmer_blocks sum = " << blocksum << std::endl;
 #endif
-
+    //print_kmers(std::cout, kmer_blocks, num_records_read, kmer_size);
     // create an 'all ones' color_bv
     for (int citer=0; citer < num_colors; ++citer)
         ones[citer] = 1;
-    
+
+    std::vector<color_bv>::iterator colors = kmer_colors.begin() + num_kmers * revcomp_factor;
+    size_t index = 0; 
+
     if (kmer_num_bits == 64) {
         typedef uint64_t kmer_t;
         size_t prev_k = 0; // for input, k is always >= 1
-        size_t index = 0;
 
-        std::vector<color_bv>::iterator colors = kmer_colors.begin() + num_kmers * revcomp_factor; 
+
+
         convert(kmer_blocks, num_kmers, kmer_size,
                 [&](edge_tag tag, const kmer_t & x, const uint32_t this_k, size_t lcs_len, bool first_end_node) {
 #ifdef VAR_ORDER
@@ -419,8 +423,19 @@ int main(int argc, char * argv[])
 #else
                     out.write(tag, x, this_k, lcs_len, first_end_node);
 #endif
+                    if (tag == standard) {
+                        // cerr << kmer_to_string(x, k, this_k) << "c" << colors[index] << "\n";
+                        serialize_color_bv(cfs, colors[index++]);
+                        //cfs.write((char *)&colors[index++], sizeof(uint64_t));
+                    }
+                    else {
+                        //uint64_t ones = -1;
+                        serialize_color_bv(cfs, ones);
+                            //assert(!"Not converted to color_bv yet!");
+                        //cfs.write((char *)&ones, sizeof(uint64_t));
+                    }
                     prev_k = this_k;
-                }, !params.cortex, kmer_colors);
+                }, !(params.cortex || params.kmc), kmer_colors);
     }
 
     out.close();

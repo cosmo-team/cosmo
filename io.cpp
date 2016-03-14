@@ -1,5 +1,6 @@
 #include "io.hpp"
 #include "kmer.hpp"
+#include <vector>
 
 static inline uint64_t nibblet_reverse(const uint64_t &word)
 {
@@ -34,36 +35,42 @@ static inline uint64_t nibblet_reverse(const uint64_t &word)
     return ret_val;
 }
 
-CKMCFile *kmer_data_base; //FIXME: move out of global
-int kmc_read_header(std::string fname, uint32_t &kmer_num_bits, uint32_t &k, uint64 &_total_kmers)
+std::vector<CKMCFile *>kmer_data_bases; //FIXME: move out of global
+int kmc_read_header(std::string db_fname, uint32_t &kmer_num_bits, uint32_t &k, uint64 &_total_kmers)
 {
-    kmer_data_base = new CKMCFile;
+    std::ifstream db_list(db_fname.c_str());
+    std::string fname;
+    while ( db_list >>  fname ) {
     
+        CKMCFile * kmer_data_base = new CKMCFile;
+        kmer_data_bases.push_back(kmer_data_base);
 
-	if (!kmer_data_base->OpenForListing(fname))
-	{
+        if (!kmer_data_base->OpenForListing(fname))
+        {
 
-		return 0;
-	}
-	else
-	{
-		//uint32 _kmer_length;
-		uint32 _mode;
-		uint32 _counter_size;
-		uint32 _lut_prefix_length;
-		uint32 _signature_len;
-		uint32 _min_count;
-		uint64 _max_count;
+            return 0;
+        }
+        else
+        {
+            //uint32 _kmer_length;
+            uint32 _mode;
+            uint32 _counter_size;
+            uint32 _lut_prefix_length;
+            uint32 _signature_len;
+            uint32 _min_count;
+            uint64 _max_count;
 
 
-		kmer_data_base->Info(k, _mode, _counter_size, _lut_prefix_length, _signature_len, _min_count, _max_count, _total_kmers);
-        kmer_num_bits = 64 * ((k * 2 - 1) / 64 + 1); // FIXME: double check ceil(quotients) is what we're getting and not more, this may be too conservative
+            kmer_data_base->Info(k, _mode, _counter_size, _lut_prefix_length, _signature_len, _min_count, _max_count, _total_kmers);
+            kmer_num_bits = 64 * ((k * 2 - 1) / 64 + 1); // FIXME: double check ceil(quotients) is what we're getting and not more, this may be too conservative
 		
-		//std::string str;
+            //std::string str;
 
 
         
+        }
     }
+    assert(kmer_data_bases.size() > 0);
     return 1;
         
 }
@@ -191,13 +198,13 @@ void set_bit(color_bv &bv, uint32_t j)
 
 // Only doing this complicated stuff to hopefully get rid of the counts in an efficient way
 // (that is, read a large chunk of the file including the counts, then discard them)
-size_t dsk_read_kmers(int handle, uint32_t kmer_num_bits, uint64_t * kmers_output) {
+size_t dsk_read_kmers(int handle, uint32_t kmer_num_bits, uint64_t * kmers_output, uint32_t kmer_size) {
   // TODO: Add a parameter to specify a limit to how many records we read (eventually multipass merge-sort?)
   // THIS IS ALSO A SECURITY CONCERN if we don't trust the DSK input (i.e. e.g. accept DSK files in a web service)
 
   // read the items items into the array via a buffer
   char input_buffer[BUFFER_SIZE];
-
+  uint32_t maxcount = 0;
   // Only read a multiple of records... this makes it easier to iterate over
   size_t record_size = DSK_FILE_RECORD_SIZE(kmer_num_bits);
   size_t read_size = (BUFFER_SIZE / record_size) * record_size;
@@ -237,6 +244,13 @@ size_t dsk_read_kmers(int handle, uint32_t kmer_num_bits, uint64_t * kmers_outpu
             // Swapping lower and upper block (to simplify sorting later)
             kmers_output[next_slot + 1] = *((uint64_t*)(input_buffer + offset));
             kmers_output[next_slot]     = *((uint64_t*)(input_buffer + offset + sizeof(uint64_t)));
+            uint32_t count = *((uint32_t*)(input_buffer + offset + 2*sizeof(uint64_t)));
+            if (count >= maxcount) {
+                maxcount = count;
+                // std::cout << count << "\tk=" << kmer_size << "\t";
+                // print_kmers(std::cout, kmers_output + next_slot, 1, kmer_size);
+            }
+                
         }
       }
     } while ( num_bytes_read );
@@ -252,52 +266,41 @@ size_t kmc_read_kmers(const int handle, const uint32_t kmer_num_bits, const uint
     //uint32 counter_len;
 		
 		CKmerAPI kmer_object(k);
-        uint64 counter, maxcount = 0;
+        uint64 counter;
+
         int numkmers = 0;
         
-        while (kmer_data_base->ReadNextKmer(kmer_object, counter)) {
-            std::vector<unsigned long long /*uint64*/> kmer;
-            kmer.push_back(0);
-            assert(k <= 32);
-			//char str[1024];
-            //kmer_object.to_string(str);
-            kmer_object.to_long(kmer);
-            //std::cerr << "got array of " << kmer.size() << " words. highest bit is ";
-            unsigned long long v = kmer[0]; // 32-bit word to find the log base 2 of
-            unsigned int r = 0; // r will be lg(v)
+        while (kmer_data_bases[0]->ReadNextKmer(kmer_object, counter)) {
 
-            while (v >>= 1) // unroll for more speed...
-            {
-                r++;
-            }
-            //std::cerr << r << std::endl;
-            if (r > largest)  largest = r;
+
+
+
+            std::vector<unsigned long long /*uint64*/> kmer;            
+            kmer_object.to_long(kmer);
+
+
             color_bv color = 1;
             kmer_colors[numkmers] = color;
-            uint64 t = kmer[0];//nibblet_reverse(kmer[0]);
-            //nibblet_reverse(t);
-            kmers_output[numkmers] = t; //kmer[0];
-            if (counter >= 0 /*maxcount*/) {
-                maxcount = counter;
-//                std::cout << counter << "\t" << kmers_output[numkmers] << "\t";
-//                print_kmers(std::cout, kmers_output + numkmers, 1, k);                
-                //              std::cout << counter << "\t" << kmer_object.to_string()  <<  std::endl;
+
+            for (int block=0; block < kmer.size(); ++block) {
+                kmers_output[numkmers*kmer.size() + block] = kmer[block]; // FIXME: check if kmer_output is big endian or little endian
+
+                if (block == 1) {
+                    assert(k == 63); //FIXME: the following line is to fix a bug in the kmc2 API where it shifts word[0] << 64 when k=63 which results in "word[1] =  word[0] + word[1]" the next line compensates; not sure how pervasive this is in the k>32 space.
+                    kmers_output[numkmers*kmer.size() + block] -=kmer[0];
+                }
+
             }
-            
-
-            // std::cout << counter << "\t" << kmer_object.to_string()  <<  "\t";
-            // print_kmers(std::cout, kmers_output + numkmers, 1, k);
-
-            kmer.pop_back();
             numkmers++;
         }
-        std::cerr << "Read " << numkmers << " from KMC file. highest bit value seen was " << largest << std::endl;
+
 
 		
 	
-
-		kmer_data_base->Close();
-        delete kmer_data_base;
+        for (auto kmer_data_base: kmer_data_bases) {
+            kmer_data_base->Close();
+            delete kmer_data_base;
+        }
         return numkmers;
     
 }
@@ -331,11 +334,11 @@ size_t cortex_read_kmers(const int handle, const uint32_t kmer_num_bits, const u
         }
         kmers_output[next_slot] = kmer;
 
-        if (covsum >= 0 /*maxcount*/) {
+        if (covsum >= maxcount) {
             maxcount = covsum;
-//            std::cout << maxcount << "\t" << kmers_output[next_slot] << "\t";
+            std::cout << maxcount << "\t" << kmers_output[next_slot] << "\t";
             
-//            print_kmers(std::cout, kmers_output + next_slot, 1, k);
+            print_kmers(std::cout, kmers_output + next_slot, 1, k);
         }
 
         color_bv color_acc;
