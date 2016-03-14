@@ -37,7 +37,7 @@ static inline uint64_t nibblet_reverse(const uint64_t &word)
 }
 
 std::vector<CKMCFile *>kmer_data_bases; //FIXME: move out of global
-int kmc_read_header(std::string db_fname, uint32_t &kmer_num_bits, uint32_t &k, uint64 &_total_kmers)
+int kmc_read_header(std::string db_fname, uint32_t &kmer_num_bits, uint32_t &k, uint64 &_total_kmers, uint32_t &num_colors)
 {
     std::ifstream db_list(db_fname.c_str());
     std::string fname;
@@ -74,6 +74,7 @@ int kmc_read_header(std::string db_fname, uint32_t &kmer_num_bits, uint32_t &k, 
         }
     }
     assert(kmer_data_bases.size() > 0);
+    num_colors = kmer_data_bases.size();
     return 1;
         
 }
@@ -285,7 +286,7 @@ size_t kmc_read_kmers(const int handle, const uint32_t kmer_num_bits, const uint
 {
 
     typedef std::priority_queue<queue_entry, std::vector<queue_entry>, mycomparison> mypq_type;
-    mypq_type queue;
+    mypq_type queue(mycomparison(true));
     int numkmers = 0;
     color_bv color = 0;
     
@@ -314,7 +315,9 @@ size_t kmc_read_kmers(const int handle, const uint32_t kmer_num_bits, const uint
 
     // 
     while (!queue.empty()) {
-        if (const_cast<CKmerAPI*>(&(queue.top().second))->to_string() == const_cast<CKmerAPI*>(&(current.second))->to_string()) { // if this is the same kmer we've seen before
+        std::string s1 = const_cast<CKmerAPI*>(&(queue.top().second))->to_string();
+        std::string s2 = const_cast<CKmerAPI*>(&(current.second))->to_string();
+        if (s1 == s2) { // if this is the same kmer we've seen before
             queue_entry additional_instance = queue.top();
             queue.pop();
             CKmerAPI kmer_object(k);
@@ -329,6 +332,8 @@ size_t kmc_read_kmers(const int handle, const uint32_t kmer_num_bits, const uint
             std::vector<unsigned long long /*uint64*/> kmer;            
             current.second.to_long(kmer);
 
+            std::cout << const_cast<CKmerAPI*>(&(current.second))->to_string() << " : " << color << std::endl;
+            
             kmer_colors[numkmers] = color;
             color.reset();
 

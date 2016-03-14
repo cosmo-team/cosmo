@@ -218,6 +218,7 @@ int main(int argc, char * argv[])
     uint32_t kmer_num_bits = 0;
     uint32_t kmer_size = 0;
     size_t num_kmers = 0;
+    uint32_t num_colors = 0;
     if (params.cortex) {
         std::cerr << "Reading cortex file " << file_name << std::endl;
         if ( !cortex_read_header(handle, &kmer_num_bits, &kmer_size) ) {
@@ -227,7 +228,7 @@ int main(int argc, char * argv[])
     } else if (params.kmc) {
         std::cerr << "Reading KMC file " << file_name << std::endl;
         uint64 _total_kmers;
-        if ( !kmc_read_header(file_name, kmer_num_bits, kmer_size, _total_kmers) ) {
+        if ( !kmc_read_header(file_name, kmer_num_bits, kmer_size, _total_kmers, num_colors) ) {
             fprintf(stderr, "ERROR: Error reading KMC_file %s\n", file_name);
             exit(EXIT_FAILURE);
         }
@@ -256,7 +257,7 @@ int main(int argc, char * argv[])
 
     // Read how many items there are (for allocation purposes)
 
-    uint32_t num_colors = 0;
+
     if (params.cortex) {
         printf("Num records\n");
         if ( cortex_num_records(handle, kmer_num_bits, num_kmers, num_colors) == -1) {
@@ -272,7 +273,7 @@ int main(int argc, char * argv[])
         // printf("NUM_COLS=%zu\n", NUM_COLS);
         // printf("Each entry in .colors file will occupy %d bytes.\n", sizeof(color_bv));
     } else if (params.kmc) {
-        num_colors = 1;
+
         if (num_colors > NUM_COLS) {
             fprintf(stderr, "KMC file %s contains %d colors which exceeds the compile time limit of %d.  Please recompile with NUM_COLS=%d (or larger).\n", file_name, num_colors, NUM_COLS, num_colors);
             exit(EXIT_FAILURE);
@@ -298,7 +299,7 @@ int main(int argc, char * argv[])
 #else
     size_t revcomp_factor = 1;
 #endif
-    size_t kmer_blocks_size = num_kmers * 2 * revcomp_factor * sizeof(uint64_t) * kmer_num_blocks;
+    size_t kmer_blocks_size = num_kmers * 2 * revcomp_factor * sizeof(uint64_t) * kmer_num_blocks * num_colors /* FIXME: CONSERVATIVELY ASSUMES NO REPEAT KMERS ACROSS COUNTS */;
     uint64_t * kmer_blocks = (uint64_t*)malloc(kmer_blocks_size);
 #ifndef NDEBUG
     for (int kmer_block_iter = 0; kmer_block_iter < kmer_blocks_size/sizeof(uint64_t); ++kmer_block_iter)
@@ -340,7 +341,7 @@ int main(int argc, char * argv[])
         exit(EXIT_FAILURE);
     }
     TRACE("num_records_read = %zu\n", num_records_read);
-    assert ((params.cortex || params.kmc) ? num_records_read == num_kmers : true);
+    assert ((params.cortex ) ? num_records_read == num_kmers : true);
     //print_kmers(std::cout, kmer_blocks , num_kmers, kmer_size);
     //auto ascii_output = std::ostream_iterator<string>(std::cout, "\n");
 

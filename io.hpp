@@ -20,7 +20,7 @@ static const size_t BUFFER_SIZE = 0x8000; // 32Kb data buffer
 using namespace std;
 
 #define DSK_FILE_RECORD_SIZE(NBITS) (((NBITS)/8) + 4)
-int kmc_read_header(std::string fname, uint32_t &kmer_num_bits, uint32_t &k, uint64 &_total_kmers);
+int kmc_read_header(std::string fname, uint32_t &kmer_num_bits, uint32_t &k, uint64 &_total_kmers, uint32_t &num_colors);
 
 // Reads the DSK file input header
 int dsk_read_header(int, uint32_t *, uint32_t *);
