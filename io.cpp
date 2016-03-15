@@ -36,8 +36,8 @@ static inline uint64_t nibblet_reverse(const uint64_t &word)
     return ret_val;
 }
 
-std::vector<CKMCFile *>kmer_data_bases; //FIXME: move out of global
-int kmc_read_header(std::string db_fname, uint32_t &kmer_num_bits, uint32_t &k, uint64 &_total_kmers, uint32_t &num_colors)
+
+int kmc_read_header(std::string db_fname, uint32_t &kmer_num_bits, uint32_t &k, uint64 &_total_kmers, uint32_t &num_colors, std::vector<CKMCFile *> &kmer_data_bases)
 {
     std::ifstream db_list(db_fname.c_str());
     std::string fname;
@@ -92,7 +92,7 @@ int cortex_read_header(int handle, uint32_t * kmer_num_bits, uint32_t * k) {
   rc = read(handle, &magic_number, sizeof(char) * 6);
 
   rc = read(handle, &version,sizeof(int));
-  if (read < 0 || strncmp(magic_number, "CORTEX", 6))
+  if (rc <= 0 || strncmp(magic_number, "CORTEX", 6))
     return 0;
 
   read(handle, (char*)k ,sizeof(uint32_t));
@@ -130,6 +130,9 @@ int cortex_num_records(const int handle, const uint32_t kmer_num_bits, size_t &n
   off_t end_pos = -1;
   int rc;
   rc  = read(handle, (char*)&number_of_colours, sizeof(uint32_t));
+  if (rc <= 0)
+      return 0;
+  
   size_t record_size = kmer_num_bits / 8 + number_of_colours * 5;
 
   // skip over per color header info
@@ -282,7 +285,7 @@ public:
         }
 };
 
-size_t kmc_read_kmers(const int handle, const uint32_t kmer_num_bits, const uint32_t num_colors, uint32_t k, uint64_t *const &kmers_output, std::vector<color_bv>  &kmer_colors)
+size_t kmc_read_kmers(const int handle, const uint32_t kmer_num_bits, const uint32_t num_colors, uint32_t k, uint64_t *const &kmers_output, std::vector<color_bv>  &kmer_colors, std::vector<CKMCFile *> &kmer_data_bases)
 {
 
     typedef std::priority_queue<queue_entry, std::vector<queue_entry>, mycomparison> mypq_type;
@@ -293,7 +296,7 @@ size_t kmc_read_kmers(const int handle, const uint32_t kmer_num_bits, const uint
     // initialize the queue with a file identifier (as a proxy for the input sequence itself) and the value at the head of the file for peeking
     for (unsigned i = 0; i < kmer_data_bases.size(); ++i) {
         CKmerAPI kmer_object(k);
-        uint64 counter;// for coverage
+        uint64 counter = 0;// for coverage
         if (!kmer_data_bases[i]->ReadNextKmer(kmer_object, counter)) {
             std::cerr << "ERROR: empty file contains no kmers." << std::endl;
             assert(false);
@@ -307,7 +310,7 @@ size_t kmc_read_kmers(const int handle, const uint32_t kmer_num_bits, const uint
     color.set(current.first); // FIXME: make sure not using << operator elsewhere!
     //and replace that streams entry
     CKmerAPI kmer_object(k);
-    uint64 counter;// for coverage    
+    uint64 counter = 0;// for coverage    
     if (kmer_data_bases[current.first]->ReadNextKmer(kmer_object, counter)) {
         queue.push(std::make_pair(current.first, kmer_object));
     }
@@ -321,7 +324,7 @@ size_t kmc_read_kmers(const int handle, const uint32_t kmer_num_bits, const uint
             queue_entry additional_instance = queue.top();
             queue.pop();
             CKmerAPI kmer_object(k);
-            uint64 counter;// for coverage
+            uint64 counter = 0;// for coverage
             color.set(additional_instance.first);
             if (kmer_data_bases[current.first]->ReadNextKmer(kmer_object, counter)) {
                 queue.push(std::make_pair(additional_instance.first, kmer_object));
@@ -332,12 +335,12 @@ size_t kmc_read_kmers(const int handle, const uint32_t kmer_num_bits, const uint
             std::vector<unsigned long long /*uint64*/> kmer;            
             current.second.to_long(kmer);
 
-            std::cout << const_cast<CKmerAPI*>(&(current.second))->to_string() << " : " << color << std::endl;
+            //std::cout << const_cast<CKmerAPI*>(&(current.second))->to_string() << " : " << color << std::endl;
             
             kmer_colors[numkmers] = color;
             color.reset();
 
-            for (int block=0; block < kmer.size(); ++block) {
+            for (unsigned int block=0; block < kmer.size(); ++block) {
                 kmers_output[numkmers*kmer.size() + block] = kmer[block]; // FIXME: check if kmer_output is big endian or little endian
 
                 if (block == 1) {
@@ -354,7 +357,7 @@ size_t kmc_read_kmers(const int handle, const uint32_t kmer_num_bits, const uint
             color.set(current.first); // FIXME: make sure not using << operator elsewhere!
             //and replace that streams entry
             CKmerAPI kmer_object(k);
-            uint64 counter;// for coverage    
+            uint64 counter = 0;// for coverage    
             if (kmer_data_bases[current.first]->ReadNextKmer(kmer_object, counter)) {
                 queue.push(std::make_pair(current.first, kmer_object));
             }
@@ -368,7 +371,7 @@ size_t kmc_read_kmers(const int handle, const uint32_t kmer_num_bits, const uint
     kmer_colors[numkmers] = color;
     color.reset();
         
-    for (int block=0; block < kmer.size(); ++block) {
+    for (unsigned int block=0; block < kmer.size(); ++block) {
         kmers_output[numkmers*kmer.size() + block] = kmer[block]; // FIXME: check if kmer_output is big endian or little endian
             
         if (block == 1) {
@@ -423,7 +426,7 @@ size_t cortex_read_kmers(const int handle, const uint32_t kmer_num_bits, const u
     size_t next_slot = 0;
     int coverage[NUM_COLS]; // hack
     unsigned long long maxcount = 0;
-    int covsum = 0;
+    unsigned int covsum = 0;
     while (1) {
         unsigned int i;
         uint64_t kmer;
@@ -438,7 +441,7 @@ size_t cortex_read_kmers(const int handle, const uint32_t kmer_num_bits, const u
 
         // find the max coverage for this coverage
         covsum = 0;
-        for (int covit=0; covit < num_colors; ++covit) {
+        for (unsigned int covit=0; covit < num_colors; ++covit) {
                 covsum += coverage[covit];
         }
         char edge = 0;

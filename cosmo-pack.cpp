@@ -22,6 +22,9 @@
 
 #include <libgen.h>
 
+// KMC2 Headers
+#include "kmc_api/kmc_file.h"
+
 // Custom Headers
 #include "uint128_t.hpp"
 #include "kmer.hpp"
@@ -40,7 +43,7 @@ template <typename kmer_t, class Visitor>
 void convert(kmer_t * kmers, size_t num_kmers, const uint32_t k, Visitor visit, bool swap, std::vector<color_bv> &colors) {
   // Convert the nucleotide representation to allow tricks
   convert_representation(kmers, kmers, num_kmers, swap);
-  print_kmers(std::cout, kmers, num_kmers, k);
+  //print_kmers(std::cout, kmers, num_kmers, k);
   // Append reverse complements
   #ifdef ADD_REVCOMPS
   size_t revcomp_factor = 2;
@@ -191,7 +194,7 @@ void parse_arguments(int argc, char **argv, parameters_t & params)
 }
 void serialize_color_bv(std::ofstream &cfs, const color_bv &color)//std::vector<color_bv>::iterator &colors, uint64_t index)
 {
-    cfs.write((char *)&color, sizeof(color_bv));
+    cfs.write((char *)&color, sizeof(color_bv)); //FIXME: Is this the right way to serailize std::bitset?
 }
 
 int main(int argc, char * argv[])
@@ -219,6 +222,7 @@ int main(int argc, char * argv[])
     uint32_t kmer_size = 0;
     size_t num_kmers = 0;
     uint32_t num_colors = 0;
+    std::vector<CKMCFile *>kmer_data_bases; //FIXME: move out of global
     if (params.cortex) {
         std::cerr << "Reading cortex file " << file_name << std::endl;
         if ( !cortex_read_header(handle, &kmer_num_bits, &kmer_size) ) {
@@ -228,7 +232,7 @@ int main(int argc, char * argv[])
     } else if (params.kmc) {
         std::cerr << "Reading KMC file " << file_name << std::endl;
         uint64 _total_kmers;
-        if ( !kmc_read_header(file_name, kmer_num_bits, kmer_size, _total_kmers, num_colors) ) {
+        if ( !kmc_read_header(file_name, kmer_num_bits, kmer_size, _total_kmers, num_colors, kmer_data_bases) ) {
             fprintf(stderr, "ERROR: Error reading KMC_file %s\n", file_name);
             exit(EXIT_FAILURE);
         }
@@ -302,7 +306,7 @@ int main(int argc, char * argv[])
     size_t kmer_blocks_size = num_kmers * 2 * revcomp_factor * sizeof(uint64_t) * kmer_num_blocks * num_colors /* FIXME: CONSERVATIVELY ASSUMES NO REPEAT KMERS ACROSS COUNTS */;
     uint64_t * kmer_blocks = (uint64_t*)malloc(kmer_blocks_size);
 #ifndef NDEBUG
-    for (int kmer_block_iter = 0; kmer_block_iter < kmer_blocks_size/sizeof(uint64_t); ++kmer_block_iter)
+    for (unsigned int kmer_block_iter = 0; kmer_block_iter < kmer_blocks_size/sizeof(uint64_t); ++kmer_block_iter)
         kmer_blocks[kmer_block_iter] = 0;
 #endif
     std::cerr << "Allocating " << kmer_blocks_size << " bytes for kmer_blocks."  << std::endl;
@@ -313,7 +317,7 @@ int main(int argc, char * argv[])
 
     //uint64_t * kmer_colors = (uint64_t*)malloc(num_kmers * 2 * revcomp_factor * sizeof(uint64_t));
     
-    std::vector<color_bv> kmer_colors(num_kmers * 2 * revcomp_factor);
+    std::vector<color_bv> kmer_colors(num_kmers * 2 * revcomp_factor * num_colors /* FIXME: CONSERVATIVELY ASSUMES NO REPEAT KMERS ACROSS COUNTS */);
     // if (!kmer_colors) {
     //     cerr << "Error allocating space for kmer colors" << endl;
     //     exit(1);
@@ -328,7 +332,7 @@ int main(int argc, char * argv[])
         printf("num_kmers = %zu and num_records_read=%zu\n", num_kmers, num_records_read);
         num_kmers = num_records_read;
     } else if (params.kmc) {
-        num_records_read = kmc_read_kmers(handle, kmer_num_bits, num_colors, kmer_size, kmer_blocks, kmer_colors);
+        num_records_read = kmc_read_kmers(handle, kmer_num_bits, num_colors, kmer_size, kmer_blocks, kmer_colors, kmer_data_bases);
         printf("num_kmers = %zu and num_records_read=%zu\n", num_kmers, num_records_read);
     } else {
         num_records_read = dsk_read_kmers(handle, kmer_num_bits, kmer_blocks, kmer_size);
@@ -342,6 +346,7 @@ int main(int argc, char * argv[])
     }
     TRACE("num_records_read = %zu\n", num_records_read);
     assert ((params.cortex ) ? num_records_read == num_kmers : true);
+    num_kmers = num_records_read; // FIXME: need to find a better way than allocate arrays for num_colors*num_kmers[color0]
     //print_kmers(std::cout, kmer_blocks , num_kmers, kmer_size);
     //auto ascii_output = std::ostream_iterator<string>(std::cout, "\n");
 
@@ -370,13 +375,13 @@ int main(int argc, char * argv[])
     color_bv ones;
     uint64_t blocksum = 0;
 #ifndef NDEBUG
-    for (int kmer_block_iter = 0; kmer_block_iter < kmer_blocks_size/sizeof(uint64_t); ++ kmer_block_iter)
+    for (unsigned int kmer_block_iter = 0; kmer_block_iter < kmer_blocks_size/sizeof(uint64_t); ++ kmer_block_iter)
         blocksum += kmer_blocks[kmer_block_iter];
     std::cerr << "kmer_blocks sum = " << blocksum << std::endl;
 #endif
     //print_kmers(std::cout, kmer_blocks, num_records_read, kmer_size);
     // create an 'all ones' color_bv
-    for (int citer=0; citer < num_colors; ++citer)
+    for (unsigned int citer=0; citer < num_colors; ++citer)
         ones[citer] = 1;
 
     std::vector<color_bv>::iterator colors = kmer_colors.begin() + num_kmers * revcomp_factor;
