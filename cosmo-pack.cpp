@@ -85,7 +85,7 @@ int main(int argc, char* argv[]) {
   auto params = parse_arguments(argc, argv);
   stxxl::internal_size_type M = params.m;
   std::string file_name = params.input_filename;
-  string base_name = basename(file_name);
+  //string base_name = basename(file_name);
   size_t k = params.k;
 
   // Set logging level
@@ -134,12 +134,12 @@ int main(int argc, char* argv[]) {
 
     size_t idx = 0;
     sort_input.sort(reader, params, [&](output_t result){
-      kmer_t x = get<0>(result.record);
+      //kmer_t x = get<0>(result.record);
       // TODO: test with a colour payload
       //auto payload = result.record.get_tail();
 
-      char w = (result.tag == out_dummy)?'$':(DNA_ALPHA + "ACGT")[get_edge_label(x) | (result.is_first_suffix<<2)];
-      cout << w << endl;
+      //char w = (result.tag == out_dummy)?'$':(DNA_ALPHA "ACGT")[get_edge_label(x) | (result.is_first_suffix<<2)];
+      //cout << w << endl;
 
       /*
       if (result.tag == out_dummy) cout << kmer_to_string(get_start_node(x<<2), k-1, k-1) << "$";

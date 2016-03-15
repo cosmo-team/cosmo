@@ -67,7 +67,7 @@ io.o: io.hpp io.cpp debug.hpp dummies.hpp kmer.hpp
 # TODO: Roll these all into one... "cosmo". Like git started off as multiple programs.
 cosmo-pack: cosmo-pack.cpp $(PACK_REQS)
 		$(CXX) $(CPP_FLAGS) -o $@ $< io.o $(DEP_FLAGS) \
-		-lstxxl -fopenmp #-lhpthread
+		-lstxxl -fopenmp -lsdsl #-lhpthread
 
 cosmo-build: cosmo-build.cpp $(BUILD_REQS)
 		$(CXX) $(CPP_FLAGS) -o $@ $< io.o $(DEP_FLAGS) -lsdsl

@@ -13,10 +13,14 @@
 #include <boost/range/iterator_range_core.hpp>
 #include <boost/range/iterator_range.hpp>
 
+#include <sdsl/bit_vectors.hpp>
+#include <sdsl/wavelet_trees.hpp>
+
 #include "dummies.hpp"
 #include "kmer.hpp"
 #include "debug.hpp"
 #include "config.hpp"
+#include "utility.hpp"
 
 namespace cosmo {
 
@@ -322,12 +326,6 @@ struct kmer_sorter {
     cout << endl;
     */
 
-    //auto payload = payload_t();
-    //std::function<kmer_t(record_t)> capture_payload([&](record_t x){
-      //payload(x.get_tail()); // might be null_type if only kmers provided, but thats ok
-      //return get<0>(x);
-    //});
-
     typename record_vector_t::bufreader_type a_reader(kmers_a);
     typename kmer_vector_t::bufreader_type   o_reader(outgoing_dummies);
     //typename dummy_vector_t::bufreader_type  i_reader(incoming_dummies);
@@ -342,20 +340,54 @@ struct kmer_sorter {
     //                                   | transformed(dummy_key);
 
     COSMO_LOG(trace) << "Merging in dummies...";
-    //stxxl::vector<kmer_t> chars;
-    stxxl::vector<char> output;
-    output.resize(kmers_a.size() + outgoing_dummies.size());
-    typename stxxl::vector<char>::bufwriter_type w(output);
-    // Make table for incoming dummies
 
+    using namespace sdsl;
+
+    string out_file_base = parameters.output_prefix + sdsl::util::basename(parameters.input_filename);
+    stxxl::syscall_file char_file(out_file_base + ".edges", stxxl::file::DIRECT | stxxl::file::RDWR | stxxl::file::CREAT);
+    stxxl::vector<char> output(&char_file);
+    output.resize(kmers_a.size() + outgoing_dummies.size());
+    typename stxxl::vector<char>::bufwriter_type char_writer(output);
+    // bitvectors + table for incoming dummies
+    stxxl::syscall_file dummy_file(out_file_base + ".dummies", stxxl::file::DIRECT | stxxl::file::RDWR | stxxl::file::CREAT);
+    stxxl::vector<kmer_t> dummies(&dummy_file);
+    output.resize(incoming_dummy_positions.size());
+    typename stxxl::vector<kmer_t>::bufwriter_type dummy_writer(dummies);
+    bit_vector node_starts(kmers_a.size() + outgoing_dummies.size());
+    bit_vector dummy_flags(kmers_a.size() + outgoing_dummies.size());
+
+    size_t idx = 0;
     FirstStartNodeFlagger is_first_start_node(k);
     FirstEndNodeFlagger   is_first_end_node(k);
     merge_dummies(a, o, incoming_dummy_positions, [&](edge_tag tag, record_t x){
       bool is_first_prefix = is_first_start_node(get<0>(x), k);
       bool is_first_suffix = is_first_end_node(tag, get<0>(x), k);
-      output_t temp{tag, x, is_first_prefix, is_first_suffix};
-      visit(temp);
+      output_t result{tag, x, is_first_prefix, is_first_suffix};
+      visit(result);
+
+      char w = (result.tag == out_dummy)?'$':(DNA_ALPHA "ACGT")[get_edge_label(x) | ((!result.is_first_suffix)<<2)];
+      char_writer << w;
+      if (result.tag == in_dummy) dummy_writer << get<0>(x);
+      node_starts[idx]   = !is_first_prefix; // inverted so sparse bv is sparser
+      dummy_flags[idx++] = (result.tag == in_dummy);
     });
+
+    // Cleanup
+    kmers_a.clear();
+    incoming_dummy_positions.clear();
+    outgoing_dummies.clear(); // A not needed anymore
+
+    COSMO_LOG(trace) << "Building dBG...";
+    typedef wt_huff<rrr_vector<63>> wt_t;
+    wt_t wt;
+    construct(wt, out_file_base+".edges", 1);
+    // TODO: delete .edges file unless flag set to keep temp files
+    sd_vector<> nodes(node_starts);
+    sd_vector<> dums(dummy_flags);
+    COSMO_LOG(info) << "size of WT: " << size_in_mega_bytes(wt) << " MB";
+    COSMO_LOG(info) << "size of node BV: " << size_in_mega_bytes(nodes) << " MB";
+    COSMO_LOG(info) << "size of dummy BV: " << size_in_mega_bytes(dums) << " MB";
+    // TODO: return dbg
 
     /*
     merge_dummies(a, o, i, k,
