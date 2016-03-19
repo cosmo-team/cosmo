@@ -2,7 +2,7 @@
 #include "kmer.hpp"
 #include <vector>
 #include <queue>
-
+#include <sstream>
 static inline uint64_t nibblet_reverse(const uint64_t &word)
 {
 
@@ -41,14 +41,17 @@ int kmc_read_header(std::string db_fname, uint32_t &kmer_num_bits, uint32_t &k, 
 {
     std::ifstream db_list(db_fname.c_str());
     std::string fname;
+    unsigned colornum = 0;
     while ( db_list >>  fname ) {
-    
+        std::cout << "Color " << colornum << ": " << fname << std::endl;
+        colornum++;
+        
         CKMCFile * kmer_data_base = new CKMCFile;
         kmer_data_bases.push_back(kmer_data_base);
 
         if (!kmer_data_base->OpenForListing(fname))
         {
-
+            std::cerr << "ERROR: Could not open KMC2 database '" << fname << "'" << std::endl;
             return 0;
         }
         else
@@ -272,11 +275,12 @@ size_t dsk_read_kmers(int handle, uint32_t kmer_num_bits, uint64_t * kmers_outpu
 // with the polarity reversed
 // FIXME: don't compare strings!!!
 typedef std::pair<unsigned, CKmerAPI > queue_entry;
-class mycomparison
+
+class mylessthan
 {
     bool reverse;
 public:
-    mycomparison(const bool& revparam=false)
+    mylessthan(const bool& revparam=false)
         {reverse=revparam;}
     bool operator() (const queue_entry& lhs, const queue_entry&rhs) const
         {
@@ -285,57 +289,76 @@ public:
         }
 };
 
+std::string print_entry(queue_entry& entry)
+{
+    std::stringstream strstr;
+    strstr << "(" << entry.first << ", '" << entry.second.to_string() << "')";
+    std::string s = strstr.str();
+    return s;
+}
+
+typedef std::priority_queue<queue_entry, std::vector<queue_entry>, mylessthan> mypq_type;
+
+int push(mypq_type& queue, const std::vector<CKMCFile *>& kmer_data_bases, const unsigned i, const unsigned k)
+{
+    int num_pushed = 0;
+    CKmerAPI kmer_object(k);
+    uint64 counter = 0;// for coverage
+    if (kmer_data_bases[i]->ReadNextKmer(kmer_object, counter)) {
+        queue_entry entry = std::make_pair(i, kmer_object);
+        queue.push(entry);
+        std::cout << "queue.push" << print_entry(entry) << std::endl;
+        num_pushed += 1;
+    }
+    return num_pushed;
+
+}
+
+queue_entry pop_replace(mypq_type& queue, const std::vector<CKMCFile *>& kmer_data_bases, const unsigned k)
+{
+    queue_entry popped_value = queue.top();
+    queue.pop();
+
+    push(queue, kmer_data_bases, popped_value.first, k);
+    return popped_value;
+}
+
 size_t kmc_read_kmers(const int handle, const uint32_t kmer_num_bits, const uint32_t num_colors, uint32_t k, uint64_t *const &kmers_output, std::vector<color_bv>  &kmer_colors, std::vector<CKMCFile *> &kmer_data_bases)
 {
+    const mylessthan gt_comparitor(true);
+    const mylessthan lt_comparitor(false);
 
-    typedef std::priority_queue<queue_entry, std::vector<queue_entry>, mycomparison> mypq_type;
-    mypq_type queue(mycomparison(true));
+    mypq_type queue(gt_comparitor);
     int numkmers = 0;
     color_bv color = 0;
     
     // initialize the queue with a file identifier (as a proxy for the input sequence itself) and the value at the head of the file for peeking
     for (unsigned i = 0; i < kmer_data_bases.size(); ++i) {
-        CKmerAPI kmer_object(k);
-        uint64 counter = 0;// for coverage
-        if (!kmer_data_bases[i]->ReadNextKmer(kmer_object, counter)) {
-            std::cerr << "ERROR: empty file contains no kmers." << std::endl;
-            assert(false);
+        if (push(queue, kmer_data_bases, i, k) == 0) {
+            std::cerr << "WARNING: File number " << i << " contains no k-mers." << std::endl;
         }
-        queue.push(std::make_pair(i, kmer_object));
     }
 
     // pop the first element into 'current' to initialize our state (and init any other state here such as this one's color)
-    queue_entry current = queue.top();
-    queue.pop();
+    queue_entry current = pop_replace(queue, kmer_data_bases, k);
     color.set(current.first); // FIXME: make sure not using << operator elsewhere!
-    //and replace that streams entry
-    CKmerAPI kmer_object(k);
-    uint64 counter = 0;// for coverage    
-    if (kmer_data_bases[current.first]->ReadNextKmer(kmer_object, counter)) {
-        queue.push(std::make_pair(current.first, kmer_object));
-    }
-
+    std::cout << "current = " << print_entry(current) << " = queue.pop()" << std::endl;    
 
     // 
     while (!queue.empty()) {
         std::string s1 = const_cast<CKmerAPI*>(&(queue.top().second))->to_string();
         std::string s2 = const_cast<CKmerAPI*>(&(current.second))->to_string();
         if (s1 == s2) { // if this is the same kmer we've seen before
-            queue_entry additional_instance = queue.top();
-            queue.pop();
-            CKmerAPI kmer_object(k);
-            uint64 counter = 0;// for coverage
+            queue_entry additional_instance = pop_replace(queue, kmer_data_bases, k);
             color.set(additional_instance.first);
-            if (kmer_data_bases[current.first]->ReadNextKmer(kmer_object, counter)) {
-                queue.push(std::make_pair(additional_instance.first, kmer_object));
-            }
+            std::cout << "additional_instance = " << print_entry(additional_instance) << " = queue.pop()" << std::endl;
         } else { // if the top of the queue contains a new instance
 
             // emit our current state
             std::vector<unsigned long long /*uint64*/> kmer;            
             current.second.to_long(kmer);
 
-            //std::cout << const_cast<CKmerAPI*>(&(current.second))->to_string() << " : " << color << std::endl;
+            std::cout << const_cast<CKmerAPI*>(&(current.second))->to_string() << " : " << color << std::endl;
             
             kmer_colors[numkmers] = color;
             color.reset();
@@ -352,15 +375,10 @@ size_t kmc_read_kmers(const int handle, const uint32_t kmer_num_bits, const uint
             numkmers++;
 
             // now initialize our current state with the top
-            current = queue.top();
-            queue.pop();
+            current = pop_replace(queue, kmer_data_bases, k);
+            std::cout << "current = " << print_entry(current) << " = queue.pop()" << std::endl;
+
             color.set(current.first); // FIXME: make sure not using << operator elsewhere!
-            //and replace that streams entry
-            CKmerAPI kmer_object(k);
-            uint64 counter = 0;// for coverage    
-            if (kmer_data_bases[current.first]->ReadNextKmer(kmer_object, counter)) {
-                queue.push(std::make_pair(current.first, kmer_object));
-            }
         }
     }
 

@@ -230,10 +230,10 @@ int main(int argc, char * argv[])
             exit(EXIT_FAILURE);
         }
     } else if (params.kmc) {
-        std::cerr << "Reading KMC file " << file_name << std::endl;
+        std::cerr << "Reading KMC2 database list file " << file_name << std::endl;
         uint64 _total_kmers;
         if ( !kmc_read_header(file_name, kmer_num_bits, kmer_size, _total_kmers, num_colors, kmer_data_bases) ) {
-            fprintf(stderr, "ERROR: Error reading KMC_file %s\n", file_name);
+            fprintf(stderr, "ERROR: Error reading databases listed in KMC2 list file '%s'\n", file_name);
             exit(EXIT_FAILURE);
         }
         num_kmers = _total_kmers;
