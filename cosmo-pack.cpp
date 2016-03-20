@@ -294,8 +294,21 @@ int main(int argc, char * argv[])
         fprintf(stderr, "ERROR: File %s has no kmers (possibly corrupt?).\n", file_name);
         exit(EXIT_FAILURE);
     }
-    TRACE("num_kmers = %zu\n", num_kmers);
+    
+    std::vector<uint64_t> kmer_block_buffer;
+    std::vector<color_bv> kmer_colors;
+    // preallocate enough space for the color0, as we'll certainly need at least that much space
+    kmer_block_buffer.reserve(num_kmers*kmer_num_blocks);
+    kmer_colors.reserve(num_kmers);
 
+
+    size_t num_records_read = 0;
+    if (params.kmc) {
+        num_records_read = kmc_read_kmers(handle, kmer_num_bits, num_colors, kmer_size, kmer_block_buffer, kmer_colors, kmer_data_bases);
+        num_kmers = num_records_read;
+        printf("num_kmers = %zu and num_records_read=%zu\n", num_kmers, num_records_read);
+        TRACE("num_kmers = %zu\n", num_kmers);
+    }
     // ALLOCATE SPACE FOR KMERS (done in one malloc call)
     // x 4 because we need to add reverse complements, and then we have two copies of the table
 #ifdef ADD_REVCOMPS
@@ -303,7 +316,7 @@ int main(int argc, char * argv[])
 #else
     size_t revcomp_factor = 1;
 #endif
-    size_t kmer_blocks_size = num_kmers * 2 * revcomp_factor * sizeof(uint64_t) * kmer_num_blocks * num_colors /* FIXME: CONSERVATIVELY ASSUMES NO REPEAT KMERS ACROSS COUNTS */;
+    size_t kmer_blocks_size = num_kmers * 2 * revcomp_factor * sizeof(uint64_t) * kmer_num_blocks  /* FIXME: CONSERVATIVELY ASSUMES NO REPEAT KMERS ACROSS COUNTS */;
     uint64_t * kmer_blocks = (uint64_t*)malloc(kmer_blocks_size);
 #ifndef NDEBUG
     for (unsigned int kmer_block_iter = 0; kmer_block_iter < kmer_blocks_size/sizeof(uint64_t); ++kmer_block_iter)
@@ -317,7 +330,8 @@ int main(int argc, char * argv[])
 
     //uint64_t * kmer_colors = (uint64_t*)malloc(num_kmers * 2 * revcomp_factor * sizeof(uint64_t));
     
-    std::vector<color_bv> kmer_colors(num_kmers * 2 * revcomp_factor * num_colors /* FIXME: CONSERVATIVELY ASSUMES NO REPEAT KMERS ACROSS COUNTS */);
+    
+
     // if (!kmer_colors) {
     //     cerr << "Error allocating space for kmer colors" << endl;
     //     exit(1);
@@ -325,15 +339,21 @@ int main(int argc, char * argv[])
 
 
     // READ KMERS FROM DISK INTO ARRAY
-    size_t num_records_read;
+
     if (params.cortex) {
+        kmer_colors.reserve(num_kmers * 2 * revcomp_factor );;
         printf("Reading kmers\n");
         num_records_read = cortex_read_kmers(handle, kmer_num_bits, num_colors, kmer_size, kmer_blocks, kmer_colors);
         printf("num_kmers = %zu and num_records_read=%zu\n", num_kmers, num_records_read);
         num_kmers = num_records_read;
     } else if (params.kmc) {
-        num_records_read = kmc_read_kmers(handle, kmer_num_bits, num_colors, kmer_size, kmer_blocks, kmer_colors, kmer_data_bases);
-        printf("num_kmers = %zu and num_records_read=%zu\n", num_kmers, num_records_read);
+        // COPY COLORS
+        // COPY KMERS
+        std::copy(kmer_block_buffer.begin(), kmer_block_buffer.end(), kmer_blocks);
+        kmer_colors.resize(num_kmers * 2 * revcomp_factor);
+        
+        // num_records_read = kmc_read_kmers(handle, kmer_num_bits, num_colors, kmer_size, kmer_blocks, kmer_colors, kmer_data_bases);
+        // printf("num_kmers = %zu and num_records_read=%zu\n", num_kmers, num_records_read);
     } else {
         num_records_read = dsk_read_kmers(handle, kmer_num_bits, kmer_blocks, kmer_size);
     }

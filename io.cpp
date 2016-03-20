@@ -309,7 +309,7 @@ int push(mypq_type& queue, const std::vector<CKMCFile *>& kmer_data_bases, const
     if (kmer_data_bases[i]->ReadNextKmer(kmer_object, counter)) {
         queue_entry entry = std::make_pair(i, kmer_object);
         queue.push(entry);
-        std::cout << "queue.push" << print_entry(entry) << std::endl;
+        //std::cout << "queue.push" << print_entry(entry) << std::endl;
         num_pushed += 1;
     }
     return num_pushed;
@@ -325,7 +325,7 @@ queue_entry pop_replace(mypq_type& queue, const std::vector<CKMCFile *>& kmer_da
     return popped_value;
 }
 
-size_t kmc_read_kmers(const int handle, const uint32_t kmer_num_bits, const uint32_t num_colors, uint32_t k, uint64_t *const &kmers_output, std::vector<color_bv>  &kmer_colors, std::vector<CKMCFile *> &kmer_data_bases)
+size_t kmc_read_kmers(const int handle, const uint32_t kmer_num_bits, const uint32_t num_colors, uint32_t k, std::vector<uint64_t>& kmers_output, std::vector<color_bv>  &kmer_colors, std::vector<CKMCFile *> &kmer_data_bases)
 {
     const mylessthan gt_comparitor(true);
     const mylessthan lt_comparitor(false);
@@ -344,7 +344,7 @@ size_t kmc_read_kmers(const int handle, const uint32_t kmer_num_bits, const uint
     // pop the first element into 'current' to initialize our state (and init any other state here such as this one's color)
     queue_entry current = pop_replace(queue, kmer_data_bases, k);
     color.set(current.first); // FIXME: make sure not using << operator elsewhere!
-    std::cout << "current = " << print_entry(current) << " = queue.pop()" << std::endl;    
+    //std::cout << "current = " << print_entry(current) << " = queue.pop()" << std::endl;    
 
     // 
     while (!queue.empty()) {
@@ -354,24 +354,24 @@ size_t kmc_read_kmers(const int handle, const uint32_t kmer_num_bits, const uint
         if (*const_cast<CKmerAPI*>(&(queue.top().second)) == *const_cast<CKmerAPI*>(&(current.second))) { // if this is the same kmer we've seen before
             queue_entry additional_instance = pop_replace(queue, kmer_data_bases, k);
             color.set(additional_instance.first);
-            std::cout << "additional_instance = " << print_entry(additional_instance) << " = queue.pop()" << std::endl;
+            //std::cout << "additional_instance = " << print_entry(additional_instance) << " = queue.pop()" << std::endl;
         } else { // if the top of the queue contains a new instance
 
             // emit our current state
             std::vector<unsigned long long /*uint64*/> kmer;            
             current.second.to_long(kmer);
 
-            std::cout << const_cast<CKmerAPI*>(&(current.second))->to_string() << " : " << color << std::endl;
+            //std::cout << const_cast<CKmerAPI*>(&(current.second))->to_string() << " : " << color << std::endl;
             
-            kmer_colors[numkmers] = color;
+            kmer_colors.push_back(color);
             color.reset();
 
             for (unsigned int block=0; block < kmer.size(); ++block) {
-                kmers_output[numkmers*kmer.size() + block] = kmer[block]; // FIXME: check if kmer_output is big endian or little endian
+                kmers_output.push_back(kmer[block]); // FIXME: check if kmer_output is big endian or little endian
 
                 if (block == 1) {
                     assert(k == 63); //FIXME: the following line is to fix a bug in the kmc2 API where it shifts word[0] << 64 when k=63 which results in "word[1] =  word[0] + word[1]" the next line compensates; not sure how pervasive this is in the k>32 space.
-                    kmers_output[numkmers*kmer.size() + block] -=kmer[0];
+                    kmers_output[kmers_output.size() - 1] -=kmer[0];
                 }
 
             }
@@ -379,7 +379,7 @@ size_t kmc_read_kmers(const int handle, const uint32_t kmer_num_bits, const uint
 
             // now initialize our current state with the top
             current = pop_replace(queue, kmer_data_bases, k);
-            std::cout << "current = " << print_entry(current) << " = queue.pop()" << std::endl;
+            //std::cout << "current = " << print_entry(current) << " = queue.pop()" << std::endl;
 
             color.set(current.first); // FIXME: make sure not using << operator elsewhere!
         }
@@ -389,15 +389,18 @@ size_t kmc_read_kmers(const int handle, const uint32_t kmer_num_bits, const uint
     std::vector<unsigned long long /*uint64*/> kmer;            
     current.second.to_long(kmer);
         
-    kmer_colors[numkmers] = color;
+
+
+    kmer_colors.push_back(color);
     color.reset();
         
     for (unsigned int block=0; block < kmer.size(); ++block) {
-        kmers_output[numkmers*kmer.size() + block] = kmer[block]; // FIXME: check if kmer_output is big endian or little endian
+        kmers_output.push_back(kmer[block]); // FIXME: check if kmer_output is big endian or little endian        
+
             
         if (block == 1) {
             assert(k == 63); //FIXME: the following line is to fix a bug in the kmc2 API where it shifts word[0] << 64 when k=63 which results in "word[1] =  word[0] + word[1]" the next line compensates; not sure how pervasive this is in the k>32 space.
-            kmers_output[numkmers*kmer.size() + block] -=kmer[0];
+            kmers_output[kmers_output.size() - 1] -=kmer[0];
         }
             
     }
@@ -473,9 +476,9 @@ size_t cortex_read_kmers(const int handle, const uint32_t kmer_num_bits, const u
 
         if (covsum >= maxcount) {
             maxcount = covsum;
-            std::cout << maxcount << "\t" << kmers_output[next_slot] << "\t";
+            //std::cout << maxcount << "\t" << kmers_output[next_slot] << "\t";
             
-            print_kmers(std::cout, kmers_output + next_slot, 1, k);
+            //print_kmers(std::cout, kmers_output + next_slot, 1, k);
         }
 
         color_bv color_acc;
