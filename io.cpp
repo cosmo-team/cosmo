@@ -284,8 +284,10 @@ public:
         {reverse=revparam;}
     bool operator() (const queue_entry& lhs, const queue_entry&rhs) const
         {
-            if (reverse) return (const_cast<CKmerAPI*>(&(lhs.second))->to_string() > const_cast<CKmerAPI*>(&(rhs.second))->to_string());
-            else return (const_cast<CKmerAPI*>(&(lhs.second))->to_string() < const_cast<CKmerAPI*>(&(rhs.second))->to_string());
+            // if (reverse) return (const_cast<CKmerAPI*>(&(lhs.second))->to_string() > const_cast<CKmerAPI*>(&(rhs.second))->to_string());
+            // else return (const_cast<CKmerAPI*>(&(lhs.second))->to_string() < const_cast<CKmerAPI*>(&(rhs.second))->to_string());
+            if (reverse) return ( *const_cast<CKmerAPI*>(&(rhs.second)) < *const_cast<CKmerAPI*>(&(lhs.second))); 
+            else return (*const_cast<CKmerAPI*>(&(lhs.second)) < *const_cast<CKmerAPI*>(&(rhs.second)));
         }
 };
 
@@ -346,9 +348,10 @@ size_t kmc_read_kmers(const int handle, const uint32_t kmer_num_bits, const uint
 
     // 
     while (!queue.empty()) {
-        std::string s1 = const_cast<CKmerAPI*>(&(queue.top().second))->to_string();
-        std::string s2 = const_cast<CKmerAPI*>(&(current.second))->to_string();
-        if (s1 == s2) { // if this is the same kmer we've seen before
+        // std::string s1 = const_cast<CKmerAPI*>(&(queue.top().second))->to_string();
+        // std::string s2 = const_cast<CKmerAPI*>(&(current.second))->to_string();
+        // if (s1 == s2) { // if this is the same kmer we've seen before
+        if (*const_cast<CKmerAPI*>(&(queue.top().second)) == *const_cast<CKmerAPI*>(&(current.second))) { // if this is the same kmer we've seen before
             queue_entry additional_instance = pop_replace(queue, kmer_data_bases, k);
             color.set(additional_instance.first);
             std::cout << "additional_instance = " << print_entry(additional_instance) << " = queue.pop()" << std::endl;
