@@ -8,6 +8,7 @@
 #include <parallel/algorithm>
 #include <boost/range/adaptor/transformed.hpp>     // Map function to inputs
 #include <boost/range/adaptors.hpp>
+#include <boost/range/adaptor/indexed.hpp>
 #include <boost/range/adaptor/uniqued.hpp>         // Uniquify
 #include <boost/range/algorithm/set_algorithm.hpp> // set_difference
 #include <boost/function_output_iterator.hpp>      // for capturing output of set_algorithms
@@ -52,16 +53,16 @@ void find_incoming_dummy_nodes(const InputRange1 a_range, const InputRange2 b_ra
   size_t idx = 0;
   kmer_t temp;
   auto a_lam    = std::function<kmer_t(kmer_t)>([&](kmer_t x) -> kmer_t {
-    idx++;
     temp = x;
     return get_start_node(x);
   });
   auto b_lam   = std::function<kmer_t(kmer_t)>([k](kmer_t x) -> kmer_t {return get_end_node(x,k);});
-  auto a = a_range | transformed(a_lam) | filtered(uniq<kmer_t>());
+  auto a = a_range | transformed(a_lam) | filtered(uniq<kmer_t>()) | indexed(0);
   auto b = b_range | transformed(b_lam) | filtered(uniq<kmer_t>());
 
-  auto pairer  = [&](kmer_t x) { out_f(idx-1, temp); };
+  auto pairer  = [&](kmer_t x) { out_f(idx++, temp); };
   auto paired_out = boost::make_function_output_iterator(pairer);
+  //std::set_difference(a_start, a.end(), b.begin(), b.end(), paired_out);
   boost::set_difference(a, b, paired_out);
   // GPU: http://thrust.github.io/doc/group__set__operations.html
   //__gnu_parallel::set_difference(a.begin(), a.end(), b.begin(), b.end(), paired_out);
@@ -258,11 +259,10 @@ void merge_dummies(InputRange1 & a_range, InputRange2 & o_range, InputRange3 & i
   typedef typename InputRange1::value_type record_t;
   typedef typename InputRange2::value_type kmer_t;
 
-  size_t idx    = 0;
+  size_t idx  = 0;
   auto i_next = i_range.cbegin();
   auto a = a_range | transformed([&](record_t x){
-    bool is_dummy = i_next != i_range.cend() && (idx++ == *(i_next));
-    if (is_dummy) ++i_next;
+    bool is_dummy = (i_next != i_range.cend()) && (idx == *(i_next));
     return boost::make_tuple(x, is_dummy?in_dummy:standard);
   });
 
@@ -271,7 +271,13 @@ void merge_dummies(InputRange1 & a_range, InputRange2 & o_range, InputRange3 & i
   });
 
   using boost::get;
-  auto v   = [&](boost::tuple<record_t, edge_tag> x) { visit(boost::get<1>(x), boost::get<0>(x)); };
+  auto v   = [&](boost::tuple<record_t, edge_tag> x) {
+    if (boost::get<1>(x) != out_dummy) {
+      ++idx;
+      if (boost::get<1>(x) == in_dummy) ++i_next;
+    }
+    visit(boost::get<1>(x), boost::get<0>(x));
+  };
   auto out = boost::make_function_output_iterator(v);
   boost::set_union(a, o, out, [](boost::tuple<record_t, edge_tag> x,
                                  boost::tuple<record_t, edge_tag> y){
