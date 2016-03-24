@@ -20,4 +20,17 @@ source kmercount.sh
 ls -1 --color=no *.flat |xargs -l -i echo "~/git/KMC/bin/kmc_tools sort {}.kmc {}.kmc.sorted " >kmercountsort.sh
 source kmercountsort.sh
 
+# make a list of these files which will be the cosmo input
+ls -1 --color=no *.flat |xargs -l -i echo "{}.kmc.sorted" >kmc2_list
+
+
+# build the BOSS
+numactl --interleave=all /bin/time -v ~/git/cosmo/cosmo-pack -k kmc2_list
+
+# build the RRR
+numactl --interleave=all /bin/time -v /s/chopin/l/grad/muggli/git/cosmo/pack-color kmc2_list.colors 3765
+
+# And finally, find bubbles!
+/bin/time -v  ~/git/cosmo/cosmo-color kmc2_list.packed kmc2_list.colors.rrr >kmc2_list.bubbles
+
 
