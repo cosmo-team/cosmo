@@ -28,8 +28,7 @@ template <size_t t_sigma            = 4, // default: DNA, TODO: change to 0 and 
           class  t_bv_select_type   = typename t_bit_vector_type::select_0_type,
           class  t_edge_vector_type = wt_huff<rrr_vector<63>>,
           class  t_symbol_type      = typename t_edge_vector_type::value_type,
-          class  t_label_type       = string,
-          class  t_kmer_type        = kmer_t> // used to store dummies
+          class  t_label_type       = string> // can define basic_string<t_symbol_type>, but need to use correct print func
 class debruijn_graph {
   static_assert(t_sigma == 4, "Alphabet sizes other than 4 are not yet supported.");
 
@@ -39,7 +38,6 @@ class debruijn_graph {
   typedef t_label_type  label_type;
   typedef typename t_bit_vector_type::size_type size_type;
   typedef size_t edge_type;
-  typedef t_kmer_type kmer_t;
   typedef pair<edge_type, edge_type> node_type;
 
   const size_t           k{};
@@ -55,23 +53,17 @@ class debruijn_graph {
   const array<size_t, 1+sigma> m_edge_max_ranks{};
   const label_type             m_alphabet{};
   const size_t                 m_num_nodes{};
-  const t_bit_vector_type m_dummy_flags;
-  // TODO: support STXXL vectors as dummy labels may not need to be in memory
-  const vector<kmer_t> m_dummies;
 
   public:
   debruijn_graph() {}
 
   // TODO: make each of these a range instead (so it doesnt depend on the type)
-  debruijn_graph(size_t in_k, const t_bit_vector_type & node_flags, const t_edge_vector_type & edges, const array<size_t, 1+sigma>& symbol_ends, const label_type& alphabet,
-      const t_bit_vector_type & dummy_flags, const vector<kmer_t> & dummies)
+  debruijn_graph(size_t in_k, const t_bit_vector_type & node_flags, const t_edge_vector_type & edges, const array<size_t, 1+sigma>& symbol_ends, const label_type& alphabet)
     : k(in_k), m_node_flags(node_flags), m_node_rank(&m_node_flags), m_node_select(&m_node_flags), m_edges(edges),
       m_symbol_ends(symbol_ends),
       m_edge_max_ranks(_init_max_ranks(edges)),
       m_alphabet(alphabet),
-      m_num_nodes(m_node_rank(m_node_flags.size())),
-      m_dummy_flags(dummy_flags),
-      m_dummies(dummies) {}
+      m_num_nodes(m_node_rank(m_node_flags.size())) {}
 
   private:
   array<size_t, 1+sigma> _init_max_ranks(const t_edge_vector_type & edges) {
@@ -83,11 +75,79 @@ class debruijn_graph {
     return max_ranks;
   }
 
-  bool is_incoming_dummy(size_t edge) {
-    return m_dummy_flags[edge];
+  public:
+  static debruijn_graph load_from_packed_edges(istream & input, label_type alphabet=label_type{}/*, vector<size_t> * v=nullptr*/) {
+    // ifstream input(filename, ios::in|ios::binary|ios::ate);
+    // check length
+    streampos size = input.tellg();
+    // should be exceptions...
+    assert(size/sizeof(uint64_t) >= (sigma+2)); // space for footer info
+    assert(((size_t)size - (sigma+2) * sizeof(uint64_t))%sizeof(uint64_t) == 0); // sequence of uint64_ts
+
+    // read footer
+    cerr << "Reading counts..." << endl;
+    input.seekg(-(sigma+2) * sizeof(uint64_t), ios::end);
+    array<size_t,1+sigma> counts{};
+    uint64_t k = 0;
+    input.read((char*)&counts[0], (sigma+1) * sizeof(uint64_t));
+    input.read((char*)&k, sizeof(uint64_t));
+    size_t num_edges = counts[sigma];
+
+    size_t num_blocks = size_t(size)/sizeof(uint64_t) - (sigma+2);
+    input.seekg(0, ios::beg); // rewind
+
+    // TODO: sanity check the inputs (e.g. tally things, convert the above asserts)
+    // So we avoid a huge malloc if someone gives us a bad file
+    t_bit_vector_type bv;
+    string temp_file_name = "cosmo.temp";
+
+    {
+    // This doesn't use more space than loading an unpacked edge vector from disk directly.
+    // This way increases I/Os, but potentially decreases disk seeks.
+    // But personally id prefer to output individual bit-packed vectors
+    // Maybe if I take input from Megahit instead, itd be easier to build the bit vector in memory, and stream the edges
+    cerr << "Allocating vector space..." << endl;
+    int_vector<1> first(num_edges,0);
+    int_vector<8> edges(num_edges);
+    // would be nice to fix wavelet trees so the constructor
+    // can accept a int_vector<4> instead (which is all we need for DNA)
+
+    cerr << "Reading packed edges..." << endl;
+    for (size_t current_edge = 0, current_block = 0; current_edge < num_edges && current_block < num_blocks;) {
+      uint64_t block;
+      input.read((char*)&block, sizeof(uint64_t));
+      for (size_t i = 0; current_edge < num_edges && i < PACKED_CAPACITY; ++i, ++current_edge) {
+        auto x = unpack_to_tuple(get_packed_edge_from_block(block, i));
+        first[current_edge] = bool(1-get<1>(x)); // convert 0s to 1s so we can have a sparse bit vector
+        edges[current_edge] = (get<0>(x) << 1) | !bool(get<2>(x));
+      }
+    }
+
+    cerr << "Writing unpacked edges to temp-file (for semi-external construction)..." << endl;
+    store_to_file(edges, temp_file_name);
+    cerr << "Creating compressed bit-vector..." << endl;
+
+    bv = t_bit_vector_type(first);
+    }
+
+    t_edge_vector_type wt;
+    cerr << "Constructing Wavelet-Tree..." << endl;
+    construct(wt, temp_file_name);
+    cerr << "Cleaning up..." << endl;
+    sdsl::remove(temp_file_name);
+    cerr << "Constructing de Bruijn graph..." << endl;
+    #ifdef VERBOSE
+      for (size_t i = 0; i < num_edges; i++) {
+        cout << "01"[bv[i]] << " " << "$acgt"[wt[i]>>1] << endl;
+      }
+    #endif
+    return debruijn_graph(k, bv, wt, counts, alphabet);
   }
 
-  public:
+  // Loaders/Writers for sdsl-serialized and JSON
+  // size_in_bytes:
+
+  // API
   size_t outdegree(size_t v) const {
     assert(v < num_nodes());
     auto range = _node_range(v);
@@ -126,8 +186,6 @@ class debruijn_graph {
   size_t indegree(size_t v) const {
     // find first predecessor edge i->j
     size_t j = _node_to_edge(v);
-    if (is_incoming_dummy(j)) return 0;
-
     // edge label has to be the last node symbol of v
     symbol_type x = _symbol_access(j);
     if (x == 0) return 0;
@@ -203,7 +261,6 @@ class debruijn_graph {
     assert(x < sigma + 1);
     // node u -> v : edge i -> j
     size_t j = _node_to_edge(v);
-    if (is_incoming_dummy(j)) return -1;
     symbol_type y = _symbol_access(j);
     if (y == 0) return -1;
     size_t i_first = _backward(j);
@@ -226,32 +283,22 @@ class debruijn_graph {
 
   label_type node_label(size_t v) const {
     size_t i = _node_to_edge(v);
-    if (is_incoming_dummy(i)) {
-      return kmer_to_string(m_dummies[i], k-1);
-    }
     label_type label = label_type(k-1, _map_symbol(symbol_type{}));
     return _node_label_from_edge_given_buffer(i, label);
   }
 
   label_type node_label_from_edge(size_t i) const {
-    if (is_incoming_dummy(i)) {
-      return kmer_to_string(m_dummies[i], k-1);
-    }
     label_type label = label_type(k-1, _map_symbol(symbol_type{}));
     return _node_label_from_edge_given_buffer(i, label);
   }
 
   label_type edge_label(size_t i) const {
-    if (is_incoming_dummy(i)) {
-      return kmer_to_string(m_dummies[i], k);
-    }
     label_type label = label_type(k, _map_symbol(symbol_type{}));
     _node_label_from_edge_given_buffer(i, label);
     label[k-1] = _map_symbol(_strip_edge_flag(m_edges[i]));
     return label;
   }
 
-  // TODO: subtract number of $ edges?
   size_t num_edges() const { return m_node_flags.size(); }
   size_t num_nodes() const { return m_num_nodes; /*m_node_rank(num_edges());*/ }
 
@@ -431,16 +478,20 @@ class debruijn_graph {
     written_bytes += write_member(m_edge_max_ranks, out, child, "edge_max_ranks");
     written_bytes += write_member(m_alphabet, out, child, "alphabet");
     written_bytes += write_member(m_num_nodes, out, child, "num_nodes");
-    written_bytes += m_dummy_flags.serialize(out, child, "dummy_flags");
-    //written_bytes += m_dummies.serialize(out, child, "dummies");
-    written_bytes += sdsl::serialize(m_dummies, out, child, "dummies");
     // helper bitvector m_doc_rmin_marked and m_doc_rmax_marked are not serialize
     structure_tree::add_size(child, written_bytes);
     return written_bytes;
   }
 
+  // THIS IS PROBABLY A BAD DESIGN CHOICE on behalf of sdsl
+  // we shouldnt have a function which mutates the state? I dunno, I just have a bad feeling
   //! Loads the data structure from the given istream.
   void load(std::istream& in) {
+    // DANGER WILL ROBINSON!
+    // Yeah, don't normally const_cast!
+    // but in this case the alternative is to leave them non-const,
+    // thus sacrificing any gain...
+    // plus I know what I'm doing here...
     read_member(deconst(k), in);
     deconst(m_node_flags).load(in);
     deconst(m_node_rank).load(in);
@@ -452,8 +503,6 @@ class debruijn_graph {
     read_member(deconst(m_edge_max_ranks), in);
     read_member(deconst(m_alphabet), in);
     read_member(deconst(m_num_nodes), in);
-    deconst(m_dummy_flags).load(in);
-    sdsl::load(deconst(m_dummies), in);
   }
 
   size_type size() const { return num_edges(); }

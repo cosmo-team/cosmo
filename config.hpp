@@ -5,6 +5,7 @@
 // And any other config stuff
 
 #include <string>
+#include <boost/tuple/tuple.hpp>
 #include "utility.hpp"
 
 using std::string;
@@ -12,6 +13,25 @@ using std::string;
 // TODO: add support for wider integers
 //#include <boost/multiprecision/cpp_int.hpp>
 typedef __uint128_t uint128_t;
+// need to define numeric limits since max() returns 0 on some compilers!!!!
+namespace std {
+  template <>
+  struct numeric_limits<uint128_t> {
+    static const size_t digits = CHAR_BIT*sizeof(uint128_t);
+
+    static uint128_t min() {
+      return 0;
+    }
+
+    static uint128_t max() {
+      uint64_t max_64 = numeric_limits<uint64_t>::max();
+      uint128_t temp = max_64;
+      temp <<= 64;
+      temp += max_64;
+      return temp;
+    }
+  };
+}
 
 namespace cosmo {
 
@@ -29,15 +49,15 @@ typedef uint128_t kmer_t;
 typedef uint64_t color_t;
 // For measuring the length of a kmer (LCS and dummies)
 typedef uint8_t length_t;
-typedef std::pair<kmer_t, length_t> dummy_t;
+typedef boost::tuple<kmer_t, length_t> dummy_t;
 
 const string version = VERSION;
 const string banner  = "Cosmo Copyright (c) Alex Bowe 2015";
-const size_t k_max = (K_LEN <= 32)? 32 : 64;
+const size_t max_k = (K_LEN <= 32)? 32 : 64;
 const size_t max_colors = bitwidth<color_t>::width;
 const size_t mb_to_bytes = 1024 * 1024;
 const size_t block_size       = 2 * 1024 * 1024; // KB
-const size_t default_mem_size = 4 * 1024; // MB
+const size_t default_mem_size = 2 * 1024; // MB
 
 // File extensions
 const string graph_ext     = ".dbg";
