@@ -13,8 +13,8 @@ KMC_PATH=/s/chopin/l/grad/muggli/git/KMC
 
 DEP_FLAGS=-I$(HOME)/proot/include -isystem $(KMC_PATH) -isystem $(MM_PATH)/include -L$(MM_PATH)/lib -I$(INC_PATH)/ -L$(HOME)/proot/lib -L$(LIB_PATH)/ -lsdsl # -ldivsufsort -ldivsufsort64
 DEBUG_FLAGS=-g
-NDEBUG_FLAGS= #-DNDEBUG
-OPT_FLAGS= #-O3 #-mmmx -msse -msse2 -msse3 -msse4 -msse4.2 -march=native
+NDEBUG_FLAGS= -DNDEBUG
+OPT_FLAGS= -O3 -mmmx -msse -msse2 -msse3 -msse4 -msse4.2 -march=native
 NOPT_FLAGS=-O0
 NUM_COLS=64
 # Using Semantic Versioning: http://semver.org/

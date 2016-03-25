@@ -20,6 +20,10 @@
 
 
 typedef std::bitset<NUM_COLS> color_bv;
+//FIXME: find a way to make NUM_COLS not be compile time.
+// http://en.cppreference.com/w/cpp/utility/bitset says:
+// "Notes: If the size of the bitset is not known at compile time, std::vector<bool> or boost::dynamic_bitset may be used."
+    
 void clear_bv(color_bv &bv);
 void set_bit(color_bv &bv, uint32_t j);
 void serialize_color_bv(std::ofstream &cfs, std::vector<color_bv>::iterator &colors, uint64_t index);

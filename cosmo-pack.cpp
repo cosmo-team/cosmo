@@ -197,61 +197,15 @@ void serialize_color_bv(std::ofstream &cfs, const color_bv &color)//std::vector<
     cfs.write((char *)&color, sizeof(color_bv)); //FIXME: Is this the right way to serailize std::bitset?
 }
 
-int main(int argc, char * argv[])
+#ifdef ADD_REVCOMPS
+static const size_t revcomp_factor = 2;
+#else
+static const size_t revcomp_factor = 1;
+#endif
+
+
+uint64_t* allocate_blocks(const uint32_t kmer_num_bits, const size_t num_kmers, const char* file_name)
 {
-    parameters_t params;
-    parse_arguments(argc, argv, params);
-
-    const char * file_name = params.input_filename.c_str();
-    int handle = -1;
-    // Open File
-    if (!params.kmc) {
-
-        if ( (handle = open(file_name, O_RDONLY)) == -1 ) {
-            fprintf(stderr, "ERROR: Can't open file: %s\n", file_name);
-            exit(EXIT_FAILURE);
-        }
-    }
-    // The parameter should be const... On my computer the parameter
-    // isn't const though, yet it doesn't modify the string...
-    // This is still done AFTER loading the file just in case
-    char * base_name = basename(const_cast<char*>(file_name));
-
-    // Read Header
-    uint32_t kmer_num_bits = 0;
-    uint32_t kmer_size = 0;
-    size_t num_kmers = 0;
-    uint32_t num_colors = 0;
-    std::vector<CKMCFile *>kmer_data_bases; //FIXME: move out of global
-    if (params.cortex) {
-        std::cerr << "Reading cortex file " << file_name << std::endl;
-        if ( !cortex_read_header(handle, &kmer_num_bits, &kmer_size) ) {
-            fprintf(stderr, "ERROR: Error reading cortex_file %s\n", file_name);
-            exit(EXIT_FAILURE);
-        }
-    } else if (params.kmc) {
-        std::cerr << "Reading KMC2 database list file " << file_name << std::endl;
-        uint64 _total_kmers;
-        if ( !kmc_read_header(file_name, kmer_num_bits, kmer_size, _total_kmers, num_colors, kmer_data_bases) ) {
-            fprintf(stderr, "ERROR: Error reading databases listed in KMC2 list file '%s'\n", file_name);
-            exit(EXIT_FAILURE);
-        }
-        num_kmers = _total_kmers;
-        std::cerr << "Will read " << num_kmers << " " << kmer_size << "-mers, each with " << kmer_num_bits << " bits." << std::endl;
-    } else {
-        std::cerr << "Reading DSK file " << file_name << std::endl;
-        if ( !dsk_read_header(handle, &kmer_num_bits, &kmer_size) ) {
-            fprintf(stderr, "ERROR: Error reading file %s\n", file_name);
-            exit(EXIT_FAILURE);
-        }
-        TRACE(">> READING DSK FILE\n");
-    }
-    assert(kmer_num_bits % 64 == 0);
-    uint32_t kmer_num_blocks = (kmer_num_bits  / 8 ) / sizeof(uint64_t) ; 
-
-    TRACE("kmer_num_bits, k = %d, %d\n", kmer_num_bits, kmer_size);
-    TRACE("kmer_num_blocks = %d\n", kmer_num_blocks);
-
     if (kmer_num_bits > MAX_BITS_PER_KMER) {
         fprintf(stderr, "ERROR: Kmers larger than %zu bits are not currently supported."
                 " %s uses %d bits per kmer (possibly corrupt?).\n",
@@ -259,11 +213,51 @@ int main(int argc, char * argv[])
         exit(EXIT_FAILURE);
     }
 
-    // Read how many items there are (for allocation purposes)
+    
+    if (num_kmers == 0) {
+        fprintf(stderr, "ERROR: File %s has no kmers (possibly corrupt?).\n", file_name);
+        exit(EXIT_FAILURE);
+    }
+    
+    assert(kmer_num_bits % 64 == 0);
+    uint32_t kmer_num_blocks = (kmer_num_bits  / 8 ) / sizeof(uint64_t) ; 
+    
+    TRACE("kmer_num_bits, k = %d, %d\n", kmer_num_bits, kmer_size);
+    TRACE("kmer_num_blocks = %d\n", kmer_num_blocks);
 
 
+    // ALLOCATE SPACE FOR KMERS (done in one malloc call)
+    // x 4 because we need to add reverse complements, and then we have two copies of the table
+    size_t kmer_blocks_size = num_kmers * 2 * revcomp_factor * sizeof(uint64_t) * kmer_num_blocks  /* FIXME: CONSERVATIVELY ASSUMES NO REPEAT KMERS ACROSS COUNTS */;
+    uint64_t * kmer_blocks = (uint64_t*)malloc(kmer_blocks_size);
+
+    std::cerr << "Allocating " << kmer_blocks_size << " bytes for kmer_blocks."  << std::endl;
+    if (!kmer_blocks) {
+        cerr << "Error allocating space for kmers" << endl;
+        exit(1);
+    }
+    return kmer_blocks;
+}
+
+
+void load_kmers(const parameters_t& params, std::vector<color_bv>& kmer_colors, uint64_t*& kmer_blocks, uint32_t& kmer_num_bits, uint32_t& kmer_size, size_t& num_kmers, uint32_t& num_colors)
+{
+    const char* file_name = params.input_filename.c_str();
+
+    int handle = -1;
+    if ( (handle = open(file_name, O_RDONLY)) == -1 ) {
+        fprintf(stderr, "ERROR: Can't open file: %s\n", file_name);
+        exit(EXIT_FAILURE);
+    }
+
+    
     if (params.cortex) {
-        printf("Num records\n");
+        std::cerr << "Reading cortex file " << file_name << std::endl;
+        if ( !cortex_read_header(handle, &kmer_num_bits, &kmer_size) ) {
+            fprintf(stderr, "ERROR: Error reading cortex_file %s\n", file_name);
+            exit(EXIT_FAILURE);
+        }
+
         if ( cortex_num_records(handle, kmer_num_bits, num_kmers, num_colors) == -1) {
             fprintf(stderr, "Error seeking cortex file %s\n", file_name);
             exit(EXIT_FAILURE);
@@ -276,99 +270,102 @@ int main(int argc, char * argv[])
         printf("Got num colors (capacity, not occupancy) %d \n", num_colors);
         // printf("NUM_COLS=%zu\n", NUM_COLS);
         // printf("Each entry in .colors file will occupy %d bytes.\n", sizeof(color_bv));
+        kmer_blocks = allocate_blocks(kmer_num_bits, num_kmers, file_name);
+
+            ///
+        kmer_colors.reserve(num_kmers * 2 * revcomp_factor );
+        printf("Reading kmers\n");
+        size_t num_records_read = cortex_read_kmers(handle, kmer_num_bits, num_colors, kmer_size, kmer_blocks, kmer_colors);
+        if (num_records_read == 0) {
+            fprintf(stderr, "Error reading file %s\n", file_name);
+            exit(EXIT_FAILURE);
+        }
+        assert(num_records_read == num_kmers);
+        TRACE("num_records_read = %zu\n", num_records_read);
+        
+        printf("num_kmers = %zu and num_records_read=%zu\n", num_kmers, num_records_read);
+
+
     } else if (params.kmc) {
+        std::vector<CKMCFile *>kmer_data_bases; //FIXME: move out of global
+        std::cerr << "Reading KMC2 database list file " << file_name << std::endl;
+        uint64 peak_kmers;
+        if ( !kmc_read_header(file_name, kmer_num_bits, kmer_size, peak_kmers, num_colors, kmer_data_bases) ) {
+            fprintf(stderr, "ERROR: Error reading databases listed in KMC2 list file '%s'\n", file_name);
+            exit(EXIT_FAILURE);
+        }
+
+        std::cerr << "Will read a maximum of " << num_kmers << " " << kmer_size << "-mers from some color, each with " << kmer_num_bits << " bits." << std::endl;
 
         if (num_colors > NUM_COLS) {
             fprintf(stderr, "KMC file %s contains %d colors which exceeds the compile time limit of %d.  Please recompile with NUM_COLS=%d (or larger).\n", file_name, num_colors, NUM_COLS, num_colors);
             exit(EXIT_FAILURE);
         }
         
-        
-    } else {
-        if ( dsk_num_records(handle, kmer_num_bits, &num_kmers) == -1) {
-            fprintf(stderr, "Error seeking file %s\n", file_name);
-            exit(EXIT_FAILURE);
+        kmer_colors.reserve(num_kmers);
+
+        // preallocate enough space for the color0, as we'll certainly need at least that much space
+        std::vector<uint64_t> kmer_block_buffer;
+        kmer_block_buffer.reserve(peak_kmers * /*kmer_num_blocks*/ (kmer_num_bits  / 8 ) / sizeof(uint64_t) );
+
+        size_t num_records_read = 0;
+        if (params.kmc) {
+            num_kmers = kmc_read_kmers(handle, kmer_num_bits, num_colors, kmer_size, kmer_block_buffer, kmer_colors, kmer_data_bases);
+            printf("num_kmers = %zu and num_records_read=%zu\n", num_kmers, num_records_read);
+            TRACE("num_kmers = %zu\n", num_kmers);
         }
-    }
-    if (num_kmers == 0) {
-        fprintf(stderr, "ERROR: File %s has no kmers (possibly corrupt?).\n", file_name);
-        exit(EXIT_FAILURE);
-    }
-    
-    std::vector<uint64_t> kmer_block_buffer;
-    std::vector<color_bv> kmer_colors;
-    // preallocate enough space for the color0, as we'll certainly need at least that much space
-    kmer_block_buffer.reserve(num_kmers*kmer_num_blocks);
-    kmer_colors.reserve(num_kmers);
+        kmer_blocks = allocate_blocks(kmer_num_bits, num_kmers, file_name);
 
-
-    size_t num_records_read = 0;
-    if (params.kmc) {
-        num_records_read = kmc_read_kmers(handle, kmer_num_bits, num_colors, kmer_size, kmer_block_buffer, kmer_colors, kmer_data_bases);
-        num_kmers = num_records_read;
-        printf("num_kmers = %zu and num_records_read=%zu\n", num_kmers, num_records_read);
-        TRACE("num_kmers = %zu\n", num_kmers);
-    }
-    // ALLOCATE SPACE FOR KMERS (done in one malloc call)
-    // x 4 because we need to add reverse complements, and then we have two copies of the table
-#ifdef ADD_REVCOMPS
-    size_t revcomp_factor = 2;
-#else
-    size_t revcomp_factor = 1;
-#endif
-    size_t kmer_blocks_size = num_kmers * 2 * revcomp_factor * sizeof(uint64_t) * kmer_num_blocks  /* FIXME: CONSERVATIVELY ASSUMES NO REPEAT KMERS ACROSS COUNTS */;
-    uint64_t * kmer_blocks = (uint64_t*)malloc(kmer_blocks_size);
-#ifndef NDEBUG
-    for (unsigned int kmer_block_iter = 0; kmer_block_iter < kmer_blocks_size/sizeof(uint64_t); ++kmer_block_iter)
-        kmer_blocks[kmer_block_iter] = 0;
-#endif
-    std::cerr << "Allocating " << kmer_blocks_size << " bytes for kmer_blocks."  << std::endl;
-    if (!kmer_blocks) {
-        cerr << "Error allocating space for kmers" << endl;
-        exit(1);
-    }
-
-    //uint64_t * kmer_colors = (uint64_t*)malloc(num_kmers * 2 * revcomp_factor * sizeof(uint64_t));
-    
-    
-
-    // if (!kmer_colors) {
-    //     cerr << "Error allocating space for kmer colors" << endl;
-    //     exit(1);
-    // }
-
-
-    // READ KMERS FROM DISK INTO ARRAY
-
-    if (params.cortex) {
-        kmer_colors.reserve(num_kmers * 2 * revcomp_factor );;
-        printf("Reading kmers\n");
-        num_records_read = cortex_read_kmers(handle, kmer_num_bits, num_colors, kmer_size, kmer_blocks, kmer_colors);
-        printf("num_kmers = %zu and num_records_read=%zu\n", num_kmers, num_records_read);
-        num_kmers = num_records_read;
-    } else if (params.kmc) {
         // COPY COLORS
         // COPY KMERS
         std::copy(kmer_block_buffer.begin(), kmer_block_buffer.end(), kmer_blocks);
         kmer_colors.resize(num_kmers * 2 * revcomp_factor);
-        
-        // num_records_read = kmc_read_kmers(handle, kmer_num_bits, num_colors, kmer_size, kmer_blocks, kmer_colors, kmer_data_bases);
-        // printf("num_kmers = %zu and num_records_read=%zu\n", num_kmers, num_records_read);
+            
     } else {
-        num_records_read = dsk_read_kmers(handle, kmer_num_bits, kmer_blocks, kmer_size);
+        std::cerr << "Reading DSK file " << file_name << std::endl;
+        if ( !dsk_read_header(handle, &kmer_num_bits, &kmer_size) ) {
+            fprintf(stderr, "ERROR: Error reading file %s\n", file_name);
+            exit(EXIT_FAILURE);
+        }
+        TRACE(">> READING DSK FILE\n");
+
+        if ( dsk_num_records(handle, kmer_num_bits, &num_kmers) == -1) {
+            fprintf(stderr, "Error seeking file %s\n", file_name);
+            exit(EXIT_FAILURE);
+        }
+        kmer_blocks = allocate_blocks(kmer_num_bits, num_kmers, file_name);
+        size_t num_records_read = dsk_read_kmers(handle, kmer_num_bits, kmer_blocks, kmer_size);
+        if (num_records_read == 0) {
+            fprintf(stderr, "Error reading file %s\n", file_name);
+            exit(EXIT_FAILURE);
+        }
+        TRACE("num_records_read = %zu\n", num_records_read);
+        assert ( num_records_read == num_kmers);
+
     }
-    if (!params.kmc) {
-        close(handle);
-    }
-    if (num_records_read == 0) {
-        fprintf(stderr, "Error reading file %s\n", argv[1]);
-        exit(EXIT_FAILURE);
-    }
-    TRACE("num_records_read = %zu\n", num_records_read);
-    assert ((params.cortex ) ? num_records_read == num_kmers : true);
-    num_kmers = num_records_read; // FIXME: need to find a better way than allocate arrays for num_colors*num_kmers[color0]
-    //print_kmers(std::cout, kmer_blocks , num_kmers, kmer_size);
-    //auto ascii_output = std::ostream_iterator<string>(std::cout, "\n");
+
+    close(handle);
+}
+
+           
+
+int main(int argc, char * argv[])
+{
+    parameters_t params;
+    parse_arguments(argc, argv, params);
+
+
+    std::vector<color_bv> kmer_colors;
+    uint64_t * kmer_blocks = 0;
+
+    uint32_t kmer_num_bits = 0;
+    uint32_t kmer_size = 0;
+    size_t num_kmers = 0;
+    uint32_t num_colors = 0;
+    
+    load_kmers(params,  kmer_colors, kmer_blocks, kmer_num_bits, kmer_size, num_kmers, num_colors);
+
+    char * base_name = basename(const_cast<char*>(params.input_filename.c_str()));
 
     string outfilename = (params.output_prefix == "")? base_name : params.output_prefix;
     ofstream ofs;
@@ -392,19 +389,15 @@ int main(int argc, char * argv[])
     PackedEdgeOutputer out(ofs);
     ofstream cfs;
     cfs.open(outfilename + ".colors", ios::out | ios::binary);
+
+
     color_bv ones;
-    uint64_t blocksum = 0;
-#ifndef NDEBUG
-    for (unsigned int kmer_block_iter = 0; kmer_block_iter < kmer_blocks_size/sizeof(uint64_t); ++ kmer_block_iter)
-        blocksum += kmer_blocks[kmer_block_iter];
-    std::cerr << "kmer_blocks sum = " << blocksum << std::endl;
-#endif
-    //print_kmers(std::cout, kmer_blocks, num_records_read, kmer_size);
     // create an 'all ones' color_bv
     for (unsigned int citer=0; citer < num_colors; ++citer)
         ones[citer] = 1;
 
     std::vector<color_bv>::iterator colors = kmer_colors.begin() + num_kmers * revcomp_factor;
+
     size_t index = 0; 
 
     if (kmer_num_bits == 64) {

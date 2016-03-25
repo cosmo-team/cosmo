@@ -37,11 +37,13 @@ static inline uint64_t nibblet_reverse(const uint64_t &word)
 }
 
 
-int kmc_read_header(std::string db_fname, uint32_t &kmer_num_bits, uint32_t &k, uint64 &_total_kmers, uint32_t &num_colors, std::vector<CKMCFile *> &kmer_data_bases)
+int kmc_read_header(std::string db_fname, uint32_t &kmer_num_bits, uint32_t &k, uint64 &peak_kmers, uint32_t &num_colors, std::vector<CKMCFile *> &kmer_data_bases)
 {
     std::ifstream db_list(db_fname.c_str());
     std::string fname;
     unsigned colornum = 0;
+    peak_kmers = 0;
+
     while ( db_list >>  fname ) {
         std::cout << "Color " << colornum << ": " << fname << std::endl;
         colornum++;
@@ -65,11 +67,13 @@ int kmc_read_header(std::string db_fname, uint32_t &kmer_num_bits, uint32_t &k, 
             uint32 _signature_len;
             uint32 _min_count;
             uint64 _max_count;
-
+            uint64 _total_kmers;
 
             kmer_data_base->Info(k, _mode, _counter_size, _lut_prefix_length, _signature_len, _min_count, _max_count, _total_kmers);
             kmer_num_bits = 64 * ((k * 2 - 1) / 64 + 1); // FIXME: double check ceil(quotients) is what we're getting and not more, this may be too conservative
-		
+            if (_total_kmers > peak_kmers) {
+                peak_kmers = _total_kmers;
+            }
             //std::string str;
 
 
@@ -282,7 +286,7 @@ class mylessthan
 public:
     mylessthan(const bool& revparam=false)
         {reverse=revparam;}
-    bool operator() (const queue_entry& lhs, const queue_entry&rhs) const
+    inline bool operator() (const queue_entry& lhs, const queue_entry&rhs) const
         {
             // if (reverse) return (const_cast<CKmerAPI*>(&(lhs.second))->to_string() > const_cast<CKmerAPI*>(&(rhs.second))->to_string());
             // else return (const_cast<CKmerAPI*>(&(lhs.second))->to_string() < const_cast<CKmerAPI*>(&(rhs.second))->to_string());
@@ -301,7 +305,7 @@ std::string print_entry(queue_entry& entry)
 
 typedef std::priority_queue<queue_entry, std::vector<queue_entry>, mylessthan> mypq_type;
 
-int push(mypq_type& queue, const std::vector<CKMCFile *>& kmer_data_bases, const unsigned i, const unsigned k)
+static inline int push(mypq_type& queue, const std::vector<CKMCFile *>& kmer_data_bases, const unsigned i, const unsigned k)
 {
     int num_pushed = 0;
     CKmerAPI kmer_object(k);
@@ -316,7 +320,7 @@ int push(mypq_type& queue, const std::vector<CKMCFile *>& kmer_data_bases, const
 
 }
 
-queue_entry pop_replace(mypq_type& queue, const std::vector<CKMCFile *>& kmer_data_bases, const unsigned k)
+static inline queue_entry pop_replace(mypq_type& queue, const std::vector<CKMCFile *>& kmer_data_bases, const unsigned k)
 {
     queue_entry popped_value = queue.top();
     queue.pop();
@@ -331,7 +335,7 @@ size_t kmc_read_kmers(const int handle, const uint32_t kmer_num_bits, const uint
     const mylessthan lt_comparitor(false);
 
     mypq_type queue(gt_comparitor);
-    int numkmers = 0;
+
     color_bv color = 0;
     
     // initialize the queue with a file identifier (as a proxy for the input sequence itself) and the value at the head of the file for peeking
@@ -346,7 +350,8 @@ size_t kmc_read_kmers(const int handle, const uint32_t kmer_num_bits, const uint
     color.set(current.first); // FIXME: make sure not using << operator elsewhere!
     //std::cout << "current = " << print_entry(current) << " = queue.pop()" << std::endl;    
 
-    // 
+    //
+    unsigned long long num_merged_kmers = 0;
     while (!queue.empty()) {
         // std::string s1 = const_cast<CKmerAPI*>(&(queue.top().second))->to_string();
         // std::string s2 = const_cast<CKmerAPI*>(&(current.second))->to_string();
@@ -360,6 +365,10 @@ size_t kmc_read_kmers(const int handle, const uint32_t kmer_num_bits, const uint
             // emit our current state
             std::vector<unsigned long long /*uint64*/> kmer;            
             current.second.to_long(kmer);
+            num_merged_kmers++;
+            if (num_merged_kmers % 1000000 == 0) {
+                std::cout << "Number of merged k-mers: " << num_merged_kmers << std::endl;
+            }
 
             //std::cout << const_cast<CKmerAPI*>(&(current.second))->to_string() << " : " << color << std::endl;
             
@@ -375,7 +384,7 @@ size_t kmc_read_kmers(const int handle, const uint32_t kmer_num_bits, const uint
                 }
 
             }
-            numkmers++;
+
 
             // now initialize our current state with the top
             current = pop_replace(queue, kmer_data_bases, k);
@@ -404,7 +413,7 @@ size_t kmc_read_kmers(const int handle, const uint32_t kmer_num_bits, const uint
         }
             
     }
-    numkmers++;
+    num_merged_kmers++;
             
     
 
@@ -440,7 +449,7 @@ size_t kmc_read_kmers(const int handle, const uint32_t kmer_num_bits, const uint
         kmer_data_base->Close();
         delete kmer_data_base;
     }
-    return numkmers;
+    return num_merged_kmers;
     
 }
 
