@@ -1,0 +1,18 @@
+Rob's:
+/s/oak/b/nobackup/robr/plants/
+/s/fir/c/nobackup/robr/ecoli/
+
+The chimp data is in /s/bovine/index/databases/panmap
+
+The AMR data is in /s/bovine/index/databases/resistance_databases/analyze/cosmo_test
+
+Martin's:
+/s/oak/b/nobackup/muggli/cdbg/robr/plants/
+/s/oak/b/nobackup/muggli/cdbg/ncbi_bacteria/
+/s/oak/b/nobackup/muggli/cdbg/ecoli/
+/s/oak/b/nobackup/muggli/cdbg/chimp/birch.well.ox.ac.uk/panMap/BAMs/PT2/
+/s/chopin/h/proj/soma/cdbg/amr/
+
+Steven:
+The master branch here: https://gitlab.toucan.cs.colostate.edu/amr/databases
+/s/bovine/index/databases/resistance_databases/databases/production_resistance_database.fasta
