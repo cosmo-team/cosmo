@@ -295,25 +295,25 @@ void load_kmers(const parameters_t& params, std::vector<color_bv>& kmer_colors, 
             exit(EXIT_FAILURE);
         }
 
-        std::cerr << "Will read a maximum of " << num_kmers << " " << kmer_size << "-mers from some color, each with " << kmer_num_bits << " bits." << std::endl;
+        std::cerr << "Will read a maximum of " << peak_kmers << " " << kmer_size << "-mers from some color, each with " << kmer_num_bits << " bits." << std::endl;
 
         if (num_colors > NUM_COLS) {
             fprintf(stderr, "KMC file %s contains %d colors which exceeds the compile time limit of %d.  Please recompile with NUM_COLS=%d (or larger).\n", file_name, num_colors, NUM_COLS, num_colors);
             exit(EXIT_FAILURE);
         }
         
-        kmer_colors.reserve(num_kmers);
+        kmer_colors.reserve(peak_kmers);
 
         // preallocate enough space for the color0, as we'll certainly need at least that much space
         std::vector<uint64_t> kmer_block_buffer;
         kmer_block_buffer.reserve(peak_kmers * /*kmer_num_blocks*/ (kmer_num_bits  / 8 ) / sizeof(uint64_t) );
 
-        size_t num_records_read = 0;
-        if (params.kmc) {
-            num_kmers = kmc_read_kmers(handle, kmer_num_bits, num_colors, kmer_size, kmer_block_buffer, kmer_colors, kmer_data_bases);
-            printf("num_kmers = %zu and num_records_read=%zu\n", num_kmers, num_records_read);
-            TRACE("num_kmers = %zu\n", num_kmers);
-        }
+
+
+        num_kmers = kmc_read_kmers(handle, kmer_num_bits, num_colors, kmer_size, kmer_block_buffer, kmer_colors, kmer_data_bases);
+        printf("num_kmers = %zu\n", num_kmers);
+        TRACE("num_kmers = %zu\n", num_kmers);
+
         kmer_blocks = allocate_blocks(kmer_num_bits, num_kmers, file_name);
 
         // COPY COLORS
