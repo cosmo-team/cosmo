@@ -188,9 +188,9 @@ class debruijn_graph {
     size_t last  = get<1>(range);
     // Try both with and without a flag
     for (symbol_type c = _with_edge_flag(x,false); c <= _with_edge_flag(x, true); c++) {
-#ifdef EDGE_FLAG_MATCHES_PAPER
+#ifdef FIX_OUTGOING
       /* But if the rank returns zero we didn't find any c's in the range so rather than fail an assert in the select call,
-        we know this edge can't be followed */
+         we know this edge can't be followed */
       size_t c_index = m_edges.rank(last+1, c);
       if (c_index == 0) continue;
       size_t most_recent = m_edges.select(c_index, c);

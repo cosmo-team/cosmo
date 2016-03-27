@@ -6,7 +6,12 @@
   Does it both directly via calls to the debruijn_graph methods, and also via the boost graph library interfaces
  
 */
+
+// this define makes changes to debruijn_graph so that the edge flags match the flagging in the paper
 #define EDGE_FLAG_MATCHES_PAPER
+
+// this define prevents another change I had to make to stop outgoing from breaking in certain test cases
+#define FIX_OUTGOING
 
 #include "bgl_sdb_adapter.hpp"
 #include <boost/concept/assert.hpp>
@@ -21,26 +26,33 @@
 
   The data for the graph is summarised in the matrix below
  
-                                $=0,A=2,C=4,G=6,T=8, flag=1
-       i i+1 L v label W    L*  encoded edge
-       0  1  1 0  $$$   T    0   8
-       1  2  1 1  CGA   C    1   4
-       2  3  1 2  $TA   C    0   4
-       3  4  0 3  GAC   G   (3)  6
-       4  5  1 3  GAC   T    2   8
-       5  6  1 4  TAC   G-   1   7
-       6  7  1 5  GTC   G    0   6
-       7  8  0 6  ACG   A   (3)  2
-       8  9  1 6  ACG   T    2   8
-       9  10 1 7  TCG   A-   0   3
-       10 11 1 8  $$T   A    1   2
-       11 12 1 9  ACT   $    1   0
-       12 13 1 10 CGT   C        4
+       i i+1 L L' v label  W  W'   L*
+       0  1  1 1  0  $$$   T  T+   0
+       1  2  1 1  1  CGA   C  C+   1
+       2  3  1 1  2  $TA   C  C+   0
+       3  4  0 1  3  GAC   G  G   (3)
+       4  5  1 0  3  GAC   T  T+   2
+       5  6  1 1  4  TAC   G- G+   1
+       6  7  1 1  5  GTC   G  G+   0
+       7  8  0 1  6  ACG   A  A   (3)
+       8  9  1 0  6  ACG   T  T+   2
+       9  10 1 1  7  TCG   A- A+   0
+       10 11 1 1  8  $$T   A  A+   1
+       11 12 1 1  9  ACT   $  $+   1
+       12 13 1 1  10 CGT   C  C+
  
 */
 const char * symbols =    "TCCGTGGATAA$C";
-const char * end_flag =   "1111101110111"; // edge flagging indicates this is not the first edge that has this symbol & target node
-const char * start_flag = "1111011101111"; // is this the first edge of the node (unlike L in the paper which is last edge)
+#ifdef EDGE_FLAG_MATCHES_PAPER
+const char * end_flag =   "1111101110111"; // W- flagging indicates this is not the last edge that has this symbol & target node
+#else
+
+// my experiments to try and find an end_flag interpretation that gets the graph to work properly
+const char * end_flag =   "1110111011111"; // W'+ flagging indicates this is the LAST edge that has this symbol & target node
+                                           // (unlike W- flagging in the paper which marks any that aren't the first)
+
+#endif
+const char * start_flag = "1111011101111"; // L' = is this the first edge of the node (unlike L in the paper which is last edge)
 const int sigma = 4;
 
 /* The test data that provides the various attributes of the graph that we test for */
