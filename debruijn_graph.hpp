@@ -188,7 +188,16 @@ class debruijn_graph {
     size_t last  = get<1>(range);
     // Try both with and without a flag
     for (symbol_type c = _with_edge_flag(x,false); c <= _with_edge_flag(x, true); c++) {
+      
+      /* Original code:
       size_t most_recent = m_edges.select(m_edges.rank(last+1, c), c);
+      
+      But if the rank returns zero we didn't find any c's in the range so rather than fail an assert in the select call,
+      we know this edge can't be followed */
+      size_t c_index = m_edges.rank(last+1, c);
+      if (c_index == 0) continue;
+      size_t most_recent = m_edges.select(c_index, c); 
+      
       // if within range, follow forward
       if (first <= most_recent && most_recent <= last) {
         // Don't have to check fwd for -1 since we checked for $ above
@@ -325,6 +334,12 @@ class debruijn_graph {
   inline symbol_type lastchar(const node_type & v) const {
     return _symbol_access(get<0>(v));
   }
+  
+  // Just return the symbol relating to this edge (for walks..)
+  typename t_label_type::value_type edge_symbol(size_t i) const
+  {
+    return _map_symbol(_strip_edge_flag(m_edges[i]));
+  }
 
   // more efficient than generating full label for incoming()
   symbol_type _first_symbol(size_t i) const {
@@ -372,6 +387,7 @@ class debruijn_graph {
   }
 
   // This is so we can reuse the symbol lookup - save an access during traversal :)
+  // Return index of the FIRST edge of the node pointed to by edge i.
   ssize_t _forward(size_t i, symbol_type & x) const {
     assert(i < num_edges());
     x = _strip_edge_flag(m_edges[i]);
@@ -379,11 +395,22 @@ class debruijn_graph {
     // (should maybe make backward consistent with this, but using the edge 0 loop for node label generation).
     if (x == 0) return -1;
     size_t start = _symbol_start(x);
+    
     size_t nth   = m_edges.rank(i, _with_edge_flag(x, false));
+    
+    /* Since rank is on 0..i-1, nth always reflects the rank of the symbol below what i points to.
+       We implicitly add one to the result though because we always start with the rank of the first node after start so
+       nth only needs to be 0 in order to select that node.
+     
+       If, however, i points to an edge flagged with -, then this is an extra incoming edge that enters the
+       same node as another similarly flagged edge, so we don't want to have that implicit +1  
+     
+       This assumes that the flagged edge matches an edge that occurs BEFORE it in the list, which is what I 
+       observe in the paper */
+    if (m_edges[i] & 1) nth--;
     size_t next  = m_node_select(m_node_rank(start+1) + nth);
     return next;
   }
-
 
   size_t _backward(size_t i) const {
     assert(i < num_edges());
@@ -434,7 +461,7 @@ class debruijn_graph {
     // last should be one past end
     return last-1;
   }
-
+  
   size_type serialize(ostream& out, structure_tree_node* v=NULL, string name="") const {
     structure_tree_node* child = structure_tree::add_child(v, name, util::class_name(*this));
     size_type written_bytes = 0;
