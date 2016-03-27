@@ -5,6 +5,10 @@ CPP_FLAGS=-m64 -std=c++0x -pedantic-errors -W -Wall -Wextra -Wshadow -Wpointer-a
 					-Wunused -Wstrict-prototypes -Wmissing-prototypes -Wwrite-strings \
 					-Wbool-conversions -Wshift-overflow -Wliteral-conversion \
 					-Werror
+
+# the boost libraries generate some warnings that become errors because of the -Werror
+IGNORE_WARNINGS=-Wno-shadow -Wno-inconsistent-missing-override -Wno-missing-prototypes -Wno-unused-parameter
+
 DEP_PATH=/usr/local
 INC_PATH=$(DEP_PATH)/include
 LIB_PATH=$(DEP_PATH)/lib
@@ -71,6 +75,10 @@ cosmo-build: cosmo-build.cpp $(BUILD_REQS)
 
 cosmo-benchmark: cosmo-benchmark.cpp $(ASSEM_REQS) wt_algorithm.hpp debruijn_hypergraph.hpp
 		$(CXX) $(CPP_FLAGS) -o $@ $< $(DEP_FLAGS) 
+
+bgl_sdb_adapter_test: bgl_sdb_adapter_test.cpp $(BUILD_REQS) bgl_sdb_adapter.hpp
+		$(CXX) $(CPP_FLAGS) $(IGNORE_WARNINGS) -o $@ $< $(DEP_FLAGS)
+#./bgl_sdb_adapter_test --color_output
 
 all: $(BINARIES)
 
