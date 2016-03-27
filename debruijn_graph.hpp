@@ -140,7 +140,6 @@ class debruijn_graph {
 
   vector<node_type> all_preds(const node_type & v) const {
     assert(v < num_nodes());
-    assert(x < sigma + 1);
     // node u -> v : edge i -> j
     size_t j = get<0>(v);
     symbol_type y = _symbol_access(j);
