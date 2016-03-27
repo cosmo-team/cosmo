@@ -42,108 +42,127 @@ class  t_label_type>
 #define SUCCINCT_TEMPLATE_ARGUMENTS t_sigma,t_bit_vector_type,t_bv_rank_type,t_bv_select_type,t_edge_vector_type,t_symbol_type,t_label_type
 #define SUCCINCT_TYPE debruijn_graph< SUCCINCT_TEMPLATE_ARGUMENTS >
 
-
-/* 
- 
-  Define the map that will extract the label (char) associated with an edge in the graph 
- 
-*/
-SUCCINCT_TEMPLATE
-class EdgeNameMap
-{
-public:
-  typedef size_t key_type;
-  typedef typename t_label_type::value_type value_type;
-  typedef typename t_label_type::value_type reference;
-  typedef boost::readable_property_map_tag category;
-  
-  inline EdgeNameMap(const SUCCINCT_TYPE & graph) : graph(graph) {}
-  value_type get (const key_type i) const
-  {
-    return graph.edge_symbol(i);
-  }
-  
-protected:
-  const SUCCINCT_TYPE & graph;
-};
-
 /* Install the edge name map in the boost namespace */
 namespace boost {
-  
+
+  /*
+   
+    Define the map that will extract the label (char) associated with an edge in the graph 
+   
+    Has to be in the same namespace as the get function otherwise the call to boost::get won't find
+    the templated map type argument
+
+  */
+  SUCCINCT_TEMPLATE
+  class sdb_edge_name_map
+  {
+  public:
+    typedef size_t key_type;
+    typedef typename t_label_type::value_type value_type;
+    typedef typename t_label_type::value_type reference;
+    typedef boost::readable_property_map_tag category;
+    
+    inline sdb_edge_name_map(const SUCCINCT_TYPE & graph) : graph(graph) {}
+    value_type get (const key_type i) const
+    {
+      return graph.edge_symbol(i);
+    }
+    
+  protected:
+    const SUCCINCT_TYPE & graph;
+  };
+
+
   /* The get function to return the label from the map */
   SUCCINCT_TEMPLATE
-  typename t_label_type::value_type get(const EdgeNameMap<SUCCINCT_TEMPLATE_ARGUMENTS> & map, const size_t i)
+  typename t_label_type::value_type get(const sdb_edge_name_map<SUCCINCT_TEMPLATE_ARGUMENTS> & map, const size_t i)
   {
     return map.get(i);
   }
   
   /* The get function to return the map for a graph */
   SUCCINCT_TEMPLATE
-  EdgeNameMap<SUCCINCT_TEMPLATE_ARGUMENTS>
+  sdb_edge_name_map<SUCCINCT_TEMPLATE_ARGUMENTS>
   get(edge_name_t, SUCCINCT_TYPE& graph)
   {
-    return EdgeNameMap<SUCCINCT_TEMPLATE_ARGUMENTS>(graph);
+    return sdb_edge_name_map<SUCCINCT_TEMPLATE_ARGUMENTS>(graph);
   }
   
   /* Install the property map type by specialisaing property_map */
   SUCCINCT_TEMPLATE
   struct property_map<SUCCINCT_TYPE, boost::edge_name_t>
   {
-    typedef EdgeNameMap<SUCCINCT_TEMPLATE_ARGUMENTS> type;
-    typedef EdgeNameMap<SUCCINCT_TEMPLATE_ARGUMENTS> const_type;
+    typedef sdb_edge_name_map<SUCCINCT_TEMPLATE_ARGUMENTS> type;
+    typedef sdb_edge_name_map<SUCCINCT_TEMPLATE_ARGUMENTS> const_type;
   };
 }
 
-/* 
- 
-  Define the map that will extract the label (string) associated with a vertex in the graph 
- 
-*/
-SUCCINCT_TEMPLATE
-class VertexNameMap
-{
-public:
-  typedef size_t key_type;
-  typedef t_label_type value_type;
-  typedef t_label_type reference;
-  typedef boost::readable_property_map_tag category;
-  
-  inline VertexNameMap(const SUCCINCT_TYPE & graph) : graph(graph) {}
-  value_type get (const key_type i) const
-  {
-    return graph.node_label(i);
-  }
-  
-protected:
-  const SUCCINCT_TYPE & graph;
-};
-
 /* Install the vertex name map in the boost namespace */
 namespace boost {
-  
-  /* The get function to return the label from the map */
+
+  /* 
+   
+    Define the map that will extract the label (string) associated with a vertex in the graph 
+    
+    Has to be in the same namespace as the get function otherwise the call to boost::get won't find
+    the templated map type argument
+  */
   SUCCINCT_TEMPLATE
-  t_label_type get(const VertexNameMap<SUCCINCT_TEMPLATE_ARGUMENTS> & map, const size_t i)
+  struct sdb_vertex_name_map
+  {
+  public:
+    typedef size_t key_type;
+    typedef t_label_type value_type;
+    typedef t_label_type reference;
+    typedef boost::readable_property_map_tag category;
+    
+    inline sdb_vertex_name_map(const SUCCINCT_TYPE & graph) : graph(graph) {}
+    value_type get (const key_type i) const
+    {
+      return graph.node_label(i);
+    }
+    
+  protected:
+    const SUCCINCT_TYPE & graph;
+  };
+
+  /* PropertyMap concept for vertex name */
+  SUCCINCT_TEMPLATE
+  t_label_type get(const sdb_vertex_name_map<SUCCINCT_TEMPLATE_ARGUMENTS> & map, const size_t i)
   {
     return map.get(i);
   }
+
+  /* ReadablePropertyGraph concepts */
   
   /* The get function to return the map for a graph */
   SUCCINCT_TEMPLATE
-  VertexNameMap<SUCCINCT_TEMPLATE_ARGUMENTS>
-  get(vertex_name_t, SUCCINCT_TYPE& graph)
+  sdb_vertex_name_map<SUCCINCT_TEMPLATE_ARGUMENTS>
+  get(vertex_name_t, const SUCCINCT_TYPE& graph)
   {
-    return VertexNameMap<SUCCINCT_TEMPLATE_ARGUMENTS>(graph);
+    return sdb_vertex_name_map<SUCCINCT_TEMPLATE_ARGUMENTS>(graph);
+  }
+  
+  SUCCINCT_TEMPLATE
+  t_label_type
+  get(vertex_name_t, const SUCCINCT_TYPE& graph, const size_t i)
+  {
+    return graph.node_label(i);
   }
   
   /* Install the property map type by specialisaing property_map */
   SUCCINCT_TEMPLATE
   struct property_map<SUCCINCT_TYPE, boost::vertex_name_t>
   {
-    typedef VertexNameMap<SUCCINCT_TEMPLATE_ARGUMENTS> type;
-    typedef VertexNameMap<SUCCINCT_TEMPLATE_ARGUMENTS> const_type;
+    typedef sdb_vertex_name_map<SUCCINCT_TEMPLATE_ARGUMENTS> type;
+    typedef sdb_vertex_name_map<SUCCINCT_TEMPLATE_ARGUMENTS> const_type;
   };
-}
+  SUCCINCT_TEMPLATE
+  struct property_map<const SUCCINCT_TYPE, boost::vertex_name_t>
+  {
+    typedef sdb_vertex_name_map<SUCCINCT_TEMPLATE_ARGUMENTS> type;
+    typedef sdb_vertex_name_map<SUCCINCT_TEMPLATE_ARGUMENTS> const_type;
+  };}
 
 
 /* 
@@ -216,9 +235,11 @@ namespace boost {
     std::pair<size_t, size_t> rng = g._node_range(v);
     
     // Skip terminator edge
-    // TODO - the iterator needs to skip all terminators, not just the first one if it happens to be the terminator.  This
-    // also depends on the way the graph is built.  (if adding an edge to a terminated node, the terminator edge should be removed...)
+    // The iterator needs to skip all terminators, not just the first one if it happens to be the terminator.
+    // It depends on the way the graph is built.  If we never have a mixture of terminators and non-terminators on a node,
+    // this shouldn't be an issue.
     if (g.edge_symbol(rng.first) == g.m_alphabet[0]) rng.first++;
+    
     return return_type(Iter(rng.first),Iter(rng.second+1));
   }
   

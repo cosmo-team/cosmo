@@ -158,23 +158,26 @@ void test_graph_via_boost(Graph & db)
   BOOST_CONCEPT_ASSERT(( GraphConcept<Graph> ));
   BOOST_CONCEPT_ASSERT(( IncidenceGraphConcept<Graph> ));
   BOOST_CONCEPT_ASSERT(( VertexListGraphConcept<Graph> ));
-  
-  // prepare the property maps for extracting node labels (strings) and edge characters (chars)
-  typename property_map<Graph, edge_name_t>::type edge_name_map = get(edge_name_t(), db);
-  typename property_map<Graph, vertex_name_t>::type vertex_name_map = get(vertex_name_t(), db);
+  BOOST_CONCEPT_ASSERT(( ReadablePropertyMapConcept<typename property_map<Graph, vertex_name_t>::type,size_t> ));
+  BOOST_CONCEPT_ASSERT(( ReadablePropertyMapConcept<typename property_map<Graph, edge_name_t>::type,size_t> ));
   
   for (size_t i = 0;i < num_nodes;i ++)
   {
-    BOOST_CHECK_MESSAGE(get(vertex_name_map,i) == expected_node_labels[i],"node_label(" << i << ") failed");
+    // the easy way to read the vertex_name_t property
+    BOOST_CHECK_MESSAGE(get(vertex_name_t(),db,i) == expected_node_labels[i],"node_label(" << i << ") failed");
     
     int outdegree = out_degree(i, db);
     BOOST_CHECK_MESSAGE(outdegree == expected_outdegree[i],"outdegree(" << i << ") failed");
   }
   
-  // and do a BFS
+  // prepare the visitor for a BFS
   std::stringstream ss;
-  bfs_edge_collector< boost::property_map<debruijn_graph<> , boost::edge_name_t>::type > edge_visitor(edge_name_map,ss);
+  typename property_map<Graph, edge_name_t>::type edge_name_map = get(edge_name_t(), db);
+  bfs_edge_collector<typename property_map<Graph , boost::edge_name_t>::type > edge_visitor(edge_name_map,ss);
+
+  // do the BFS
   breadth_first_search(db, 0, boost::visitor(edge_visitor));
+  
   BOOST_CHECK_EQUAL(ss.str(), "TACGATCCTG");
 }
 
