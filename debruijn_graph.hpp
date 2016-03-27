@@ -398,7 +398,7 @@ class debruijn_graph {
     
     size_t nth   = m_edges.rank(i, _with_edge_flag(x, false));
     
-#ifdef EDGE_FLAG_MATCHES_PAPER
+#ifdef FIX_FORWARD
     /* Since rank is on 0..i-1, nth always reflects the rank of the symbol below what i points to.
        We implicitly add one to the result though because we always start with the rank of the first node after start so
        nth only needs to be 0 in order to select that node.

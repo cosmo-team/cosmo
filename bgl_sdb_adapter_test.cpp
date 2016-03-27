@@ -8,7 +8,7 @@
 */
 
 // this define makes changes to debruijn_graph so that the edge flags match the flagging in the paper
-#define EDGE_FLAG_MATCHES_PAPER
+#define FIX_FORWARD
 
 // this define prevents another change I had to make to stop outgoing from breaking in certain test cases
 #define FIX_OUTGOING
@@ -43,12 +43,11 @@
  
 */
 const char * symbols =    "TCCGTGGATAA$C";
-#ifdef EDGE_FLAG_MATCHES_PAPER
+#ifdef FIX_FORWARD
 const char * end_flag =   "1111101110111"; // W- flagging indicates this is not the last edge that has this symbol & target node
 #else
-
-// my experiments to try and find an end_flag interpretation that gets the graph to work properly
-const char * end_flag =   "1110111011111"; // W'+ flagging indicates this is the LAST edge that has this symbol & target node
+// my experiments to try and find an alternative end_flag interpretation that gets the graph to work without the fix... no success there
+const char * end_flag =   "1110111011111"; // W'+ flagging indicates this is the last edge that has this symbol & target node
                                            // (unlike W- flagging in the paper which marks any that aren't the first)
 
 #endif
