@@ -7,10 +7,10 @@
  
 */
 
-// this define makes changes to debruijn_graph so that the edge flags match the flagging in the paper
+// this define tweaks the debruijn_graph _forward(i) function to work when W[i] is a flagged edge
 #define FIX_FORWARD
 
-// this define prevents another change I had to make to stop outgoing from breaking in certain test cases
+// this define enables another change I had to make to stop outgoing() from crashing in certain test cases
 #define FIX_OUTGOING
 
 #include "bgl_sdb_adapter.hpp"
@@ -44,12 +44,11 @@
 */
 const char * symbols =    "TCCGTGGATAA$C";
 #ifdef FIX_FORWARD
-const char * end_flag =   "1111101110111"; // W- flagging indicates this is not the last edge that has this symbol & target node
+const char * end_flag =   "1111101110111"; // W flagging indicates this is the first edge that has this symbol & target node (i.e. not -)
 #else
-// my experiments to try and find an alternative end_flag interpretation that gets the graph to work without the fix... no success there
+// my experiment to try and find an alternative end_flag interpretation that gets the graph to work without the FIX_FORWARD...
+// this would make sense from the way that _forward assumes the non-flagged edge comes _last_, but it breaks lots of other things.
 const char * end_flag =   "1110111011111"; // W'+ flagging indicates this is the last edge that has this symbol & target node
-                                           // (unlike W- flagging in the paper which marks any that aren't the first)
-
 #endif
 const char * start_flag = "1111011101111"; // L' = is this the first edge of the node (unlike L in the paper which is last edge)
 const int sigma = 4;
