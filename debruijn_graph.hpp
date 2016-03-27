@@ -188,15 +188,15 @@ class debruijn_graph {
     size_t last  = get<1>(range);
     // Try both with and without a flag
     for (symbol_type c = _with_edge_flag(x,false); c <= _with_edge_flag(x, true); c++) {
-      
-      /* Original code:
-      size_t most_recent = m_edges.select(m_edges.rank(last+1, c), c);
-      
-      But if the rank returns zero we didn't find any c's in the range so rather than fail an assert in the select call,
-      we know this edge can't be followed */
+#ifdef EDGE_FLAG_MATCHES_PAPER
+      /* But if the rank returns zero we didn't find any c's in the range so rather than fail an assert in the select call,
+        we know this edge can't be followed */
       size_t c_index = m_edges.rank(last+1, c);
       if (c_index == 0) continue;
-      size_t most_recent = m_edges.select(c_index, c); 
+      size_t most_recent = m_edges.select(c_index, c);
+#else
+      size_t most_recent = m_edges.select(m_edges.rank(last+1, c), c);
+#endif
       
       // if within range, follow forward
       if (first <= most_recent && most_recent <= last) {
@@ -398,6 +398,7 @@ class debruijn_graph {
     
     size_t nth   = m_edges.rank(i, _with_edge_flag(x, false));
     
+#ifdef EDGE_FLAG_MATCHES_PAPER
     /* Since rank is on 0..i-1, nth always reflects the rank of the symbol below what i points to.
        We implicitly add one to the result though because we always start with the rank of the first node after start so
        nth only needs to be 0 in order to select that node.
@@ -408,6 +409,7 @@ class debruijn_graph {
        This assumes that the flagged edge matches an edge that occurs BEFORE it in the list, which is what I 
        observe in the paper */
     if (m_edges[i] & 1) nth--;
+#endif
     size_t next  = m_node_select(m_node_rank(start+1) + nth);
     return next;
   }

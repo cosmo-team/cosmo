@@ -6,6 +6,8 @@
   Does it both directly via calls to the debruijn_graph methods, and also via the boost graph library interfaces
  
 */
+#define EDGE_FLAG_MATCHES_PAPER
+
 #include "bgl_sdb_adapter.hpp"
 #include <boost/concept/assert.hpp>
 #include <boost/graph/graph_concepts.hpp>
@@ -37,8 +39,8 @@
  
 */
 const char * symbols =    "TCCGTGGATAA$C";
-const char * end_flag =   "1111101110111";
-const char * start_flag = "1111011101111";
+const char * end_flag =   "1111101110111"; // edge flagging indicates this is not the first edge that has this symbol & target node
+const char * start_flag = "1111011101111"; // is this the first edge of the node (unlike L in the paper which is last edge)
 const int sigma = 4;
 
 /* The test data that provides the various attributes of the graph that we test for */
