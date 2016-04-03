@@ -17,7 +17,7 @@ NDEBUG_FLAGS=-DNDEBUG
 OPT_FLAGS=-O3 -mmmx -msse -msse2 -msse3 -msse4 -msse4.2 -march=native -fno-strict-aliasing
 NOPT_FLAGS=-O0
 # Using Semantic Versioning: http://semver.org/
-VERSION=0.5.1
+VERSION=0.6.0
 BANNER='Copyright Alex Bowe (c) 2016'
 CPP_FLAGS+=-DVERSION=\"$(VERSION)\" -DBANNER=\"$(BANNER)\"
 
