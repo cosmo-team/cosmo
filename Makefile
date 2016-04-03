@@ -58,7 +58,7 @@ endif
 KMC_OBJS=$(KMC_PATH)/kmc_api/kmc_file.o $(KMC_PATH)/kmc_api/kmer_api.o $(KMC_PATH)/kmc_api/mmer.o
 BUILD_REQS=lut.hpp debug.hpp utility.hpp io.hpp sort.hpp kmer.hpp dummies.hpp debruijn_graph.hpp
 COLOR_REQS=colored_debruijn_graph.hpp io.hpp debug.hpp
-BINARIES=cosmo-build cosmo-color #cosmo-benchmark
+BINARIES=cosmo-build cosmo-color
 
 default: all
 
