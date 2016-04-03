@@ -141,7 +141,7 @@ public:
   bfs_edge_collector(EdgeNameMap n_map, std::stringstream & ss) : m_name_map(n_map),ss(ss) {}
   template<typename Edge, typename Graph>
   void tree_edge(Edge e, const Graph&) const {
-    ss << boost::get(m_name_map, e);
+    ss << get(m_name_map, e);
   }
   std::string str() const { return ss.str(); }
 private:
