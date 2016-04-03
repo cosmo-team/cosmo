@@ -20,7 +20,7 @@
 #include "config.hpp"
 #include "kmer.hpp"
 #include "debug.hpp"
-
+#include "kmc_api/kmc_file.h"
 static const size_t MAX_BITS_PER_KMER = 128;
 static const size_t BUFFER_SIZE = 1024 * 1024;
 
@@ -28,98 +28,12 @@ using namespace std;
 
 #define DSK_FILE_RECORD_SIZE(NBITS) (((NBITS)/8) + 4)
 
-// Reads the DSK file input header
 int dsk_read_header(int, uint32_t *, uint32_t *);
-// Counts the number of records in the file - for allocation purposes
 int dsk_num_records(int handle, uint32_t kmer_num_bits, size_t * num_records);
-// Read kmers from file into the output array
 size_t dsk_read_kmers(int handle, uint32_t kmer_num_bits, uint64_t * kmers_output);
 
-template <class ifstream>
-tuple<size_t, size_t, size_t> ctx_read_header(ifstream & in_file) {
-  // Consume header
-  in_file.ignore(6+sizeof(int));
-  int input_kmer_size;
-  in_file.read((char*)&input_kmer_size,sizeof(int));
-  int number_of_bitfields;
-  int number_of_colours;
-  in_file.read((char*)&number_of_bitfields,sizeof(int));
-  in_file.read((char*)&number_of_colours,sizeof(int));
-  size_t k = input_kmer_size + 1;
-
-  COSMO_LOG(info) << "Cortex node length (k)     : " << input_kmer_size;
-  //COSMO_LOG(info) << "Cortex number of bitfields : " << number_of_bitfields;
-  COSMO_LOG(info) << "Cortex number of colors    : " << number_of_colours;
-
-  in_file.ignore(number_of_colours*(sizeof(int)+sizeof(long long)));
-  for (int i = 0; i < number_of_colours; i++) {
-    int sample_id_lens;
-    in_file.read((char*)&sample_id_lens, sizeof(int));
-    in_file.ignore(sample_id_lens);
-  }
-  in_file.ignore(number_of_colours*sizeof(long double));
-  for (int i = 0; i < number_of_colours; i++) {
-    int len_name_of_graph;
-    in_file.ignore(4 + 2*sizeof(int));
-    in_file.read((char*)&len_name_of_graph, sizeof(int));
-    in_file.ignore(len_name_of_graph);
-  }
-  in_file.ignore(6);
-  return make_tuple(k, (size_t)number_of_colours, (size_t)number_of_bitfields);
-}
-
-template <class ifstream, class Visitor>
-void ctx_read_kmers(ifstream & in_file, size_t k, size_t number_of_colours, size_t number_of_bitfields, Visitor visit) {
-  // Header consumed. find how many nodes there are
-  size_t start = in_file.tellg();
-  in_file.seekg (0, in_file.end);
-  size_t length = (size_t)in_file.tellg() - start;
-  size_t size = length/(8 + number_of_colours * sizeof(int) + number_of_colours);
-  in_file.seekg (start, in_file.beg);
-
-  // TODO: convert to asynch IO (how can I provide a file handle to STXXL?)
-  // TODO: parallelize/optimise
-  for (size_t i = 0; i < size; i++) {
-    kmer_t in_kmer;
-    int * covg = new int[number_of_colours];
-    char * edges = new char[number_of_colours];
-    // 5th is node only (i.e. no outgoing edges)
-    vector<bitset<max_colors>> colors_per_edge(5);
-
-    in_file.read((char*)&in_kmer,sizeof(kmer_t));
-    in_file.read((char*)covg,number_of_colours*sizeof(int));
-    in_file.read((char*)edges,number_of_colours); 
-
-    // Invert color matrix
-    for (int j = 0; j < number_of_colours; j++) {
-      if (covg[j] == 0) {
-        continue; // skip colours with no coverage
-      }
-      // coverage for node but not edges...
-      bool node_only = bitset<8>(edges[j]).none();
-      if (node_only) {
-        colors_per_edge[4][j] = 1;
-      }
-      else for (int c : {0,1,2,3}) {
-        colors_per_edge[c][j] = bitset<8>(edges[j])[c];
-      }
-    }
-
-    // add edges + colors
-    for (int c : {0,1,2,3}) {
-      if (colors_per_edge[c].any()) {
-        kmer_t x = (in_kmer << 2)|c;
-        // TODO: make this variable using a dynamic bitset
-        visit(x, colors_per_edge[c].to_ulong());
-      }
-      // TODO: what should we do with the node_only colors? especially if no edges.
-      // by BOSS dBG definition, we can ignore them, so will do that for now.
-      // but maybe later can add outgoing dummies with colours using the 5th row.
-    }
-    delete[] covg;
-    delete[] edges;
-  }
-}
+int kmc_read_header(std::string fname, uint32_t &kmer_num_bits, uint32_t &k, uint64 &_total_kmers, uint32_t &num_colors, std::vector<CKMCFile *> &kmer_data_bases);
+size_t kmc_read_kmers(const int handle, const uint32_t kmer_num_bits, const uint32_t num_colors, uint32_t k, std::vector<uint64_t>& kmers_output, std::vector<color_bv>  &kmer_colors, std::vector<CKMCFile *> &kmer_data_bases);
 
 typedef uint8_t packed_edge;
 

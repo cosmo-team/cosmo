@@ -8,6 +8,7 @@
 #include <string>
 #include "utility.hpp"
 #include "lut.hpp"
+#include <bitset>
 
 #define BLOCK_WIDTH 64
 #define NT_WIDTH 2
@@ -15,9 +16,20 @@
 #define DNA_ALPHA "acgt"
 #define DUMMY_SYM '$'
 
+
+typedef std::bitset<NUM_COLS> color_bv;
+//FIXME: find a way to make NUM_COLS not be compile time.
+// http://en.cppreference.com/w/cpp/utility/bitset says:
+// "Notes: If the size of the bitset is not known at compile time, std::vector<bool> or boost::dynamic_bitset may be used."
+    
+void clear_bv(color_bv &bv);
+void set_bit(color_bv &bv, uint32_t j);
+void serialize_color_bv(std::ofstream &cfs, std::vector<color_bv>::iterator &colors, uint64_t index);
+void deserialize_color_bv(std::ifstream &colorfile, color_bv &value);
 using namespace cosmo;
 
 // Swaps G (11 -> 10) and T (10 -> 11) representation so radix ordering is lexical
+// (DSK represents T < G)
 inline uint64_t _swap_gt_64(const uint64_t x) {
   return (x ^ ((x & 0xAAAAAAAAAAAAAAAA) >> 1));
 }

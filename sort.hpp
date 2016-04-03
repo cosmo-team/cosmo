@@ -1,7 +1,6 @@
 #pragma once
 #ifndef SORT_HPP
 #define SORT_HPP
-
 #include <type_traits>
 #include <thread>
 #include <set>

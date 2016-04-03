@@ -29,6 +29,26 @@ Where `input_file` is the binary output of a [DSK][dsk] run. Each program has a 
 detailed description of how to use them.
 
 
+### Colored de Bruijn graph usage:
+```sh
+$ cosmo-pack -c kmer_counts.ctx # read cortex binary file format of kmer counts, writes .colors file
+$ pack-color  [-o <output_prefix>] [--] [--version] [-h] <input_file>  <num colors> # convert a "color file" (a sequence of 64 bit ints, one per edge) to an SDSL::rrr_vector
+$ cosmo-color  [-b <color_mask2>] [-a <color_mask1>] [-o <output_prefix>] [--] [--version] [-h] <input_file>  <color_file> # reads rrr
+
+```
+practical example:
+```sh
+$ cd /s/oak/b/nobackup/muggli/src/CORTEX_release_v1.0.5.21/demo/example4_using_reference_genome_to_exclude_paralogs
+$ ../../bin/cortex_var_31_c2 --kmer_size 17 --colour_list colours  --dump_binary both.ctx
+$ cd ~/git/cosmo
+$ ./cosmo-pack -c /s/oak/b/nobackup/muggli/src/CORTEX_release_v1.0.5.21/demo/example4_using_reference_genome_to_exclude_paralogs/both.ctx
+$ ./pack-color both.ctx.colors 2
+$ ./cosmo-color both.ctx.packed both.ctx.colors.rrr
+```
+
+
+
+
 ## Caveats
 
 Here are some things that you don't want to let surprise you:
@@ -62,8 +82,6 @@ We currently only output the unitigs (paths between branching nodes).
 
 There is an included Makefile - just type `make` to build it (assuming you have the dependencies listed below).
 To build with "Variable order mode", use the `varord=1` flag.
-
-*Note: it has only been tested on Mac OS X. Changes to work on any *NIX should be minor.*
 
 ### Dependencies  
 - A compiler that supports C++11,
