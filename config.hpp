@@ -52,7 +52,7 @@ typedef uint8_t length_t;
 typedef boost::tuple<kmer_t, length_t> dummy_t;
 
 const string version = VERSION;
-const string banner  = "Cosmo Copyright (c) Alex Bowe 2015";
+const string banner  = BANNER;
 const size_t max_k = (K_LEN <= 32)? 32 : 64;
 const size_t max_colors = bitwidth<color_t>::width;
 const size_t mb_to_bytes = 1024 * 1024;

@@ -1,28 +1,17 @@
 //#include <iterator>
 //#include <typeinfo>
 #include <fstream>
+#include <boost/date_time/posix_time/posix_time.hpp>
 //#include <bitset>
 //#include <set>
 
 #include <stxxl.h>
 
-/*
-#include <stxxl/bits/containers/sorter.h>
-#include <boost/range/adaptors.hpp>
-#include <boost/range/adaptor/uniqued.hpp>
-#include <boost/range/algorithm/copy.hpp>
-#include <boost/range/iterator_range_core.hpp>
-#include <boost/range/iterator_range.hpp>
-#include <boost/range/istream_range.hpp>
-#include <boost/iterator/zip_iterator.hpp>
-#include <boost/iterator/transform_iterator.hpp>
-#include <boost/iterator/function_input_iterator.hpp>
-*/
 #include <boost/log/trivial.hpp>
 #include <boost/log/core.hpp>
 #include <boost/log/expressions.hpp>
 #include <boost/filesystem/path.hpp>
-//#include <boost/filesystem.hpp>
+#include <boost/filesystem.hpp>
 
 // TCLAP
 #include "tclap/CmdLine.h"
@@ -35,48 +24,45 @@
 #include "sort.hpp"
 #include "dummies.hpp"
 #include "debruijn_graph.hpp"
+#include "kmc_api/kmc_file.h"
 
 struct parameters_t {
   std::string input_filename = "";
-  std::string output_prefix = "";
+  std::string output_prefix  = "";
+  std::string output_base    = "";
   size_t k = 0;
   size_t m = 0;
   bool swap = true;
   bool variable_order = false;
-  bool shift_dummies  = true;
+//  bool shift_dummies  = true;
 };
 
 parameters_t parse_arguments(int argc, char **argv) {
   parameters_t params;
   TCLAP::CmdLine cmd(banner, ' ', version);
-  TCLAP::UnlabeledValueArg<std::string> input_filename_arg("input",
-    "Input file (DSK or Cortex output).",
-    true, "", "input_file", cmd);
-  TCLAP::ValueArg<size_t> kmer_length_arg("k", "kmer_length",
-    "Length of edges (node is k-1).",
-    false, 0, "length", cmd);
-  TCLAP::ValueArg<size_t> mem_size_arg("m", "mem_size",
-    "Internal memory to use (MB).",
-    false, default_mem_size, "mem_size", cmd);
-  TCLAP::ValueArg<std::string> output_prefix_arg("o", "output_prefix",
-    "Output prefix.",
-    false, "", "output_prefix", cmd);
-  TCLAP::SwitchArg varord_arg("v", "variable_order", "Output .lcs file for variable order support.", cmd, false);
-  TCLAP::SwitchArg swap_arg("g", "swap_gt", "Swap g and t representation in kmers (Use if DSK input).", cmd, false);
-  TCLAP::SwitchArg shift_arg("d", "no_shifts", "Don't shift all incoming dummies (faster, but loses some information).", cmd, false);
-  // TODO: ASCII outputter: -a for last symbol, -aa for whole kmer
-  // TODO: XORed forced input format switch
-  // TODO: add DSK count parser (-c)
-  // TODO: add option to save full sorted kmers (e.g. for iterative dbg)
+  TCLAP::ValueArg<size_t> kmer_length_arg("k", "kmer_length", "Length of edges (node is k-1). Needed for raw/DSK input.", false, 0, "length", cmd);
+  TCLAP::ValueArg<size_t> mem_size_arg("m", "mem_size", "Internal memory to use (MB).", false, default_mem_size, "mem_size", cmd);
+  TCLAP::ValueArg<std::string> output_prefix_arg("o", "output_prefix", "Output prefix.", false, "", "output_prefix", cmd);
+  // TODO: add variable order support to builder
+  //TCLAP::SwitchArg varord_arg("v", "variable_order", "Output .lcs file for variable order support.", cmd, false);
+  // TODO: make this detect if directory by reading it
+  TCLAP::SwitchArg mono_arg("m", "monochrome", "If multiple files are specified, don't add color data.");
+  TCLAP::UnlabeledValueArg<std::string> input_filename_arg("input", "Input file.", true, "", "input_file", cmd);
+  //TCLAP::UnlabeledMultiArg<string> input_filenames_arg("input", "file names", true, "", "input_file", cmd);
+  //cmd.add( input_filename_arg );
+  //TCLAP::SwitchArg shift_arg("s", "shift_dummies", "Don't shift all incoming dummies (faster, but loses some information).", cmd, false);
   // TODO: add option for no reverse complements (e.g. if using bcalm input)
+  // TODO: ASCII outputter: -a for last symbol, -aa for whole kmer
+  // TODO: add DSK count parser (-c)
+  // TODO: add option to keep temporaries (e.g. for iterative dbg)
   // TODO: add option for mutliple files being merged for colour
   cmd.parse( argc, argv );
   params.input_filename  = input_filename_arg.getValue();
   params.k               = kmer_length_arg.getValue();
   params.m               = mem_size_arg.getValue() * mb_to_bytes;
-  params.variable_order  = varord_arg.getValue();
-  params.swap            = swap_arg.getValue();
-  params.shift_dummies   = !shift_arg.getValue();
+  //params.variable_order  = varord_arg.getValue();
+  //params.shift_dummies   = !shift_arg.getValue();
+  //params.temp_dir        = "";
   params.output_prefix   = output_prefix_arg.getValue();
   return params;
 }
@@ -88,7 +74,7 @@ int main(int argc, char* argv[]) {
   auto params = parse_arguments(argc, argv);
   stxxl::internal_size_type M = params.m;
   std::string file_name = params.input_filename;
-  string base_name = boost::filesystem::path(file_name).stem().string();
+  params.output_base = boost::filesystem::path(file_name).stem().string();
   size_t k = params.k;
 
   // Set logging level
@@ -97,19 +83,43 @@ int main(int argc, char* argv[]) {
     boost::log::trivial::severity != boost::log::trivial::debug
   );
 
-  // Check format
-  // TODO: add fastq/fasta input, and read from stdin
-  bool ctx_input = (extension(file_name) == ".ctx");
-  COSMO_LOG(info) << "Loading file: " << file_name;
-  if (ctx_input) {
-    COSMO_LOG(info) << "Input format: Cortex file";
+  // TEST FILE
+  // TODO: add fastq/fasta input support, and read from stdin if no file
+  if (!boost::filesystem::exists(file_name)) {
+    COSMO_LOG(error) << "Trouble opening " << file_name;
+    exit(1);
   }
-  else {
-    COSMO_LOG(info) << "Input format: Raw file";
-    if (k == 0) {
-      COSMO_LOG(error) << "When using raw format, please provide a value for -k flag.";
+  input_format fmt;
+  if (probably_list_of_files(file_name, &fmt)) {
+    auto fmt_s = input_format_strings[(int)fmt];
+    COSMO_LOG(info) << file_name << " looks like a list of " << fmt_s << " files.";
+    if (fmt == input_format::dsk) {
+      COSMO_LOG(error) << "Lists of DSK files aren't yet supported (we rely on KMC2's sorted output).";
       exit(1);
     }
+  } else {
+    fmt = get_format(file_name);
+    auto fmt_s = input_format_strings[(int)fmt];
+    COSMO_LOG(info) << file_name << " looks like a " << fmt_s << " file.";
+    // TODO: support multiple input files, add to vector
+    if (fmt == input_format::kmc) {
+      COSMO_LOG(error) << "Single KMC files aren't yet supported (we're lazy).";
+      exit(1);
+    }
+  }
+  params.swap = (fmt == input_format::dsk);
+  if ((fmt == input_format::dsk || fmt == input_format::raw) && k == 0) {
+    COSMO_LOG(error) << "Need to specify k value when dealing with raw or DSK input files.";
+    exit(EXIT_FAILURE);
+  }
+
+  // If its a named pipe, we need to make a new output name
+  bool is_regular_file = boost::filesystem::is_regular_file(file_name);
+  if (!is_regular_file) {
+    namespace pt = boost::posix_time;
+    auto now = pt::second_clock::local_time();
+    params.output_base = pt::to_iso_string(now);
+    COSMO_LOG(info) << file_name << " is not a regular file. Using \"" << params.output_base << "\" as the base name.";
   }
 
   // Check k value supported
@@ -118,94 +128,87 @@ int main(int argc, char* argv[]) {
     exit(1);
   }
 
-  if (ctx_input) {
-    //ifstream in_file(file_name, ios::binary | ios::in);
-    COSMO_LOG(error) << "Cortex input not yet supported.";
-    exit(1);
-  }
-  else {
+  // TODO: support varord
+  typedef debruijn_graph<> dbg_t;
+
+  if (fmt == input_format::dsk || fmt == input_format::raw) {
     // stxxl::syscall_file out_file(file_name + ".boss", stxxl::file::DIRECT | stxxl::file::RDWR | stxxl::file::CREAT);
-    typedef debruijn_graph<> dbg_t;
-    typedef kmer_sorter<dbg_t, kmer_t> kmer_sorter_t;
-    typedef kmer_sorter_t::record_vector_t record_vector_t;
-    typedef kmer_sorter_t::kmer_vector_t kmer_vector_t;
-    typedef kmer_sorter_t::output_t output_t;
+    typedef dbg_builder<dbg_t, kmer_t> builder_t;
+    typedef builder_t::record_vector_t record_vector_t;
 
     stxxl::syscall_file in_file(file_name, stxxl::file::DIRECT | stxxl::file::RDONLY);
     record_vector_t in_vec(&in_file);
     record_vector_t::bufreader_type reader(in_vec);
-    kmer_sorter_t sort_input;
+    builder_t builder(params);
 
-    auto dbg = sort_input.sort(reader, params, [&](output_t result){});
-    sdsl::store_to_file(dbg, params.output_prefix + base_name + ".dbg");
+    COSMO_LOG(trace) << "Reading input and creating runs...";
+    for (auto & x : reader) {
+      builder.push(x);
+    }
+    auto dbg = builder.build();
+    sdsl::store_to_file(dbg, params.output_prefix + params.output_base + ".dbg");
   }
+  else if (fmt == input_format::kmc) {
+    typedef dbg_builder<dbg_t, kmer_t, color_bv> builder_t;
+    typedef builder_t::record_vector_t record_vector_t;
 
-  /*
-  // Make Outputter
-  // TODO: Should probably do checking here when opening the file...
-  string outfilename = (params.output_prefix == "")? base_name : params.output_prefix;
-  ofstream ofs;
-  ofs.open(outfilename + packed_ext, ios::out | ios::binary);
-  PackedEdgeOutputer out(ofs);
-  #ifdef VAR_ORDER
-  ofstream lcs;
-  lcs.open(outfilename + packed_ext + lcs_ext, ios::out | ios::binary);
-  #endif
-  ofstream cols;
-  cols.open(outfilename + packed_ext + color_ext, ios::out | ios::binary);
+    std::vector<CKMCFile*> kmer_data_bases;
+    COSMO_LOG(trace) << "Reading KMC2 database list file...";
+    size_t num_colors;
+    size_t min_union;
+    size_t max_union;
+    uint32_t kmc_k;
+    if ( !kmc_read_header(file_name, kmc_k, min_union, max_union, num_colors, kmer_data_bases) ) {
+      COSMO_LOG(error) << "Error reading databases listed in KMC2 list file" << file_name;
+      exit(EXIT_FAILURE);
+    }
+    k = params.k = kmc_k;
 
-  merge_dummies(xx2|transformed(capture_color), xb2, d, k,
-    [&](edge_tag tag, const kmer_t & x, size_t this_k, size_t lcs_len, bool first_end_node) {
-      #ifdef VAR_ORDER
-      out.write(tag, x, this_k, (lcs_len != k-1), first_end_node);
-      char l(lcs_len);
-      lcs.write((char*)&l, 1);
-      #else
-      out.write(tag, x, this_k, lcs_len, first_end_node);
-      #endif
-      cols.write((char*)&color, sizeof(color_t));
-      prev_k = this_k;
+    // Check k value supported
+    if (k > max_k) {
+      COSMO_LOG(error) << "This version only supports k <= " << max_k << ". Try recompiling.";
+      exit(EXIT_FAILURE);
+    }
 
-      #ifdef VERBOSE // print each kmer to stderr for testing
-      if (tag == out_dummy) cout << kmer_to_string(get_start_node(x), k-1, k-1) << "$";
-      else                  cout << kmer_to_string(x, k, this_k);
-      cout << " " << (lcs_len != k-1) << " " << lcs_len << " " << first_end_node;
-      // print color
-      bitset<max_colors> bs(0); // dummy edges -> 0
-      if (tag == standard) bs = color;
-      else bs;
-      cout << " ";
-      for (int i = 0; i<number_of_colours;i++) cout << bs[i];
-      cout << endl;
-      #endif
-      if (tag == out_dummy) num_out_dummies++;
-      else if (tag == in_dummy) num_in_dummies++;
+    if (num_colors > NUM_COLS) {
+      COSMO_LOG(error) << "KMC file " << file_name << " contains " << num_colors << " colors which exceeds the compile time limit of "
+                       << NUM_COLS << ". Please recompile with colors=" << NUM_COLS << " (or larger).";
+      exit(EXIT_FAILURE);
+    }
+
+    builder_t builder(params);
+
+    size_t num_kmers_read = kmc_read_kmers(kmer_data_bases, num_colors, k, [&](auto x, auto c) {
+      builder.push(x,c);
     });
-  COSMO_LOG(info) << "Number of unique incoming dummies: " << num_in_dummies;
-  COSMO_LOG(info) << "Number of outgoing dummies: " << num_out_dummies;
 
-  out.close();
-  #ifdef VAR_ORDER
-  lcs.flush();
-  lcs.close();
-  #endif
-  cols.flush();
-  cols.close();
+    // TODO: improve the memory use here (can SDSL use external vectors?)
+    bit_vector color_bv;
+    size_t num_set = 0;
+    size_t edge_idx = 0;
+    auto dbg = builder.build([&](auto x) { // Pre merge
+      color_bv = bit_vector(x * num_colors);
+    },[&](auto x) { // Merge visitor
+      auto color = get<0>(x.payload);
+      for (int color_idx = 0; color_idx < num_colors; color_idx++) {
+        // TODO: test inverting row/col
+        color_bv[edge_idx * num_colors + color_idx] = color[color_idx];
+        num_set += color[color_idx];
+      }
+      edge_idx++;
+    });
 
+    sdsl::store_to_file(dbg, params.output_prefix + params.output_base + ".dbg");
 
-  out.close();
-  #ifdef VAR_ORDER
-  lcs.flush();
-  lcs.close();
-  #endif
-
-  // Write out counts and stuff
-  uint64_t t_k(k); // make uint64_t just to make parsing easier
-  // (can read them all at once and take the last 6 values)
-  ofs.write((char*)&t_k, sizeof(uint64_t));
-  ofs.flush();
-  ofs.close();
-  */
+    rrr_vector<63> color_rrr(color_bv);
+    COSMO_LOG(info) << "size of color_bv : " << size_in_mega_bytes(color_bv) << " MB";
+    COSMO_LOG(info) << "size of color_rrr : " << size_in_mega_bytes(color_rrr) << " MB";
+    sdsl::store_to_file(color_rrr, params.output_prefix + params.output_base + ".rrr");
+  }
+  else {
+    COSMO_LOG(error) << "Shouldn't be here...";
+    assert(false);
+  }
 
   COSMO_LOG(trace) << "Done!";
 

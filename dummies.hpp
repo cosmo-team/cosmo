@@ -198,6 +198,7 @@ auto uniquify(Visitor v) -> Unique<decltype(v)> {
   return Unique<decltype(v)>(v);
 }
 
+/*
 struct incrementer : boost::static_visitor<> {
   template <typename T>
   void operator()(T & t) const {
@@ -253,6 +254,7 @@ struct heap_item {
     return (r.front() << 2) < (l.front() << 2); // swapped because we want min heap
   }
 };
+*/
 
 template <typename InputRange1, typename InputRange2, typename InputRange3, class Visitor>
 void merge_dummies(InputRange1 & a_range, InputRange2 & o_range, InputRange3 & i_range, Visitor visit) {
@@ -271,10 +273,10 @@ void merge_dummies(InputRange1 & a_range, InputRange2 & o_range, InputRange3 & i
   });
 
   using boost::get;
-  auto v   = [&](boost::tuple<record_t, edge_tag> x) {
-    if (boost::get<1>(x) != out_dummy) {
+  auto v   = [&](auto x) {
+    if (get<1>(x) != out_dummy) {
       ++idx;
-      if (boost::get<1>(x) == in_dummy) ++i_next;
+      if (get<1>(x) == in_dummy) ++i_next;
     }
     visit(boost::get<1>(x), boost::get<0>(x));
   };

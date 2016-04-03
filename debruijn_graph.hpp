@@ -22,6 +22,8 @@ using namespace std;
 using namespace sdsl;
 
 // TODO: convert asserts into exceptions? (Copy Boost)
+// TODO: named template paremeters (See Boost)
+// TODO: Add dummy and dummy flag and dummy rank types
 template <size_t t_sigma            = 4, // default: DNA, TODO: change to 0 and make dynamic
           class  t_bit_vector_type  = sd_vector<>,
           class  t_bv_rank_type     = typename t_bit_vector_type::rank_0_type, // We invert the bits so it is 0 instead
@@ -56,6 +58,7 @@ class debruijn_graph {
   const label_type             m_alphabet{};
   const size_t                 m_num_nodes{};
   const t_bit_vector_type m_dummy_flags;
+  const typename t_bit_vector_type::rank_1_type m_dummy_rank;
   // TODO: support STXXL vectors as dummy labels may not need to be in memory
   const vector<kmer_t> m_dummies;
 
@@ -71,6 +74,7 @@ class debruijn_graph {
       m_alphabet(alphabet),
       m_num_nodes(m_node_rank(m_node_flags.size())),
       m_dummy_flags(dummy_flags),
+      m_dummy_rank(&m_dummy_flags),
       m_dummies(dummies) {}
 
   private:
@@ -238,11 +242,14 @@ class debruijn_graph {
 
   // string -> node, edge
   // BGL style API
+  size_t _get_dummy_index(size_t i) {
+    return m_dummy_rank(i);
+  }
 
   label_type node_label(size_t v) const {
     size_t i = _node_to_edge(v);
     if (is_incoming_dummy(i)) {
-      return kmer_to_string(m_dummies[i], k-1);
+      return kmer_to_string(m_dummies[_get_dummy_index(i)], k-1);
     }
     label_type label = label_type(k-1, _map_symbol(symbol_type{}));
     return _node_label_from_edge_given_buffer(i, label);
@@ -250,7 +257,7 @@ class debruijn_graph {
 
   label_type node_label_from_edge(size_t i) const {
     if (is_incoming_dummy(i)) {
-      return kmer_to_string(m_dummies[i], k-1);
+      return kmer_to_string(m_dummies[_get_dummy_index(i)], k-1);
     }
     label_type label = label_type(k-1, _map_symbol(symbol_type{}));
     return _node_label_from_edge_given_buffer(i, label);
@@ -258,7 +265,7 @@ class debruijn_graph {
 
   label_type edge_label(size_t i) const {
     if (is_incoming_dummy(i)) {
-      return kmer_to_string(m_dummies[i], k);
+      return kmer_to_string(m_dummies[_get_dummy_index(i)], k-1);
     }
     label_type label = label_type(k, _map_symbol(symbol_type{}));
     _node_label_from_edge_given_buffer(i, label);
@@ -457,7 +464,7 @@ class debruijn_graph {
     written_bytes += write_member(m_alphabet, out, child, "alphabet");
     written_bytes += write_member(m_num_nodes, out, child, "num_nodes");
     written_bytes += m_dummy_flags.serialize(out, child, "dummy_flags");
-    //written_bytes += m_dummies.serialize(out, child, "dummies");
+    written_bytes += m_dummy_rank.serialize(out, child, "dummy_rank");
     written_bytes += sdsl::serialize(m_dummies, out, child, "dummies");
     // helper bitvector m_doc_rmin_marked and m_doc_rmax_marked are not serialize
     structure_tree::add_size(child, written_bytes);
@@ -478,6 +485,8 @@ class debruijn_graph {
     read_member(deconst(m_alphabet), in);
     read_member(deconst(m_num_nodes), in);
     deconst(m_dummy_flags).load(in);
+    deconst(m_dummy_rank).load(in);
+    deconst(m_dummy_rank).set_vector(&m_dummy_flags);
     sdsl::load(deconst(m_dummies), in);
   }
 

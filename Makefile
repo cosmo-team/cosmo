@@ -1,15 +1,16 @@
 # NOTE: needs boost, tclap, STXXL, KMC, and sdsl
 
 CXX=g++
-CPP_FLAGS=-pipe -m64 -std=c++11 -pedantic-errors -W -Wall -Wextra -Wpointer-arith -Wcast-qual \
-					-Wunused -Wwrite-strings -Wbool-conversions -Wshift-overflow -Wliteral-conversion
+CPP_FLAGS=-pipe -m64 -std=c++14 -pedantic-errors -W -Wall -Wextra -Wpointer-arith -Wcast-qual \
+					-Wunused -Wwrite-strings
+          #-Wbool-conversions -Wshift-overflow -Wliteral-conversion # CLANG ONLY
 					#-Werror
 
 DEP_PATH=/usr/local
 KMC_PATH=./KMC
 INC=-I$(DEP_PATH)/include
 LIB=-L$(DEP_PATH)/lib -L./
-BOOST_FLAGS=-DBOOST_LOG_DYN_LINK -lboost_log -lboost_system -lboost_filesystem 
+BOOST_FLAGS=-DBOOST_LOG_DYN_LINK -lboost_log -lboost_system -lboost_filesystem
 DEP_FLAGS=$(INC) $(LIB) $(BOOST_FLAGS) -isystem $(KMC_PATH) -lsdsl
 DEBUG_FLAGS=-pg -gstabs
 NDEBUG_FLAGS=-DNDEBUG
@@ -17,7 +18,8 @@ OPT_FLAGS=-O3 -mmmx -msse -msse2 -msse3 -msse4 -msse4.2 -march=native -fno-stric
 NOPT_FLAGS=-O0
 # Using Semantic Versioning: http://semver.org/
 VERSION=0.5.1
-CPP_FLAGS+=-DVERSION=\"$(VERSION)\"
+BANNER='Copyright Alex Bowe (c) 2016'
+CPP_FLAGS+=-DVERSION=\"$(VERSION)\" -DBANNER=\"$(BANNER)\"
 
 k?=32
 CPP_FLAGS+=-DK_LEN=$(k)
@@ -54,32 +56,27 @@ CPP_FLAGS+=-DVAR_ORDER
 endif
 
 KMC_OBJS=$(KMC_PATH)/kmc_api/kmc_file.o $(KMC_PATH)/kmc_api/kmer_api.o $(KMC_PATH)/kmc_api/mmer.o
-PACK_REQS=lut.hpp debug.hpp io.hpp io.o sort.hpp kmer.hpp dummies.hpp
-BUILD_REQS=lut.hpp debug.hpp sort.hpp kmer.hpp dummies.hpp debruijn_graph.hpp
-COLOR_REQS=colored_debruijn_graph.hpp io.hpp io.o debug.hpp
-ASSEM_REQS=debruijn_graph.hpp algorithm.hpp utility.hpp kmer.hpp uint128_t.hpp
-BINARIES=cosmo-pack cosmo-build cosmo-color cosmo-benchmark pack-color
+BUILD_REQS=lut.hpp debug.hpp utility.hpp io.hpp sort.hpp kmer.hpp dummies.hpp debruijn_graph.hpp
+COLOR_REQS=colored_debruijn_graph.hpp io.hpp io.hpp debug.hpp
+BINARIES=cosmo-build cosmo-color cosmo-benchmark pack-color
 
 default: all
 
 lut.hpp: make_lut.py
 		python make_lut.py > lut.hpp
 
-io.o: io.hpp io.cpp debug.hpp dummies.hpp kmer.hpp
-		$(CXX) $(CPP_FLAGS) -c io.cpp  $(DEP_FLAGS) 
-
 # TODO: Roll these all into one... "cosmo"
-cosmo-pack: cosmo-pack.cpp $(PACK_REQS)
-		$(CXX) $(CPP_FLAGS) -o $@ $< io.o $(KMC_OBJS) $(DEP_FLAGS)
+#cosmo-pack: cosmo-pack.cpp $(PACK_REQS)
+#		$(CXX) $(CPP_FLAGS) -o $@ $< io.o $(KMC_OBJS) $(DEP_FLAGS)
 
 cosmo-build: cosmo-build.cpp $(BUILD_REQS)
-		$(CXX) $(CPP_FLAGS) -o $@ $< io.o $(KMC_OBJS) $(DEP_FLAGS) -lstxxl -fopenm
+		$(CXX) $(CPP_FLAGS) -o $@ $< $(KMC_OBJS) $(DEP_FLAGS) -lstxxl -fopenmp
 
-pack-color: pack-color.cpp $(BUILD_REQS)
-		$(CXX) $(CPP_FLAGS) -o $@ $< io.o $(KMC_OBJS) $(DEP_FLAGS)
+#pack-color: pack-color.cpp $(BUILD_REQS)
+#		$(CXX) $(CPP_FLAGS) -o $@ $< $(KMC_OBJS) $(DEP_FLAGS)
 
 cosmo-color: cosmo-color.cpp $(BUILD_REQS)
-		$(CXX) $(CPP_FLAGS) -o $@ $< io.o $(KMC_OBJS) $(DEP_FLAGS)
+		$(CXX) $(CPP_FLAGS) -o $@ $< $(KMC_OBJS) $(DEP_FLAGS)
 
 #cosmo-benchmark: cosmo-benchmark.cpp $(ASSEM_REQS) wt_algorithm.hpp debruijn_hypergraph.hpp
 #		$(CXX) $(CPP_FLAGS) -o $@ $< $(DEP_FLAGS) -lsdsl
