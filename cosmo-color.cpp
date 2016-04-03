@@ -1,4 +1,4 @@
-rrr#include <iostream>
+#include <iostream>
 #include <fstream>
 #include <vector>
 #include <string>
@@ -35,21 +35,11 @@ int getMilliSpan(int nTimeStart){
   return nSpan;
 }
 
-string extension = ".dbg";
-
-
-
 void parse_arguments(int argc, char **argv, parameters_t & params)
 {
   TCLAP::CmdLine cmd(BANNER, ' ', VERSION);
-  TCLAP::UnlabeledValueArg<std::string> input_filename_arg("input",
-            ".packed edge file (output from pack-edges).", true, "", "input_file", cmd);
-  TCLAP::UnlabeledValueArg<std::string> color_filename_arg("color",
-            ".color file (output from pack-edges).", true, "", "color_file", cmd);
-  string output_short_form = "output_prefix";
-  TCLAP::ValueArg<std::string> output_prefix_arg("o", "output_prefix",
-            "Output prefix. Graph will be written to [" + output_short_form + "]" + extension + ". " +
-            "Default prefix: basename(input_file).", false, "", output_short_form, cmd);
+  TCLAP::UnlabeledValueArg<std::string> input_filename_arg("input", ".dbg file." true, "", "input_file", cmd);
+  TCLAP::UnlabeledValueArg<std::string> color_filename_arg("color", ".rrr file.", true, "", "color_file", cmd);
   string color_mask1 = "color_mask1";
   TCLAP::ValueArg<std::string> color_mask1_arg("a", "color_mask1",
 	    "Color mask 1, color1 [" + color_mask1 + "]", false, "", color_mask1, cmd);
@@ -60,7 +50,6 @@ void parse_arguments(int argc, char **argv, parameters_t & params)
 
   params.input_filename  = input_filename_arg.getValue();
   params.color_filename  = color_filename_arg.getValue();
-  params.output_prefix   = output_prefix_arg.getValue();
   params.color_mask1     = color_mask1_arg.getValue();
   params.color_mask2     = color_mask2_arg.getValue();
 }
@@ -219,11 +208,11 @@ int main(int argc, char* argv[]) {
   parameters_t p;
   parse_arguments(argc, argv, p);
 
-  ifstream input(p.input_filename, ios::in|ios::binary|ios::ate);
+  //ifstream input(p.input_filename, ios::in|ios::binary|ios::ate);
   // Can add this to save a couple seconds off traversal - not really worth it.
-  //vector<size_t> minus_positions;
-  debruijn_graph<> dbg = debruijn_graph<>::load_from_packed_edges(input, "$ACGT"/*, &minus_positions*/);
-  input.close();
+  debruijn_graph<> dbg;
+  load_from_file(dbg, p.input_filename);
+  //input.close();
 
   rrr_vector<63> colors;
   load_from_file(colors, p.color_filename);

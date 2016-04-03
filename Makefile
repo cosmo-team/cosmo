@@ -57,23 +57,16 @@ endif
 
 KMC_OBJS=$(KMC_PATH)/kmc_api/kmc_file.o $(KMC_PATH)/kmc_api/kmer_api.o $(KMC_PATH)/kmc_api/mmer.o
 BUILD_REQS=lut.hpp debug.hpp utility.hpp io.hpp sort.hpp kmer.hpp dummies.hpp debruijn_graph.hpp
-COLOR_REQS=colored_debruijn_graph.hpp io.hpp io.hpp debug.hpp
-BINARIES=cosmo-build cosmo-color cosmo-benchmark pack-color
+COLOR_REQS=colored_debruijn_graph.hpp io.hpp debug.hpp
+BINARIES=cosmo-build cosmo-color #cosmo-benchmark
 
 default: all
 
 lut.hpp: make_lut.py
 		python make_lut.py > lut.hpp
 
-# TODO: Roll these all into one... "cosmo"
-#cosmo-pack: cosmo-pack.cpp $(PACK_REQS)
-#		$(CXX) $(CPP_FLAGS) -o $@ $< io.o $(KMC_OBJS) $(DEP_FLAGS)
-
 cosmo-build: cosmo-build.cpp $(BUILD_REQS)
 		$(CXX) $(CPP_FLAGS) -o $@ $< $(KMC_OBJS) $(DEP_FLAGS) -lstxxl -fopenmp
-
-#pack-color: pack-color.cpp $(BUILD_REQS)
-#		$(CXX) $(CPP_FLAGS) -o $@ $< $(KMC_OBJS) $(DEP_FLAGS)
 
 cosmo-color: cosmo-color.cpp $(BUILD_REQS)
 		$(CXX) $(CPP_FLAGS) -o $@ $< $(KMC_OBJS) $(DEP_FLAGS)

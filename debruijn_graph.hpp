@@ -87,7 +87,7 @@ class debruijn_graph {
     return max_ranks;
   }
 
-  bool is_incoming_dummy(size_t edge) {
+  bool is_incoming_dummy(size_t edge) const {
     return m_dummy_flags[edge];
   }
 
@@ -242,7 +242,7 @@ class debruijn_graph {
 
   // string -> node, edge
   // BGL style API
-  size_t _get_dummy_index(size_t i) {
+  size_t _get_dummy_index(size_t i) const {
     return m_dummy_rank(i);
   }
 
