@@ -10,7 +10,8 @@
 
 # Cosmo
 
-[**Version**][semver]: 0.5.1 (mikenz1976 branch that includes a boost graph library adapter)
+[**Version**][semver]: 0.5.1
+(This is the mikenz1976 branch that includes a boost graph library adapter)
 
 Cosmo is a fast, low-memory DNA assembler that uses a [succinct de Bruijn graph][succ].
 
