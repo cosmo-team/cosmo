@@ -46,7 +46,7 @@ parameters_t parse_arguments(int argc, char **argv) {
   // TODO: add variable order support to builder
   //TCLAP::SwitchArg varord_arg("v", "variable_order", "Output .lcs file for variable order support.", cmd, false);
   // TODO: make this detect if directory by reading it
-  TCLAP::SwitchArg mono_arg("m", "monochrome", "If multiple files are specified, don't add color data.");
+  //TCLAP::SwitchArg mono_arg("", "monochrome", "If multiple files are specified, don't add color data.");
   TCLAP::UnlabeledValueArg<std::string> input_filename_arg("input", "Input file.", true, "", "input_file", cmd);
   //TCLAP::UnlabeledMultiArg<string> input_filenames_arg("input", "file names", true, "", "input_file", cmd);
   //cmd.add( input_filename_arg );
