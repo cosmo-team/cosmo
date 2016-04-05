@@ -167,8 +167,7 @@ class debruijn_graph {
     // Try both with and without a flag
     for (symbol_type c = _with_edge_flag(x,false); c <= _with_edge_flag(x, true); c++) {
       size_t rnk = m_edges.rank(last+1, c);
-      if (rnk == 0)
-	continue;
+      if (rnk == 0) continue;
       size_t most_recent = m_edges.select(rnk, c);
       // if within range, follow forward
       if (first <= most_recent && most_recent <= last) {
@@ -323,6 +322,12 @@ class debruijn_graph {
   inline symbol_type lastchar(const node_type & v) const {
     return _symbol_access(get<0>(v));
   }
+  
+  // Just return the symbol relating to this edge (for walks..)
+  typename t_label_type::value_type edge_symbol(size_t i) const
+  {
+    return _map_symbol(_strip_edge_flag(m_edges[i]));
+  }
 
   // more efficient than generating full label for incoming()
   symbol_type _first_symbol(size_t i) const {
@@ -370,25 +375,39 @@ class debruijn_graph {
   }
 
   // This is so we can reuse the symbol lookup - save an access during traversal :)
+  // Return index of the FIRST edge of the node pointed to by edge i.
   ssize_t _forward(size_t i, symbol_type & x) const {
     assert(i < num_edges());
-    x = _strip_edge_flag(m_edges[i]);
-    symbol_type fullx =_with_edge_flag(x, false);
+    auto sym_with_flag = m_edges[i];
+    x = _strip_edge_flag(sym_with_flag);
+    size_t start = _symbol_start(x);
+    symbol_type fullx = _with_edge_flag(x, false);
     // if x == 0 ($) then we can't follow the edge
     // (should maybe make backward consistent with this, but using the edge 0 loop for node label generation).
     if (x == 0) return -1;
 
+    size_t nth   = m_edges.rank(i, fullx);
+
     // if this is flagged, then reset i to the corresponding unflagged symbol and use that as the starting point
-    if (m_edges[i] & 1) {
-      i = m_edges.select(m_edges.rank(i, fullx), fullx);
+    if (sym_with_flag & 1) {
+      // i = m_edges.select(m_edges.rank(i, fullx), fullx);
+      // The above is basically the same as subtracting 1...
+      // ALTERNATIVE PATCH which doesn't need extra ranks/selects (observed and written by Mike Mueller)
+      /* Since rank is on 0..i-1, nth always reflects the rank of the symbol below what i points to.
+         We implicitly add one to the result though because we always start with the rank of the first node after start so
+         nth only needs to be 0 in order to select that node.
+     
+         If, however, i points to an edge flagged with -, then this is an extra incoming edge that enters the
+         same node as another similarly flagged edge, so we don't want to have that implicit +1  
+     
+         This assumes that the flagged edge matches an edge that occurs BEFORE it in the list, which is what I 
+         observe in the paper */
+      nth--;
     }
 
-    size_t start = _symbol_start(x);
-    size_t nth   = m_edges.rank(i, fullx);
     size_t next  = m_node_select(m_node_rank(start+1) + nth);
     return next;
   }
-
 
   size_t _backward(size_t i) const {
     assert(i < num_edges());
@@ -450,7 +469,7 @@ class debruijn_graph {
     // last should be one past end
     return last-1;
   }
-
+  
   size_type serialize(ostream& out, structure_tree_node* v=NULL, string name="") const {
     structure_tree_node* child = structure_tree::add_child(v, name, util::class_name(*this));
     size_type written_bytes = 0;

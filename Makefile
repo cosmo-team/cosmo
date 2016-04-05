@@ -3,12 +3,13 @@
 CXX=g++
 CPP_FLAGS=-pipe -m64 -std=c++14 -pedantic-errors -W -Wall -Wextra -Wpointer-arith -Wcast-qual \
 					-Wunused -Wwrite-strings
-          #-Wbool-conversions -Wshift-overflow -Wliteral-conversion # CLANG ONLY
 					#-Werror
+
+CLANG_WARNINGS=-Wbool-conversions -Wshift-overflow -Wliteral-conversion # CLANG ONLY
 
 DEP_PATH=/usr/local
 KMC_PATH=./KMC
-INC=-I$(DEP_PATH)/include
+INC=-isystem $(DEP_PATH)/include
 LIB=-L$(DEP_PATH)/lib -L./
 BOOST_FLAGS=-DBOOST_LOG_DYN_LINK -lboost_log -lboost_system -lboost_filesystem
 DEP_FLAGS=$(INC) $(LIB) $(BOOST_FLAGS) -isystem $(KMC_PATH) -lsdsl
@@ -16,6 +17,7 @@ DEBUG_FLAGS=-pg -gstabs
 NDEBUG_FLAGS=-DNDEBUG
 OPT_FLAGS=-O3 -mmmx -msse -msse2 -msse3 -msse4 -msse4.2 -march=native -fno-strict-aliasing
 NOPT_FLAGS=-O0
+
 # Using Semantic Versioning: http://semver.org/
 VERSION=0.6.0
 BANNER='Copyright Alex Bowe (c) 2016'
@@ -79,6 +81,10 @@ catch.hpp:
 
 cosmo-test: cosmo-test.cpp catch.hpp $(wildcard *_test.cpp) $(wildcard $(subst _test.cpp,.hpp,$(wildcard *_test.cpp)))
 	$(CXX) $(CPP_FLAGS) -o $@ $(filter-out %.hpp,$^) $(DEP_FLAGS) -lstxxl -fopenmp -lsdsl
+
+bgl_sdb_adapter_test: bgl_sdb_adapter_test.cpp $(BUILD_REQS) bgl_sdb_adapter.hpp
+		$(CXX) $(CPP_FLAGS) $(IGNORE_WARNINGS) -o $@ $< $(DEP_FLAGS)
+#./bgl_sdb_adapter_test --color_output
 
 all: $(BINARIES)
 
