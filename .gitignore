@@ -24,6 +24,7 @@ cosmo-test
 *.lcs*
 *.qzd*
 *.gz
+*.rrr
 
 # Data
 *.fq
@@ -42,6 +43,7 @@ test_data/*
 # C stuff
 *.o
 *.dSYM
+gmon.out
 core
 
 # Python stuff
