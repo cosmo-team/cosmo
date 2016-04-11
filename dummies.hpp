@@ -60,7 +60,7 @@ void find_incoming_dummy_nodes(const InputRange1 a_range, const InputRange2 b_ra
   auto a = a_range | transformed(a_lam) | filtered(uniq<kmer_t>()) | indexed(0);
   auto b = b_range | transformed(b_lam) | filtered(uniq<kmer_t>());
 
-  auto pairer  = [&](kmer_t x) { out_f(idx++, temp); };
+  auto pairer  = [&](kmer_t) { out_f(idx++, temp); };
   auto paired_out = boost::make_function_output_iterator(pairer);
   //std::set_difference(a_start, a.end(), b.begin(), b.end(), paired_out);
   boost::set_difference(a, b, paired_out);
