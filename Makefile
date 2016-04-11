@@ -65,25 +65,22 @@ BINARIES=cosmo-build cosmo-color cosmo-test
 default: all
 
 lut.hpp: make_lut.py
-		python make_lut.py > lut.hpp
+	python make_lut.py > lut.hpp
 
 cosmo-build: cosmo-build.cpp $(BUILD_REQS)
-		$(CXX) $(CPP_FLAGS) -o $@ $< $(KMC_OBJS) $(DEP_FLAGS) -lstxxl -fopenmp
+	$(CXX) $(CPP_FLAGS) -o $@ $< $(KMC_OBJS) $(DEP_FLAGS) -lstxxl -fopenmp
 
 cosmo-color: cosmo-color.cpp $(BUILD_REQS)
-		$(CXX) $(CPP_FLAGS) -o $@ $< $(KMC_OBJS) $(DEP_FLAGS)
+	$(CXX) $(CPP_FLAGS) -o $@ $< $(KMC_OBJS) $(DEP_FLAGS)
 
 #cosmo-benchmark: cosmo-benchmark.cpp $(ASSEM_REQS) wt_algorithm.hpp debruijn_hypergraph.hpp
-#		$(CXX) $(CPP_FLAGS) -o $@ $< $(DEP_FLAGS) -lsdsl
-
-#catch.hpp:
-#	wget https://raw.githubusercontent.com/philsquared/Catch/master/single_include/catch.hpp
+#	$(CXX) $(CPP_FLAGS) -o $@ $< $(DEP_FLAGS) -lsdsl
 
 #cosmo-test: cosmo-test.cpp catch.hpp $(wildcard *_test.cpp) $(wildcard $(subst _test.cpp,.hpp,$(wildcard *_test.cpp)))
 #	$(CXX) $(CPP_FLAGS) -o $@ $(filter-out %.hpp,$^) $(DEP_FLAGS) -lstxxl -fopenmp -lsdsl
 
 cosmo-test: debruijn_graph_test.cpp $(BUILD_REQS) bgl_sdb_adapter.hpp
-		$(CXX) $(CPP_FLAGS) -o $@ $< $(DEP_FLAGS) -lboost_unit_test_framework
+	$(CXX) $(CPP_FLAGS) -o $@ $< $(DEP_FLAGS) -lboost_unit_test_framework
 
 test: cosmo-test
 	./cosmo-test
@@ -91,4 +88,4 @@ test: cosmo-test
 all: $(BINARIES)
 
 clean:
-		rm -rf $(BINARIES) *.o *.dSYM
+	rm -rf $(BINARIES) *.o *.dSYM
