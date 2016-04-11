@@ -76,15 +76,19 @@ cosmo-color: cosmo-color.cpp $(BUILD_REQS)
 #cosmo-benchmark: cosmo-benchmark.cpp $(ASSEM_REQS) wt_algorithm.hpp debruijn_hypergraph.hpp
 #		$(CXX) $(CPP_FLAGS) -o $@ $< $(DEP_FLAGS) -lsdsl
 
-catch.hpp:
-	wget https://raw.githubusercontent.com/philsquared/Catch/master/single_include/catch.hpp
+#catch.hpp:
+#	wget https://raw.githubusercontent.com/philsquared/Catch/master/single_include/catch.hpp
 
-cosmo-test: cosmo-test.cpp catch.hpp $(wildcard *_test.cpp) $(wildcard $(subst _test.cpp,.hpp,$(wildcard *_test.cpp)))
-	$(CXX) $(CPP_FLAGS) -o $@ $(filter-out %.hpp,$^) $(DEP_FLAGS) -lstxxl -fopenmp -lsdsl
+#cosmo-test: cosmo-test.cpp catch.hpp $(wildcard *_test.cpp) $(wildcard $(subst _test.cpp,.hpp,$(wildcard *_test.cpp)))
+#	$(CXX) $(CPP_FLAGS) -o $@ $(filter-out %.hpp,$^) $(DEP_FLAGS) -lstxxl -fopenmp -lsdsl
 
 bgl_sdb_adapter_test: bgl_sdb_adapter_test.cpp $(BUILD_REQS) bgl_sdb_adapter.hpp
-		$(CXX) $(CPP_FLAGS) $(IGNORE_WARNINGS) -o $@ $< $(DEP_FLAGS)
+		$(CXX) $(CPP_FLAGS) -o $@ $< $(DEP_FLAGS)
 #./bgl_sdb_adapter_test --color_output
+
+test: bgl_sdb_adapter_test
+	#./cosmo-test
+	./bgl_sdb_adapter_test
 
 all: $(BINARIES)
 

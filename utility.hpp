@@ -6,6 +6,7 @@
 // For CHAR_BIT, which might not be 8 on certain systems
 #include <climits>
 #include <string>
+#include <fstream>
 #include <boost/filesystem.hpp>
 #include "debug.hpp"
 

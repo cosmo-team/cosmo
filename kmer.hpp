@@ -13,7 +13,7 @@
 #define BLOCK_WIDTH 64
 #define NT_WIDTH 2
 #define DNA_RADIX 4
-#define DNA_ALPHA "acgt"
+#define DNA_ALPHA "ACGT"
 #define DUMMY_SYM '$'
 
 
@@ -21,12 +21,50 @@ typedef std::bitset<NUM_COLS> color_bv;
 //FIXME: find a way to make NUM_COLS not be compile time.
 // http://en.cppreference.com/w/cpp/utility/bitset says:
 // "Notes: If the size of the bitset is not known at compile time, std::vector<bool> or boost::dynamic_bitset may be used."
-    
+
 void clear_bv(color_bv &bv);
 void set_bit(color_bv &bv, uint32_t j);
 void serialize_color_bv(std::ofstream &cfs, std::vector<color_bv>::iterator &colors, uint64_t index);
 void deserialize_color_bv(std::ifstream &colorfile, color_bv &value);
 using namespace cosmo;
+
+uint8_t nt_to_int(char x) {
+  switch(x) {
+    case 'a':
+    case 'A': return 0;
+    case 'c':
+    case 'C': return 1;
+    case 'g':
+    case 'G': return 2;
+    case 't':
+    case 'T': return 3;
+    default:
+      COSMO_ASSERT(false);
+  }
+}
+
+uint8_t flagged_nt_to_int(char x) {
+  switch(x) {
+    case '$': return 0;
+    case 'A': return 2;
+    case 'C': return 4;
+    case 'G': return 6;
+    case 'T': return 8;
+    case 'a': return 3;
+    case 'c': return 5;
+    case 'g': return 7;
+    case 't': return 9;
+    // Should never reach here
+    default:
+      COSMO_ASSERT(false);
+      return -1;
+  }
+}
+
+char int_to_nt(size_t x) {
+  assert(x <= 8);
+  return "$ACGTacgt"[x];
+}
 
 // Swaps G (11 -> 10) and T (10 -> 11) representation so radix ordering is lexical
 // (DSK represents T < G)
@@ -87,6 +125,17 @@ inline uint8_t get_nt(const T & x, size_t i) {
   size_t nt_idx    = i%nts_per_block;
   uint64_t block   = ((uint64_t*)&x)[block_idx];
   return (block << (nt_idx * 2)) >> 62;
+}
+
+template <typename T>
+T string_to_kmer(std::string input) {
+  T temp(0);
+  for (size_t i = 0; i < input.length(); ++i) {
+    auto x = input[i];
+    temp |= nt_to_int(x);
+    if (i != input.length() - 1) temp <<= 2;
+  }
+  return reverse_nt<T>()(temp);
 }
 
 template <typename T>
@@ -211,33 +260,6 @@ kmer_t set_nt(const kmer_t & x, uint8_t i, uint8_t v) {
   assert(v < DNA_RADIX);
   kmer_t cleared = clear_nt(x, i);
   return cleared | (kmer_t(v) << (bitwidth<kmer_t>::width - (1+i)*NT_WIDTH));
-}
-
-template <typename T>
-struct get_nt_functor : std::binary_function<T, uint8_t, uint8_t> {
-  uint8_t operator() (const T & x, uint8_t i) {
-    return get_nt(x, i);
-  }
-};
-
-template <typename T>
-uint8_t get_edge_label(const T & x) {
-  return get_nt(x, 0);
-}
-
-
-// It might look like the implementations for get_start_node and get_end_node
-// are around the wrong way, but remember that the kmers are stored in reverse
-// to enable integer comparison => colex ordering of the string representation
-template <typename T>
-T get_start_node(const T & x, uint8_t) {
-  return get_start_node(x);
-}
-
-template <typename T>
-T get_start_node(const T & x) {
-  return x << NT_WIDTH;
-  //return get_range(x, 1, k);
 }
 
 template <typename kmer_t>

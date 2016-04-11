@@ -273,7 +273,7 @@ class debruijn_graph {
   }
 
   // TODO: subtract number of $ edges?
-  size_t num_edges() const { return m_node_flags.size(); }
+  size_t num_edges() const { return m_node_flags.size() - m_edge_max_ranks[0]; }
   size_t num_nodes() const { return m_num_nodes; /*m_node_rank(num_edges());*/ }
 
   private:
@@ -289,7 +289,7 @@ class debruijn_graph {
   }
 
   size_t _edge_to_node(size_t i) const {
-    assert(i < num_edges());
+    assert(i < size());
     return m_node_rank(i);
     // TODO: check this alternative?
     //size_t x = m_node_rank(i+1)-1;
@@ -308,7 +308,7 @@ class debruijn_graph {
   }
 
   symbol_type _symbol_access(size_t i) const {
-    assert(i < num_edges());
+    assert(i < size());
     // I assume std binary search is optimised for small ranges (if sigma is small, e.g. DNA)
     return upper_bound(m_symbol_ends.begin(), m_symbol_ends.end(), i) - m_symbol_ends.begin();
   }
@@ -333,10 +333,13 @@ class debruijn_graph {
   symbol_type _first_symbol(size_t i) const {
     symbol_type x = 0;
     for (size_t pos = 1; pos <= k-1; pos++) {
-      // Don't need to map it to the alphabet in this case
       x = _symbol_access(i);
-      // All are $ before the last $
       if (x == 0) return x;
+      if (is_incoming_dummy(i)) {
+        // Get character in question
+        symbol_type x = (m_dummies[_get_dummy_index(i)]<<((k - pos - 1)*2)&0x11 +1);
+        return x;
+      }
       i = _backward(i);
     }
     return x;
@@ -348,18 +351,30 @@ class debruijn_graph {
     for (size_t pos = 1; pos <= k-1; pos++) {
       symbol_type x = _symbol_access(i);
       label[k-pos-1] = _map_symbol(x);
+
       // All are $ before the last $
       if (x == 0) return label;
+
+      if (is_incoming_dummy(i)) {
+        // If last character, don't need to prepend anything
+        if (pos + 1 == k) return label;
+        string prefix = kmer_to_string(m_dummies[_get_dummy_index(i)]<<(pos*2), k - 1 - pos);
+        for (size_t i = 0; i < k-pos-1; ++i) {
+          label[i] = prefix[i];
+        }
+        return label;
+      }
+
       i = _backward(i);
     }
     return label;
   }
 
   size_t _next_edge(size_t i, symbol_type x) const {
-    if (i >= num_edges() - 1) return i;
+    if (i >= size() - 1) return i;
     // Might not actually occur if out of rank bounds?
     size_t next_rank = 1 + m_edges.rank(1+i, _with_edge_flag(x, false));
-    if (next_rank > m_edge_max_ranks[x]) return num_edges();
+    if (next_rank > m_edge_max_ranks[x]) return size();
     return m_edges.select(next_rank, _with_edge_flag(x, false));
   }
 
@@ -377,7 +392,7 @@ class debruijn_graph {
   // This is so we can reuse the symbol lookup - save an access during traversal :)
   // Return index of the FIRST edge of the node pointed to by edge i.
   ssize_t _forward(size_t i, symbol_type & x) const {
-    assert(i < num_edges());
+    assert(i < size());
     auto sym_with_flag = m_edges[i];
     x = _strip_edge_flag(sym_with_flag);
     size_t start = _symbol_start(x);
@@ -386,7 +401,8 @@ class debruijn_graph {
     // (should maybe make backward consistent with this, but using the edge 0 loop for node label generation).
     if (x == 0) return -1;
 
-    size_t nth   = m_edges.rank(i, fullx);
+    size_t nth = m_edges.rank(i, fullx);
+    nth += (m_dummy_rank(m_symbol_ends[x]) - m_dummy_rank(start));
 
     // if this is flagged, then reset i to the corresponding unflagged symbol and use that as the starting point
     if (sym_with_flag & 1) {
@@ -396,21 +412,22 @@ class debruijn_graph {
       /* Since rank is on 0..i-1, nth always reflects the rank of the symbol below what i points to.
          We implicitly add one to the result though because we always start with the rank of the first node after start so
          nth only needs to be 0 in order to select that node.
-     
+         
          If, however, i points to an edge flagged with -, then this is an extra incoming edge that enters the
          same node as another similarly flagged edge, so we don't want to have that implicit +1  
-     
+         
          This assumes that the flagged edge matches an edge that occurs BEFORE it in the list, which is what I 
          observe in the paper */
       nth--;
     }
 
-    size_t next  = m_node_select(m_node_rank(start+1) + nth);
+    size_t next = m_node_select(m_node_rank(start+1) + nth);
     return next;
   }
 
-  size_t _backward(size_t i) const {
-    assert(i < num_edges());
+  ssize_t _backward(size_t i) const {
+    assert(i < size());
+    if (is_incoming_dummy(i)) return -1;
     symbol_type x  = _symbol_access(i);
     //cerr << "$acgt"[x] << endl;
     // This handles x = $ so that we have the all-$ edge at position 0
@@ -419,9 +436,10 @@ class debruijn_graph {
     // NOTE: this will only happen if we added all incoming dummy edge shifts
     if (x == 0) return 0;
     size_t x_start = _symbol_start(x);
-    //cerr << x_start << endl;
     // rank is over [0,i) and select is 1-based
-    size_t nth = _rank_distance(x_start+1, i+1);
+    size_t nth = _rank_distance(x_start, i+1);
+    // Need to subtract dummies
+    nth -= (m_dummy_rank(i+1) - m_dummy_rank(x_start));
     // TODO: check this
     //size_t nth = _rank_distance(x_start, i+1);
     // no minus flag because we want the FIRST
@@ -429,7 +447,8 @@ class debruijn_graph {
     //cerr << nth + 1 << " <=? " 
     //     << m_edges.rank(m_edges.size(), _with_edge_flag(x, false))
     //     << endl;
-    return m_edges.select(nth+1, _with_edge_flag(x, false));
+    //auto temp = m_edges.select(nth+1, _with_edge_flag(x, false));
+    return m_edges.select(nth, _with_edge_flag(x, false));
   }
 
   size_t backward(size_t v) const {
@@ -451,7 +470,7 @@ class debruijn_graph {
     // as long as a next node exists!
     // TODO - test this
     assert(v + 1 <= num_nodes());
-    if (v+1 == num_nodes()) return num_edges() - 1;
+    if (v+1 == num_nodes()) return size() - 1;
     else return _first_edge_of_node(v+1) - 1;
   }
 
@@ -463,7 +482,7 @@ class debruijn_graph {
   // TODO: update to use rank and select for larger alphabets
   size_t _last_sibling(size_t i) const {
     size_t last = i;
-    while(last < num_edges() && m_node_flags[last] != 0) {
+    while(last < size() && m_node_flags[last] != 0) {
       last++;
     }
     // last should be one past end
@@ -509,7 +528,7 @@ class debruijn_graph {
     sdsl::load(deconst(m_dummies), in);
   }
 
-  size_type size() const { return num_edges(); }
+  size_type size() const { return m_node_flags.size(); }
 };
 
 template <typename Container>
