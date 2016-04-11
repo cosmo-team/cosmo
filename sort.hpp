@@ -391,7 +391,7 @@ struct dbg_builder {
     typedef wt_huff<rrr_vector<63>> wt_t;
     wt_t edges;
     //construct(edges, out_file_base+".edges", 1);
-    construct_im(edges, output, 0);
+    construct_im(edges, output);
     // TODO: add parameter to keep temp files
     //boost::filesystem::remove(out_file_base+".edges");
     sd_vector<> node_bv(node_starts);
