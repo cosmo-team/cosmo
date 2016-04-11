@@ -1,6 +1,7 @@
 #include "kmer.hpp"
 #include "utility.hpp"
 #include "debug.hpp"
+#include "multi_bit_vector.hpp"
 #include "bgl_sdb_adapter.hpp"
 #include <sdsl/bit_vectors.hpp>
 #include <sdsl/wavelet_trees.hpp>
@@ -17,64 +18,67 @@
 /*
   Test graph without dummy shifts.
 
-  input = "AACGACGTCGACT", k = 4
+  input = "ATCG", "AACGACGTCGACT", k = 4
 
        i v d n lbl W
        0 0 0 1 CGA C
        1 1 1 1 AAC G
        2 2 0 1 GAC g
        3   0 0 GAC T
-       4 3 0 1 GTC G
-       5 4 0 1 ACG A
-       6   0 0 ACG T
-       7 5 0 1 TCG a
-       8 6 0 1 ACT $
-       9 7 0 1 CGT C
+       4 3 1 1 ATC G
+       5 4 0 1 GTC g
+       6 5 0 1 ACG A
+       7   0 0 ACG T
+       8 6 0 1 TCG a
+       9 7 0 1 ACT $
+      10 8 0 1 CGT C
 */
 
 const int sigma    = 4;
-string edges       = "CGgTGATa$C";
-string node_flags  = "1110110111";
-string dummy_flags = "0100000000";
-vector<string> dummies = vector<string>({ "AAC" });
-std::array<size_t, 1+sigma> symbol_ends{0, 1, 5, 8, 10};
+string edges       = "CGgTGgATa$C";
+string node_flags  = "11101110111";
+string dummy_flags = "01001000000";
+vector<string> dummies = vector<string>({ "AAC", "ATC" });
+std::array<size_t, 1+sigma> symbol_ends{0, 1, 6, 9, 11};
 
-const size_t g_size = 10;
-const size_t num_edges = 9; // outgoing dummy edge is not a real edge
-const size_t num_nodes = 8;
+const size_t g_size = 11;
+const size_t num_edges = 10; // outgoing dummy edge is not a real edge
+const size_t num_nodes = 9;
 string expected_node_labels[num_nodes] = {
-  "CGA","AAC","GAC","GTC","ACG","TCG","ACT","CGT"
+  "CGA","AAC","GAC","ATC", "GTC","ACG","TCG","ACT","CGT"
 };
 
-const int expected_outdegree[num_nodes] = { 1, 1, 2, 1, 2, 1, 0, 1};
-const int  expected_indegree[num_nodes] = { 2, 0, 1, 1, 2, 1, 1, 1};
+const int expected_outdegree[num_nodes] = { 1, 1, 2, 1, 1, 2, 1, 0, 1};
+const int  expected_indegree[num_nodes] = { 2, 0, 1, 1, 0, 2, 2, 1, 1};
 
 const ssize_t expected_forward[g_size] = {
      // i v d n lbl W
   2, // 0 0 0 1 CGA C
-  5, // 1 1 1 1 AAC G
-  5, // 2 2 0 1 GAC g
-  8, // 3   0 0 GAC T
-  7, // 4 3 0 1 GTC G
-  0, // 5 4 0 1 ACG A
-  9, // 6   0 0 ACG T
-  0, // 7 5 0 1 TCG a
- -1, // 8 6 0 1 ACT $
-  7, // 9 7 0 1 CGT C
+  6, // 1 1 1 1 AAC G
+  6, // 2 2 0 1 GAC g
+  9, // 3   0 0 GAC T
+  8, // 4 3 1 1 ATC G
+  8, // 5 4 0 1 GTC g
+  0, // 6 5 0 1 ACG A
+ 10, // 7   0 0 ACG T
+  0, // 8 6 0 1 TCG a
+ -1, // 9 7 0 1 ACT $
+  5, //10 8 0 1 CGT C
 };
 
 const ssize_t expected_backward[g_size] = {
      // i v d n lbl W
-  5, // 0 0 0 1 CGA C
+  6, // 0 0 0 1 CGA C
  -1, // 1 1 1 1 AAC G
   0, // 2 2 0 1 GAC g
   0, // 3   0 0 GAC T
-  9, // 4 3 0 1 GTC G
-  1, // 5 4 0 1 ACG A
-  1, // 6   0 0 ACG T
-  4, // 7 5 0 1 TCG a
-  3, // 8 6 0 1 ACT $
-  6, // 9 7 0 1 CGT C
+ -1, // 4 3 1 1 ATC G
+ 10, // 5 3 0 1 GTC g
+  1, // 6 4 0 1 ACG A
+  1, // 7   0 0 ACG T
+  4, // 8 5 0 1 TCG a
+  3, // 9 6 0 1 ACT $
+  7, //10 7 0 1 CGT C
 };
 
 /* test the graph by directly calling the debruijn_graph methods */
@@ -179,8 +183,11 @@ BOOST_AUTO_TEST_CASE ( create_graph_using_constructor )
   }
   sd_vector<> node_flags(node_bv);
   sd_vector<> dummy_flags(dummy_bv);
-  wt_huff<rrr_vector<63>> wt;
-  construct_im(wt, edges_v);
+  typedef wt_huff<rrr_vector<63>> edge_idx_t;
+  //typedef cosmo::multi_bit_vector<> edge_idx_t;
+  typedef debruijn_graph<edge_idx_t> dbg_t;
+  edge_idx_t edge_idx;
+  construct_im(edge_idx, edges_v);
 
   vector<kmer_t> dummy_v;
   dummy_v.reserve(dummies.size());
@@ -190,17 +197,19 @@ BOOST_AUTO_TEST_CASE ( create_graph_using_constructor )
   }
 
   // construct the graph!
-  debruijn_graph<> db(k, node_flags, wt, symbol_ends, alphabet, dummy_bv, dummy_v);
+  dbg_t db(k, node_flags, edge_idx, symbol_ends, alphabet, dummy_bv, dummy_v);
 
   test_graph_directly(db);
 
   // Serialization
+  /*
   std::string temp_file = boost::filesystem::unique_path().native();
-  debruijn_graph<> db2;
+  dbg_t db2;
   sdsl::store_to_file(db, temp_file);
   sdsl::load_from_file(db2, temp_file);
   boost::filesystem::remove(temp_file);
   test_graph_directly(db2);
 
   test_graph_via_boost(db);
+  */
 }

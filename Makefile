@@ -11,7 +11,7 @@ DEP_PATH=/usr/local
 KMC_PATH=./KMC
 INC=-isystem $(DEP_PATH)/include
 LIB=-L$(DEP_PATH)/lib -L./
-BOOST_FLAGS=-DBOOST_LOG_DYN_LINK -lboost_log -lboost_system -lboost_filesystem
+BOOST_FLAGS=-DBOOST_LOG_DYN_LINK -lboost_log -lboost_system -lboost_filesystem 
 DEP_FLAGS=$(INC) $(LIB) $(BOOST_FLAGS) -isystem $(KMC_PATH) -lsdsl
 DEBUG_FLAGS=-pg -gstabs
 NDEBUG_FLAGS=-DNDEBUG
@@ -65,7 +65,7 @@ BINARIES=cosmo-build cosmo-color cosmo-test
 default: all
 
 lut.hpp: make_lut.py
-	python make_lut.py > lut.hpp
+		python make_lut.py > lut.hpp
 
 cosmo-build: cosmo-build.cpp $(BUILD_REQS)
 	$(CXX) $(CPP_FLAGS) -o $@ $< $(KMC_OBJS) $(DEP_FLAGS) -lstxxl -fopenmp
@@ -74,13 +74,13 @@ cosmo-color: cosmo-color.cpp $(BUILD_REQS)
 	$(CXX) $(CPP_FLAGS) -o $@ $< $(KMC_OBJS) $(DEP_FLAGS)
 
 #cosmo-benchmark: cosmo-benchmark.cpp $(ASSEM_REQS) wt_algorithm.hpp debruijn_hypergraph.hpp
-#	$(CXX) $(CPP_FLAGS) -o $@ $< $(DEP_FLAGS) -lsdsl
+#		$(CXX) $(CPP_FLAGS) -o $@ $< $(DEP_FLAGS) -lsdsl
 
 #cosmo-test: cosmo-test.cpp catch.hpp $(wildcard *_test.cpp) $(wildcard $(subst _test.cpp,.hpp,$(wildcard *_test.cpp)))
 #	$(CXX) $(CPP_FLAGS) -o $@ $(filter-out %.hpp,$^) $(DEP_FLAGS) -lstxxl -fopenmp -lsdsl
 
-cosmo-test: debruijn_graph_test.cpp $(BUILD_REQS) bgl_sdb_adapter.hpp
-	$(CXX) $(CPP_FLAGS) -o $@ $< $(DEP_FLAGS) -lboost_unit_test_framework
+cosmo-test: debruijn_graph_test.cpp $(BUILD_REQS) bgl_sdb_adapter.hpp multi_bit_vector.hpp
+	$(CXX) $(CPP_FLAGS) -o $@ $< $(DEP_FLAGS) -lboost_unit_test_framework -fopenmp
 
 test: cosmo-test
 	./cosmo-test
@@ -88,4 +88,4 @@ test: cosmo-test
 all: $(BINARIES)
 
 clean:
-	rm -rf $(BINARIES) *.o *.dSYM
+		rm -rf $(BINARIES) *.o *.dSYM

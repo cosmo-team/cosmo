@@ -21,6 +21,7 @@
 #include "debug.hpp"
 #include "config.hpp"
 #include "utility.hpp"
+#include "dna_bv_rs.hpp"
 
 namespace cosmo {
 
@@ -390,8 +391,10 @@ struct dbg_builder {
     COSMO_LOG(trace) << "Building dBG...";
     typedef wt_huff<rrr_vector<63>> wt_t;
     wt_t edges;
+    dna_bv_rs<> edges_mbv;
     //construct(edges, out_file_base+".edges", 1);
     construct_im(edges, output);
+    construct_im(edges_mbv, output);
     // TODO: add parameter to keep temp files
     //boost::filesystem::remove(out_file_base+".edges");
     sd_vector<> node_bv(node_starts);
@@ -404,6 +407,7 @@ struct dbg_builder {
     }
 
     COSMO_LOG(info) << "size of WT: " << size_in_mega_bytes(edges) << " MB";
+    COSMO_LOG(info) << "size of MBV: " << size_in_mega_bytes(edges_mbv) << " MB";
     COSMO_LOG(info) << "size of node BV: " << size_in_mega_bytes(node_bv) << " MB";
     COSMO_LOG(info) << "size of dummy BV: " << size_in_mega_bytes(dum_pos_bv) << " MB";
     COSMO_LOG(info) << "size of dummy vec: " << size_in_mega_bytes(dummies) << " MB";

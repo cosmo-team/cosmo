@@ -21,35 +21,30 @@
 using namespace std;
 using namespace sdsl;
 
-// TODO: convert asserts into exceptions? (Copy Boost)
+// TODO: convert asserts into exceptions?
 // TODO: named template paremeters (See Boost)
-// TODO: Add dummy and dummy flag and dummy rank types
-template <size_t t_sigma            = 4, // default: DNA, TODO: change to 0 and make dynamic
-          class  t_bit_vector_type  = sd_vector<>,
-          class  t_bv_rank_type     = typename t_bit_vector_type::rank_0_type, // We invert the bits so it is 0 instead
-          class  t_bv_select_type   = typename t_bit_vector_type::select_0_type,
-          class  t_edge_vector_type = wt_huff<rrr_vector<63>>,
-          class  t_symbol_type      = typename t_edge_vector_type::value_type,
-          class  t_label_type       = string,
-          class  t_kmer_type        = kmer_t> // used to store dummies
+template <class  t_edge_vector_type  = wt_huff<rrr_vector<63>>,
+          class  t_bit_vector_type   = sd_vector<>,
+          class  t_dummy_vector_type = vector<kmer_t>> // used to store dummies
 class debruijn_graph {
-  static_assert(t_sigma == 4, "Alphabet sizes other than 4 are not yet supported.");
-
   public:
-  const static size_t sigma = t_sigma;
-  typedef t_symbol_type symbol_type;
-  typedef t_label_type  label_type;
-  typedef typename t_bit_vector_type::size_type size_type;
+  typedef string label_type;
+  const static size_t sigma = 4;
+  typedef t_edge_vector_type edge_vector_type;
+  typedef t_bit_vector_type  bit_vector_type;
+  typedef t_dummy_vector_type  dummy_vector_type;
+  typedef typename edge_vector_type::value_type symbol_type;
+  typedef typename bit_vector_type::size_type size_type;
+  typedef typename dummy_vector_type::value_type kmer_t;
   typedef size_t edge_type;
-  typedef t_kmer_type kmer_t;
   typedef pair<edge_type, edge_type> node_type;
 
   const size_t           k{};
 
-  const t_bit_vector_type      m_node_flags{};
-  const t_bv_rank_type         m_node_rank{};
-  const t_bv_select_type       m_node_select{};
-  const t_edge_vector_type     m_edges{};
+  const bit_vector_type                         m_node_flags{};
+  const typename bit_vector_type::rank_0_type   m_node_rank{};
+  const typename bit_vector_type::select_0_type m_node_select{};
+  const edge_vector_type     m_edges{};
   // This is the "F table" in the blog/paper. It stores the starting positions of the sorted runs
   // of the k-1th symbol of the edge (or, last symbol of the node)
   // Could be implemented as the start positions, but here we store the cumulative sum (i.e. run ends)
@@ -67,10 +62,11 @@ class debruijn_graph {
 
   // TODO: make each of these a range instead (so it doesnt depend on the type)
   debruijn_graph(size_t in_k, const t_bit_vector_type & node_flags, const t_edge_vector_type & edges, const array<size_t, 1+sigma>& symbol_ends, const label_type& alphabet,
-      const t_bit_vector_type & dummy_flags, const vector<kmer_t> & dummies)
-    : k(in_k), m_node_flags(node_flags), m_node_rank(&m_node_flags), m_node_select(&m_node_flags), m_edges(edges),
+      const t_bit_vector_type & dummy_flags, const dummy_vector_type & dummies)
+    : k(in_k), m_node_flags(node_flags), m_node_rank(&m_node_flags), m_node_select(&m_node_flags),
+      m_edges(edges),
       m_symbol_ends(symbol_ends),
-      m_edge_max_ranks(_init_max_ranks(edges)),
+      m_edge_max_ranks(_init_max_ranks(m_edges)),
       m_alphabet(alphabet),
       m_num_nodes(m_node_rank(m_node_flags.size())),
       m_dummy_flags(dummy_flags),
@@ -324,7 +320,7 @@ class debruijn_graph {
   }
   
   // Just return the symbol relating to this edge (for walks..)
-  typename t_label_type::value_type edge_symbol(size_t i) const
+  typename label_type::value_type edge_symbol(size_t i) const
   {
     return _map_symbol(_strip_edge_flag(m_edges[i]));
   }
@@ -402,6 +398,7 @@ class debruijn_graph {
     if (x == 0) return -1;
 
     size_t nth = m_edges.rank(i, fullx);
+    // find prev_rank of dummies from base, then select to the nth
     nth += (m_dummy_rank(m_symbol_ends[x]) - m_dummy_rank(start));
 
     // if this is flagged, then reset i to the corresponding unflagged symbol and use that as the starting point
@@ -530,10 +527,5 @@ class debruijn_graph {
 
   size_type size() const { return m_node_flags.size(); }
 };
-
-template <typename Container>
-double bits_per_element(const Container & c) {
-  return size_in_bytes(c) * 8.0 / c.size();
-}
 
 #endif

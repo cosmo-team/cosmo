@@ -28,7 +28,7 @@ void serialize_color_bv(std::ofstream &cfs, std::vector<color_bv>::iterator &col
 void deserialize_color_bv(std::ifstream &colorfile, color_bv &value);
 using namespace cosmo;
 
-uint8_t nt_to_int(char x) {
+uint8_t nt_to_int_f(char x) {
   switch(x) {
     case 'a':
     case 'A': return 0;
@@ -132,7 +132,7 @@ T string_to_kmer(std::string input) {
   T temp(0);
   for (size_t i = 0; i < input.length(); ++i) {
     auto x = input[i];
-    temp |= nt_to_int(x);
+    temp |= nt_to_int_f(x);
     if (i != input.length() - 1) temp <<= 2;
   }
   return reverse_nt<T>()(temp);

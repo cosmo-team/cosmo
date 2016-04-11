@@ -32,14 +32,10 @@
 
 
 /* Because the identifying type of the graph is quite complex, the following def's make things much more concise */
-#define SUCCINCT_TEMPLATE template <size_t t_sigma,\
+#define SUCCINCT_TEMPLATE template <class  t_edge_vector_type,\
 class  t_bit_vector_type,\
-class  t_bv_rank_type,\
-class  t_bv_select_type,\
-class  t_edge_vector_type,\
-class  t_symbol_type,\
-class  t_label_type>
-#define SUCCINCT_TEMPLATE_ARGUMENTS t_sigma,t_bit_vector_type,t_bv_rank_type,t_bv_select_type,t_edge_vector_type,t_symbol_type,t_label_type
+class  t_kmer_type>
+#define SUCCINCT_TEMPLATE_ARGUMENTS t_edge_vector_type,t_bit_vector_type,t_kmer_type
 #define SUCCINCT_TYPE debruijn_graph< SUCCINCT_TEMPLATE_ARGUMENTS >
 
 
@@ -54,8 +50,8 @@ class sdb_edge_name_map
 {
 public:
   typedef size_t key_type;
-  typedef typename t_label_type::value_type value_type;
-  typedef typename t_label_type::value_type reference;
+  typedef string::value_type value_type;
+  typedef string::value_type reference;
   typedef boost::readable_property_map_tag category;
   
   inline sdb_edge_name_map(const SUCCINCT_TYPE & graph) : graph(graph) {}
@@ -80,7 +76,7 @@ namespace boost {
 
 /* The get function to return the label from the map (ReadablePropertyMap) */
 SUCCINCT_TEMPLATE
-typename t_label_type::value_type get(const sdb_edge_name_map<SUCCINCT_TEMPLATE_ARGUMENTS> & map, const size_t i)
+typename string::value_type get(const sdb_edge_name_map<SUCCINCT_TEMPLATE_ARGUMENTS> & map, const size_t i)
 {
   return map.get(i);
 }
@@ -95,7 +91,7 @@ get(boost::edge_name_t, SUCCINCT_TYPE& graph)
 
 /* Directly return the property value (ReadablePropertyGraph) */
 SUCCINCT_TEMPLATE
-typename t_label_type::value_type
+typename string::value_type
 get(boost::edge_name_t, const SUCCINCT_TYPE& graph, const size_t i)
 {
   return graph.edge_symbol(i);
@@ -113,8 +109,8 @@ struct sdb_vertex_name_map
 {
 public:
   typedef size_t key_type;
-  typedef t_label_type value_type;
-  typedef t_label_type reference;
+  typedef string value_type;
+  typedef string reference;
   typedef boost::readable_property_map_tag category;
   
   inline sdb_vertex_name_map(const SUCCINCT_TYPE & graph) : graph(graph) {}
@@ -139,7 +135,7 @@ namespace boost {
 
 /* The get function to return the label from the map (ReadablePropertyMap) */
 SUCCINCT_TEMPLATE
-t_label_type get(const sdb_vertex_name_map<SUCCINCT_TEMPLATE_ARGUMENTS> & map, const size_t i)
+string get(const sdb_vertex_name_map<SUCCINCT_TEMPLATE_ARGUMENTS> & map, const size_t i)
 {
   return map.get(i);
 }
@@ -154,7 +150,7 @@ get(boost::vertex_name_t, const SUCCINCT_TYPE& graph)
 
 /* Return the property value (ReadablePropertyGraph) */
 SUCCINCT_TEMPLATE
-t_label_type
+string
 get(boost::vertex_name_t, const SUCCINCT_TYPE& graph, const size_t i)
 {
   return graph.node_label(i);
