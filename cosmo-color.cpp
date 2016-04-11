@@ -81,7 +81,7 @@ void dump_nodes(debruijn_graph<> dbg, uint64_t * colors) {
 
 
 void dump_edges(debruijn_graph<> dbg, uint64_t * colors) {
-  for (size_t i = 0; i < dbg.num_edges(); i++) {
+  for (size_t i = 0; i < dbg.size(); i++) {
     cout << i << "e:" << dbg.edge_label(i) << colors[i] << "\n";
   }
 }
@@ -91,7 +91,7 @@ const char *const starts[] = {"GCCATACTGCGTCATGTCGCCCTGACGCGC","GCAGGTTCGAATCCTG
 void find_bubbles(debruijn_graph<> dbg, rrr_vector<63> &colors, uint64_t color_mask1, uint64_t color_mask2)
 {
     int t = getMilliCount();
-    int num_colors = colors.size() / dbg.num_edges();
+    int num_colors = colors.size() / dbg.size();
     //uint64_t combined_mask = color_mask1 | color_mask2;
     bit_vector visited = bit_vector(dbg.num_nodes(), 0);
     cout << "Starting to look for bubbles\n";
@@ -220,7 +220,7 @@ int main(int argc, char* argv[]) {
   cerr << "k             : " << dbg.k << endl;
   cerr << "num_nodes()   : " << dbg.num_nodes() << endl;
   cerr << "num_edges()   : " << dbg.num_edges() << endl;
-  cerr << "colors        : " << colors.size() / dbg.num_edges() << endl; 
+  cerr << "colors        : " << colors.size() / dbg.size() << endl; 
   cerr << "Total size    : " << size_in_mega_bytes(dbg) << " MB" << endl;
   cerr << "Bits per edge : " << bits_per_element(dbg) << " Bits" << endl;
   cerr << "Color size    : " << size_in_mega_bytes(colors) << " MB" << endl;
