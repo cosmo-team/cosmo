@@ -1,12 +1,3 @@
-/*
-
-  Thoroughly tests the debruijn graph for the graph in the paper
-  http://alexbowe.com/succinct-debruijn-graphs/
- 
-  Does it both directly via calls to the debruijn_graph methods, and also via the boost graph library interfaces
- 
-*/
-
 #include "kmer.hpp"
 #include "utility.hpp"
 #include "debug.hpp"
@@ -20,6 +11,7 @@
 #include <boost/graph/breadth_first_search.hpp>
 /* the following #define tells the boost::test framework to generate a main() for this module. only one cpp file in the test suite should have it */
 #define BOOST_TEST_MODULE BGL SDB Adpater Test
+#define BOOST_TEST_DYN_LINK
 #include <boost/test/included/unit_test.hpp>
 
 /*
@@ -113,6 +105,7 @@ void test_graph_directly(const DBG & db)
 }
 
 /* this BFS visitor collects the names of each edge as it is added to the tree */
+/*
 template<typename EdgeNameMap>
 class bfs_edge_collector : public boost::default_bfs_visitor
 {
@@ -127,6 +120,7 @@ private:
   EdgeNameMap m_name_map;
   std::stringstream & ss;
 };
+*/
 
 /* test the graph by calling it via boost graph library methods */
 using namespace boost;
@@ -139,24 +133,33 @@ void test_graph_via_boost(Graph & db)
   BOOST_CONCEPT_ASSERT(( ReadablePropertyMapConcept<typename property_map<Graph, vertex_name_t>::type,size_t> ));
   BOOST_CONCEPT_ASSERT(( ReadablePropertyMapConcept<typename property_map<Graph, edge_name_t>::type,size_t> ));
   
-  for (size_t i = 0;i < num_nodes;i ++)
+  for (size_t i = 0;i < num_nodes; ++i)
   {
     // the easy way to read the vertex_name_t property
     BOOST_CHECK_MESSAGE(get(vertex_name_t(),db,i) == expected_node_labels[i],"node_label(" << i << ") failed");
-    
+
     int outdegree = out_degree(i, db);
+    //int indegree  = in_degree(i, db);
     BOOST_CHECK_MESSAGE(outdegree == expected_outdegree[i],"outdegree(" << i << ") failed");
+    //BOOST_CHECK_MESSAGE(in_degree == expected_indegree[i],"indegree(" << i << ") failed");
   }
-  
+
+  //auto edge_name_map = get(edge_name_t(), db);
+  /*
+  for (size_t i = 0; i < g_size; ++i) {
+    std::cerr << get(edge_name_map, i);
+  }
+  */
+
+  // NOTE: BFS commented out as it is hard to know which edges will be chosen first in a bigger test
   // prepare the visitor for a BFS
-  std::stringstream ss;
-  typename property_map<Graph, edge_name_t>::type edge_name_map = get(edge_name_t(), db);
-  bfs_edge_collector<typename property_map<Graph , boost::edge_name_t>::type > edge_visitor(edge_name_map,ss);
+  //std::stringstream ss;
+  //typename property_map<Graph, edge_name_t>::type edge_name_map = get(edge_name_t(), db);
+  //bfs_edge_collector<typename property_map<Graph , boost::edge_name_t>::type > edge_visitor(edge_name_map,ss);
 
   // do the BFS
-  breadth_first_search(db, 0, boost::visitor(edge_visitor));
-  
-  BOOST_CHECK_EQUAL(ss.str(), "AACGATCCTG");
+  //breadth_first_search(db, 0, boost::visitor(edge_visitor));
+  //BOOST_CHECK_EQUAL(ss.str(), "AACGATCCTG");
 }
 
 /* builds the graph and calls the test functions */

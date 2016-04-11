@@ -60,7 +60,7 @@ endif
 KMC_OBJS=$(KMC_PATH)/kmc_api/kmc_file.o $(KMC_PATH)/kmc_api/kmer_api.o $(KMC_PATH)/kmc_api/mmer.o
 BUILD_REQS=lut.hpp debug.hpp utility.hpp io.hpp sort.hpp kmer.hpp dummies.hpp debruijn_graph.hpp
 COLOR_REQS=colored_debruijn_graph.hpp io.hpp debug.hpp
-BINARIES=cosmo-build cosmo-color
+BINARIES=cosmo-build cosmo-color cosmo-test
 
 default: all
 
@@ -82,13 +82,11 @@ cosmo-color: cosmo-color.cpp $(BUILD_REQS)
 #cosmo-test: cosmo-test.cpp catch.hpp $(wildcard *_test.cpp) $(wildcard $(subst _test.cpp,.hpp,$(wildcard *_test.cpp)))
 #	$(CXX) $(CPP_FLAGS) -o $@ $(filter-out %.hpp,$^) $(DEP_FLAGS) -lstxxl -fopenmp -lsdsl
 
-bgl_sdb_adapter_test: bgl_sdb_adapter_test.cpp $(BUILD_REQS) bgl_sdb_adapter.hpp
-		$(CXX) $(CPP_FLAGS) -o $@ $< $(DEP_FLAGS)
-#./bgl_sdb_adapter_test --color_output
+cosmo-test: debruijn_graph_test.cpp $(BUILD_REQS) bgl_sdb_adapter.hpp
+		$(CXX) $(CPP_FLAGS) -o $@ $< $(DEP_FLAGS) -lboost_unit_test_framework
 
-test: bgl_sdb_adapter_test
-	#./cosmo-test
-	./bgl_sdb_adapter_test
+test: cosmo-test
+	./cosmo-test
 
 all: $(BINARIES)
 
