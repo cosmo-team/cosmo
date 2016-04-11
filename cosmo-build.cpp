@@ -72,7 +72,6 @@ int main(int argc, char* argv[]) {
 
   // Parameter extraction
   auto params = parse_arguments(argc, argv);
-  stxxl::internal_size_type M = params.m;
   std::string file_name = params.input_filename;
   params.output_base = boost::filesystem::path(file_name).stem().string();
   size_t k = params.k;
@@ -150,7 +149,6 @@ int main(int argc, char* argv[]) {
   }
   else if (fmt == input_format::kmc) {
     typedef dbg_builder<dbg_t, kmer_t, color_bv> builder_t;
-    typedef builder_t::record_vector_t record_vector_t;
 
     std::vector<CKMCFile*> kmer_data_bases;
     COSMO_LOG(trace) << "Reading KMC2 database list file...";
@@ -178,7 +176,7 @@ int main(int argc, char* argv[]) {
 
     builder_t builder(params);
 
-    size_t num_kmers_read = kmc_read_kmers(kmer_data_bases, num_colors, k, [&](auto x, auto c) {
+    size_t num_kmers_read = kmc_read_kmers(kmer_data_bases, k, [&](auto x, auto c) {
       builder.push(x,c);
     });
 
@@ -193,7 +191,7 @@ int main(int argc, char* argv[]) {
       color_bv = bit_vector(x * num_colors);
     },[&](auto x) { // Merge visitor
       auto color = get<0>(x.payload);
-      for (int color_idx = 0; color_idx < num_colors; color_idx++) {
+      for (size_t color_idx = 0; color_idx < num_colors; color_idx++) {
         color_bv[color_idx * num_colors + edge_idx] = !color[color_idx];
         //color_bv[edge_idx * num_colors + color_idx] = !color[color_idx];
         num_set += color[color_idx];

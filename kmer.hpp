@@ -41,6 +41,7 @@ uint8_t nt_to_int_f(char x) {
     default:
       COSMO_ASSERT(false);
   }
+  return -1;
 }
 
 uint8_t flagged_nt_to_int(char x) {
@@ -104,7 +105,7 @@ struct reverse_nt : std::unary_function<T, T> {
 
     T result(x);
     for (size_t i = 0; i < num_blocks; i++) {
-      uint64_t block = ((uint64_t*)&x)[i];
+      uint64_t block = ((const uint64_t*)&x)[i];
       ((uint64_t*)&result)[num_blocks - i - 1] = _reverse_nt_64(block);
     }
 
@@ -123,7 +124,7 @@ inline uint8_t get_nt(const T & x, size_t i) {
   // MSB...LSB
   size_t block_idx = num_blocks - i/nts_per_block - 1;
   size_t nt_idx    = i%nts_per_block;
-  uint64_t block   = ((uint64_t*)&x)[block_idx];
+  uint64_t block   = ((const uint64_t*)&x)[block_idx];
   return (block << (nt_idx * 2)) >> 62;
 }
 
@@ -173,7 +174,7 @@ struct reverse_complement : std::unary_function<T, T> {
 
     T result(x);
     for (size_t i = 0; i < num_blocks; i++) {
-      uint64_t block = ((uint64_t*)&x)[i];
+      uint64_t block = ((const uint64_t*)&x)[i];
       ((uint64_t*)&result)[num_blocks - i - 1] = _reverse_complement_64(block);
     }
     return result << (sizeof(T)*8 - _k * NT_WIDTH);

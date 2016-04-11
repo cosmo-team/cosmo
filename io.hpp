@@ -173,7 +173,7 @@ inline bool kmc_read_header(std::string db_fname, uint32_t & k, size_t &min_unio
 
 
 template <class Visitor>
-size_t kmc_read_kmers(std::vector<CKMCFile *> &kmer_data_bases, const uint32_t num_colors, uint32_t k, Visitor visit) {
+size_t kmc_read_kmers(std::vector<CKMCFile *> &kmer_data_bases, uint32_t k, Visitor visit) {
     const mylessthan gt_comparitor(true);
     const mylessthan lt_comparitor(false);
 

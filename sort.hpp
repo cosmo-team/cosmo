@@ -21,7 +21,7 @@
 #include "debug.hpp"
 #include "config.hpp"
 #include "utility.hpp"
-#include "dna_bv_rs.hpp"
+#include "multi_bit_vector.hpp"
 
 namespace cosmo {
 
@@ -45,6 +45,7 @@ struct typed_iterator : iterator {
   typedef T* pointer;
 };
 
+// TODO: patch STXXL to have type traits and be copy/movable instead
 template <typename T, typename iterator>
 typed_iterator<T, iterator> & make_typed_iterator(const iterator & it) {
   return (typed_iterator<T, iterator>&) it;
@@ -167,8 +168,8 @@ struct dbg_builder {
     decltype(record_t().get_tail()) payload;
     bool is_first_prefix;
     bool is_first_suffix;
-    size_t k; // for variable order (when we later have dummy shifts)
-    size_t lcs; // for variable order
+    //size_t k; // for variable order (when we later have dummy shifts)
+    //size_t lcs; // for variable order
   };
 
   typedef stxxl::vector<record_t, 1, stxxl::lru_pager<8>, block_size> record_vector_t;
@@ -391,10 +392,10 @@ struct dbg_builder {
     COSMO_LOG(trace) << "Building dBG...";
     typedef wt_huff<rrr_vector<63>> wt_t;
     wt_t edges;
-    dna_bv_rs<> edges_mbv;
+    //multi_bit_vector<> edges_mbv;
     //construct(edges, out_file_base+".edges", 1);
     construct_im(edges, output);
-    construct_im(edges_mbv, output);
+    //construct_im(edges_mbv, output);
     // TODO: add parameter to keep temp files
     //boost::filesystem::remove(out_file_base+".edges");
     sd_vector<> node_bv(node_starts);
@@ -407,7 +408,7 @@ struct dbg_builder {
     }
 
     COSMO_LOG(info) << "size of WT: " << size_in_mega_bytes(edges) << " MB";
-    COSMO_LOG(info) << "size of MBV: " << size_in_mega_bytes(edges_mbv) << " MB";
+    //COSMO_LOG(info) << "size of MBV: " << size_in_mega_bytes(edges_mbv) << " MB";
     COSMO_LOG(info) << "size of node BV: " << size_in_mega_bytes(node_bv) << " MB";
     COSMO_LOG(info) << "size of dummy BV: " << size_in_mega_bytes(dum_pos_bv) << " MB";
     COSMO_LOG(info) << "size of dummy vec: " << size_in_mega_bytes(dummies) << " MB";
@@ -418,9 +419,9 @@ struct dbg_builder {
   }
 
   template <class Visitor>
-  dbg_t build(Visitor visit) { return build([](auto x){}, visit); }
+  dbg_t build(Visitor visit) { return build([](auto){}, visit); }
 
-  dbg_t build() { return build([](auto x){}); }
+  dbg_t build() { return build([](auto){}); }
 };
 
 

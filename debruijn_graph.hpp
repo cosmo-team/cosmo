@@ -333,7 +333,7 @@ class debruijn_graph {
       if (x == 0) return x;
       if (is_incoming_dummy(i)) {
         // Get character in question
-        symbol_type x = (m_dummies[_get_dummy_index(i)]<<((k - pos - 1)*2)&0x11 +1);
+        symbol_type x = ((m_dummies[_get_dummy_index(i)]<<((k - pos - 1)*2)&0x11)+1);
         return x;
       }
       i = _backward(i);

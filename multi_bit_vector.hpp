@@ -191,6 +191,7 @@ public:
     structure_tree::add_size(child, written_bytes);
     return written_bytes;
     */
+    return 0;
   }
 
   void load(std::istream& in) {
