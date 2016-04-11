@@ -182,6 +182,9 @@ int main(int argc, char* argv[]) {
       builder.push(x,c);
     });
 
+    COSMO_LOG(info) << "Percentage of min union : " << num_kmers_read/(double)min_union * 100 << "%";
+    COSMO_LOG(info) << "Percentage of max union : " << num_kmers_read/(double)max_union * 100 << "%";
+
     // TODO: improve the memory use here (can SDSL use external vectors?)
     bit_vector color_bv;
     size_t num_set = 0;
@@ -191,8 +194,8 @@ int main(int argc, char* argv[]) {
     },[&](auto x) { // Merge visitor
       auto color = get<0>(x.payload);
       for (int color_idx = 0; color_idx < num_colors; color_idx++) {
-        // TODO: test inverting row/col
-        color_bv[edge_idx * num_colors + color_idx] = color[color_idx];
+        color_bv[color_idx * num_colors + edge_idx] = !color[color_idx];
+        //color_bv[edge_idx * num_colors + color_idx] = !color[color_idx];
         num_set += color[color_idx];
       }
       edge_idx++;
@@ -201,8 +204,12 @@ int main(int argc, char* argv[]) {
     sdsl::store_to_file(dbg, params.output_prefix + params.output_base + ".dbg");
 
     rrr_vector<63> color_rrr(color_bv);
-    COSMO_LOG(info) << "size of color_bv : " << size_in_mega_bytes(color_bv) << " MB";
+    sd_vector<> color_sd(color_bv);
+    size_t total_colors = edge_idx * num_colors;
+    COSMO_LOG(info) << "Color density : " << num_set/(double)total_colors * 100 << "%";
+    COSMO_LOG(info) << "size of color_bv  : " << size_in_mega_bytes(color_bv) << " MB";
     COSMO_LOG(info) << "size of color_rrr : " << size_in_mega_bytes(color_rrr) << " MB";
+    COSMO_LOG(info) << "size of color_sd  : " << size_in_mega_bytes(color_sd) << " MB";
     sdsl::store_to_file(color_rrr, params.output_prefix + params.output_base + ".rrr");
   }
   else {
