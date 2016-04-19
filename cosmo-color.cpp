@@ -117,7 +117,7 @@ void find_bubbles(debruijn_graph<> dbg, rrr_vector<63> &colors, uint64_t color_m
             branch[0].clear();
             branch[1].clear();
 
-            int branch_offset = 0;
+            //int branch_offset = 0;
             uint64_t branch_color[2];
 
 
@@ -172,7 +172,7 @@ void find_bubbles(debruijn_graph<> dbg, rrr_vector<63> &colors, uint64_t color_m
                 // cout << "Stopped due to : " << dbg.indegree(pos) << ":" << dbg.outdegree(pos) << ":" << branch_offset << "\n";
 
                 end[branch_num++] =  (dbg.indegree(pos) > 1) ? pos : 0;
-                branch_offset = 0;
+                //branch_offset = 0;
             }
             // check if both branches ended on the same kmer and they pass the requested color masks
             //cout << "Trying " << branch_color[0] << ":" << branch_color[1] << " " << end[0] << ":" << end[1] <<"\n";
