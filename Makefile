@@ -1,9 +1,8 @@
 # NOTE: needs boost, tclap, STXXL, KMC, and sdsl
 
 CXX=g++
-CPP_FLAGS=-pipe -m64 -std=c++14 -pedantic-errors -W -Wall -Wextra -Wpointer-arith -Wcast-qual \
-					-Wunused -Wwrite-strings
-					#-Werror
+CPP_FLAGS=-pipe -m64 -std=c++14 -pedantic-errors -W -Wall -Wextra -Wpointer-arith \
+					-Wunused -Wwrite-strings #-Wcast-qual #-Werror
 
 CLANG_WARNINGS=-Wbool-conversions -Wshift-overflow -Wliteral-conversion # CLANG ONLY
 
@@ -11,8 +10,8 @@ DEP_PATH=/usr/local
 KMC_PATH=./KMC
 INC=-isystem $(DEP_PATH)/include
 LIB=-L$(DEP_PATH)/lib -L./
-BOOST_FLAGS=-DBOOST_LOG_DYN_LINK -lboost_log -lboost_system -lboost_filesystem 
-DEP_FLAGS=$(INC) $(LIB) $(BOOST_FLAGS) -isystem $(KMC_PATH) -lsdsl
+BOOST_FLAGS=-DBOOST_LOG_DYN_LINK -lboost_log -lboost_system -lboost_filesystem
+DEP_FLAGS=$(INC) $(LIB) $(BOOST_FLAGS) -isystem $(KMC_PATH) -lsdsl -fopenmp #openmp is needed for logging
 DEBUG_FLAGS=-pg -gstabs
 NDEBUG_FLAGS=-DNDEBUG
 OPT_FLAGS=-O3 -mmmx -msse -msse2 -msse3 -msse4 -msse4.2 -march=native -fno-strict-aliasing
@@ -68,7 +67,7 @@ lut.hpp: make_lut.py
 		python make_lut.py > lut.hpp
 
 cosmo-build: cosmo-build.cpp $(BUILD_REQS)
-	$(CXX) $(CPP_FLAGS) -o $@ $< $(KMC_OBJS) $(DEP_FLAGS) -lstxxl -fopenmp
+	$(CXX) $(CPP_FLAGS) -o $@ $< $(KMC_OBJS) $(DEP_FLAGS) -lstxxl
 
 cosmo-color: cosmo-color.cpp $(BUILD_REQS)
 	$(CXX) $(CPP_FLAGS) -o $@ $< $(KMC_OBJS) $(DEP_FLAGS)
@@ -80,7 +79,7 @@ cosmo-color: cosmo-color.cpp $(BUILD_REQS)
 #	$(CXX) $(CPP_FLAGS) -o $@ $(filter-out %.hpp,$^) $(DEP_FLAGS) -lstxxl -fopenmp -lsdsl
 
 cosmo-test: debruijn_graph_test.cpp $(BUILD_REQS) bgl_sdb_adapter.hpp multi_bit_vector.hpp
-	$(CXX) $(CPP_FLAGS) -o $@ $< $(DEP_FLAGS) -lboost_unit_test_framework -fopenmp
+	$(CXX) $(CPP_FLAGS) -o $@ $< $(DEP_FLAGS) -lboost_unit_test_framework
 
 test: cosmo-test
 	./cosmo-test
