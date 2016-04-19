@@ -53,7 +53,10 @@ class debruijn_graph {
   const label_type             m_alphabet{};
   const size_t                 m_num_nodes{};
   const t_bit_vector_type m_dummy_flags;
-  const typename t_bit_vector_type::rank_1_type m_dummy_rank;
+  const typename t_bit_vector_type::rank_1_type m_dummy_rank_1;
+  // TODO: Add IO for these
+  const typename t_bit_vector_type::rank_0_type m_dummy_rank_0;
+  const typename t_bit_vector_type::select_0_type m_dummy_select_0;
   // TODO: support STXXL vectors as dummy labels may not need to be in memory
   const vector<kmer_t> m_dummies;
 
@@ -70,7 +73,9 @@ class debruijn_graph {
       m_alphabet(alphabet),
       m_num_nodes(m_node_rank(m_node_flags.size())),
       m_dummy_flags(dummy_flags),
-      m_dummy_rank(&m_dummy_flags),
+      m_dummy_rank_1(&m_dummy_flags),
+      m_dummy_rank_0(&m_dummy_flags),
+      m_dummy_select_0(&m_dummy_flags),
       m_dummies(dummies) {}
 
   private:
@@ -84,6 +89,8 @@ class debruijn_graph {
   }
 
   bool is_incoming_dummy(size_t edge) const {
+    // TODO: get start edge of node
+    // should be called at first edge of node
     return m_dummy_flags[edge];
   }
 
@@ -131,7 +138,7 @@ class debruijn_graph {
     // edge label has to be the last node symbol of v
     symbol_type x = _symbol_access(j);
     if (x == 0) return 0;
-    size_t i_first = _backward(j);
+    size_t i_first = _backward(j, false);
     size_t i_last = _next_edge(i_first, x);
     return m_edges.rank(i_last, _with_edge_flag(x, true)) -
            m_edges.rank(i_first, _with_edge_flag(x, true)) + 1;
@@ -217,11 +224,14 @@ class debruijn_graph {
     assert(x < sigma + 1);
     // node u -> v : edge i -> j
     size_t j = _node_to_edge(v);
+    //COSMO_LOG(info) << "j: " << j;
     if (is_incoming_dummy(j)) return -1;
     symbol_type y = _symbol_access(j);
     if (y == 0) return -1;
-    size_t i_first = _backward(j);
+    size_t i_first = _backward(j, false);
     size_t i_last  = _next_edge(i_first, y);
+    //COSMO_LOG(info) << "i_first: " << i_first;
+    //COSMO_LOG(info) << "i_last: " << i_last;
     size_t base_rank = m_edges.rank(i_first, _with_edge_flag(y, true));
     size_t last_rank = m_edges.rank(i_last, _with_edge_flag(y, true));
     size_t num_predecessors = last_rank - base_rank + 1;
@@ -230,6 +240,7 @@ class debruijn_graph {
       return (i == 0)? i_first : m_edges.select(base_rank+i, _with_edge_flag(y,true));
     };
     auto accessor = [&](size_t i) -> symbol_type { return _first_symbol(selector(i)); };
+    // TODO: rewrite this with iterators and boost function adapter? many binary searches have issues
     ssize_t sub_idx = function_binary_search(0, num_predecessors-1, x, accessor);
     if (sub_idx == -1) return -1;
     return _edge_to_node(selector(sub_idx));
@@ -238,7 +249,8 @@ class debruijn_graph {
   // string -> node, edge
   // BGL style API
   size_t _get_dummy_index(size_t i) const {
-    return m_dummy_rank(i);
+    size_t dummy_idx = m_dummy_rank_1(i) - (i - m_node_rank(i));
+    return dummy_idx;
   }
 
   label_type node_label(size_t v) const {
@@ -269,7 +281,7 @@ class debruijn_graph {
   }
 
   // TODO: subtract number of $ edges?
-  size_t num_edges() const { return m_node_flags.size() - m_edge_max_ranks[0]; }
+  size_t num_edges() const { return m_node_flags.size(); /* - m_edge_max_ranks[0];*/ }
   size_t num_nodes() const { return m_num_nodes; /*m_node_rank(num_edges());*/ }
 
   private:
@@ -286,10 +298,7 @@ class debruijn_graph {
 
   size_t _edge_to_node(size_t i) const {
     assert(i < size());
-    return m_node_rank(i);
-    // TODO: check this alternative?
-    //size_t x = m_node_rank(i+1)-1;
-    //return x;
+    return m_node_rank(i+1)-1;
   }
 
   // This should be moved to a helper file...
@@ -354,14 +363,16 @@ class debruijn_graph {
       if (is_incoming_dummy(i)) {
         // If last character, don't need to prepend anything
         if (pos + 1 == k) return label;
-        string prefix = kmer_to_string(m_dummies[_get_dummy_index(i)]<<(pos*2), k - 1 - pos);
+        string label_2 = kmer_to_string(m_dummies[_get_dummy_index(i)], k - 1);
+        string prefix = kmer_to_string(m_dummies[_get_dummy_index(i)]<<((pos-1)*2), k - 1 - pos);
         for (size_t i = 0; i < k-pos-1; ++i) {
           label[i] = prefix[i];
         }
         return label;
       }
 
-      i = _backward(i);
+      // TODO: optimize these node/edge conversion calls (does backward convert to nodes in the process?)
+      i = _node_to_edge(_edge_to_node(_backward(i,false)));
     }
     return label;
   }
@@ -397,12 +408,12 @@ class debruijn_graph {
     // (should maybe make backward consistent with this, but using the edge 0 loop for node label generation).
     if (x == 0) return -1;
 
-    size_t nth = m_edges.rank(i, fullx);
+    size_t nth = m_edges.rank(i+1, fullx);
     // find prev_rank of dummies from base, then select to the nth
-    nth += (m_dummy_rank(m_symbol_ends[x]) - m_dummy_rank(start));
+    //nth += (m_dummy_rank(m_symbol_ends[x]) - m_dummy_rank(start));
 
     // if this is flagged, then reset i to the corresponding unflagged symbol and use that as the starting point
-    if (sym_with_flag & 1) {
+    //if (sym_with_flag & 1) {
       // i = m_edges.select(m_edges.rank(i, fullx), fullx);
       // The above is basically the same as subtracting 1...
       // ALTERNATIVE PATCH which doesn't need extra ranks/selects (observed and written by Mike Mueller)
@@ -415,18 +426,36 @@ class debruijn_graph {
          
          This assumes that the flagged edge matches an edge that occurs BEFORE it in the list, which is what I 
          observe in the paper */
-      nth--;
-    }
+     // nth--;
+    //}
 
-    size_t next = m_node_select(m_node_rank(start+1) + nth);
+    // select to nth 0 from base in dummies
+    size_t prev = m_dummy_rank_0(start);
+    size_t next = m_dummy_select_0(prev + nth);
+    //size_t next = m_node_select(m_node_rank(start+1) + nth);
+
+    /*
+    COSMO_LOG(info) << "";
+    COSMO_LOG(info) << "edge  : " << i;
+    COSMO_LOG(info) << "start : " << start;
+    COSMO_LOG(info) << "nth   : " << nth;
+    COSMO_LOG(info) << "#prev : " << prev;
+    COSMO_LOG(info) << "next  : " << next;
+    */
+
     return next;
   }
 
-  ssize_t _backward(size_t i) const {
+  ssize_t _backward(size_t i, bool find_first=true) const {
+    //COSMO_LOG(info) << "";
+    //COSMO_LOG(info) << "i       : " << i;
+
     assert(i < size());
+    // Makes things a lot easier if we just start from the first edge
+    i = (find_first)?_node_to_edge(_edge_to_node(i)):i;
+    //COSMO_LOG(info) << "i'      : " << i;
     if (is_incoming_dummy(i)) return -1;
     symbol_type x  = _symbol_access(i);
-    //cerr << "$acgt"[x] << endl;
     // This handles x = $ so that we have the all-$ edge at position 0
     // As we use the same symbol for outgoing dummy edges, which actually
     // DONT point back to the incoming dummy edges.
@@ -434,18 +463,18 @@ class debruijn_graph {
     if (x == 0) return 0;
     size_t x_start = _symbol_start(x);
     // rank is over [0,i) and select is 1-based
-    size_t nth = _rank_distance(x_start, i+1);
-    // Need to subtract dummies
-    nth -= (m_dummy_rank(i+1) - m_dummy_rank(x_start));
-    // TODO: check this
-    //size_t nth = _rank_distance(x_start, i+1);
-    // no minus flag because we want the FIRST
-    // ACTUALLY we might need this now, since we wont have all the shifts in some cases
-    //cerr << nth + 1 << " <=? " 
-    //     << m_edges.rank(m_edges.size(), _with_edge_flag(x, false))
-    //     << endl;
-    //auto temp = m_edges.select(nth+1, _with_edge_flag(x, false));
-    return m_edges.select(nth, _with_edge_flag(x, false));
+    size_t nth = m_dummy_rank_0(i+1) - m_dummy_rank_0(x_start);//_rank_distance(x_start, i+1);
+    //size_t nth_adjust = 0;//(m_dummy_rank_1(i+1) - m_dummy_rank_1(x_start));
+    size_t next = m_edges.select(nth, _with_edge_flag(x, false));
+
+    /*
+    COSMO_LOG(info) << "x_start : " << x_start;
+    COSMO_LOG(info) << "nth     : " << nth;
+    COSMO_LOG(info) << "nth_d   : " << nth_adjust;
+    COSMO_LOG(info) << "next    : " << next;
+    */
+
+    return next;
   }
 
   size_t backward(size_t v) const {
@@ -499,7 +528,9 @@ class debruijn_graph {
     written_bytes += write_member(m_alphabet, out, child, "alphabet");
     written_bytes += write_member(m_num_nodes, out, child, "num_nodes");
     written_bytes += m_dummy_flags.serialize(out, child, "dummy_flags");
-    written_bytes += m_dummy_rank.serialize(out, child, "dummy_rank");
+    written_bytes += m_dummy_rank_1.serialize(out, child, "dummy_rank_1");
+    written_bytes += m_dummy_rank_0.serialize(out, child, "dummy_rank_0");
+    written_bytes += m_dummy_select_0.serialize(out, child, "dummy_select_0");
     written_bytes += sdsl::serialize(m_dummies, out, child, "dummies");
     // helper bitvector m_doc_rmin_marked and m_doc_rmax_marked are not serialize
     structure_tree::add_size(child, written_bytes);
@@ -520,8 +551,12 @@ class debruijn_graph {
     read_member(deconst(m_alphabet), in);
     read_member(deconst(m_num_nodes), in);
     deconst(m_dummy_flags).load(in);
-    deconst(m_dummy_rank).load(in);
-    deconst(m_dummy_rank).set_vector(&m_dummy_flags);
+    deconst(m_dummy_rank_1).load(in);
+    deconst(m_dummy_rank_1).set_vector(&m_dummy_flags);
+    deconst(m_dummy_rank_0).load(in);
+    deconst(m_dummy_rank_0).set_vector(&m_dummy_flags);
+    deconst(m_dummy_select_0).load(in);
+    deconst(m_dummy_select_0).set_vector(&m_dummy_flags);
     sdsl::load(deconst(m_dummies), in);
   }
 

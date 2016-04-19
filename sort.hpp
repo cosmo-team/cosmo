@@ -375,11 +375,11 @@ struct dbg_builder {
       output[idx]=w_idx;
       counts[1 + node_last_sym]++;
       if (result.tag == in_dummy) {
-        dummies.push_back(x);
+        dummies.push_back(x<<2); // remove edge symbol
         //dummy_writer << get<0>(x);
       }
       node_starts[idx]   = !is_first_prefix; // inverted so sparse bv is sparser
-      dummy_flags[idx] = (result.tag == in_dummy);
+      dummy_flags[idx] = (result.tag == in_dummy) || !is_first_prefix;
       idx++;
     });
 
@@ -394,7 +394,9 @@ struct dbg_builder {
     wt_t edges;
     //multi_bit_vector<> edges_mbv;
     //construct(edges, out_file_base+".edges", 1);
+    // TODO: make not use in-mem construction
     construct_im(edges, output);
+
     //construct_im(edges_mbv, output);
     // TODO: add parameter to keep temp files
     //boost::filesystem::remove(out_file_base+".edges");
