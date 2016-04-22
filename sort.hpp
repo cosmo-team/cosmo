@@ -67,7 +67,10 @@ template <typename kmer_t>
 struct node_less {
   typedef kmer_t value_type;
   bool operator() (const value_type & a, const value_type & b) const {
-    return get_start_node(a) < get_start_node(b);
+    //return get_start_node(a) < get_start_node(b);
+    if (get_start_node(a) < get_start_node(b)) return true;
+    if (get_start_node(a) == get_start_node(b)) return (get_edge_label(a) < get_edge_label(b));
+    return false;
   }
   value_type min_value() const { return std::numeric_limits<value_type>::min(); }
   value_type max_value() const { return std::numeric_limits<value_type>::max(); }
@@ -370,7 +373,9 @@ struct dbg_builder {
       char label = get_edge_label(x);
       int  node_last_sym = get_nt(x, 1);
       bool is_out_dummy = (tag == out_dummy);
-      char w_idx = is_out_dummy?0:label | ((!result.is_first_suffix)<<2);
+      // TODO: change to use ascii (consistently) coz these symbols are annoyiinnng
+      char w_idx = is_out_dummy?0:((1+label)<<1) | (!result.is_first_suffix);
+      //cerr << (int) w_idx << endl;
       //char w = is_out_dummy?'$':(DNA_ALPHA "ACGT")[w_idx];
       output[idx]=w_idx;
       counts[1 + node_last_sym]++;
@@ -415,7 +420,7 @@ struct dbg_builder {
     COSMO_LOG(info) << "size of dummy BV: " << size_in_mega_bytes(dum_pos_bv) << " MB";
     COSMO_LOG(info) << "size of dummy vec: " << size_in_mega_bytes(dummies) << " MB";
 
-    dbg_t graph(k, node_bv, edges, counts, "$acgtACGT", dum_pos_bv, dummies);
+    dbg_t graph(k, node_bv, edges, counts, "$ACGT", dum_pos_bv, dummies);
     COSMO_LOG(info) << "size of DBG: " << size_in_mega_bytes(graph) << " MB";
     return graph;
   }
