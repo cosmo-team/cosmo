@@ -150,9 +150,6 @@ int main(int argc, char* argv[]) {
       cerr << kmer_to_string(kmer,k) << endl;
     });
     sdsl::store_to_file(dbg, params.output_prefix + params.output_base + ".dbg");
-    for (size_t v = 0; v < dbg.num_nodes(); ++v) {
-      cerr << dbg.node_label(v) << endl;
-    }
   }
   else if (fmt == input_format::kmc) {
     typedef dbg_builder<dbg_t, kmer_t, color_bv> builder_t;
@@ -197,18 +194,18 @@ int main(int argc, char* argv[]) {
     auto dbg = builder.build([&](auto x) { // Pre merge
       color_bv = bit_vector(x * num_colors);
     },[&](auto x) { // Merge visitor
-      auto kmer = x.edge;
-      cerr << kmer_to_string(kmer,k) << endl;
+      //auto kmer = x.edge;
+      //cerr << kmer_to_string(kmer,k) << endl;
       auto color = get<0>(x.payload);
       for (size_t color_idx = 0; color_idx < num_colors; color_idx++) {
+        // TODO: try complemented bits in color-major form in a *sd_vector* for large data set.
         //color_bv[color_idx * num_colors + edge_idx] = !color[color_idx];
-        color_bv[edge_idx * num_colors + color_idx] = !color[color_idx];
+        color_bv[edge_idx * num_colors + color_idx] = color[color_idx];
         num_set += color[color_idx];
       }
       edge_idx++;
     });
 
-    cerr << endl;
     sdsl::store_to_file(dbg, params.output_prefix + params.output_base + ".dbg");
 
     rrr_vector<63> color_rrr(color_bv);
@@ -219,14 +216,10 @@ int main(int argc, char* argv[]) {
     COSMO_LOG(info) << "size of color_rrr : " << size_in_mega_bytes(color_rrr) << " MB";
     //COSMO_LOG(info) << "size of color_sd  : " << size_in_mega_bytes(color_sd) << " MB";
     sdsl::store_to_file(color_rrr, params.output_prefix + params.output_base + ".rrr");
-
-    for (size_t v = 0; v < dbg.num_nodes(); ++v) {
-      cerr << dbg.node_label(v) << endl;
-    }
   }
   else {
-    COSMO_LOG(error) << "Shouldn't be here...";
-    assert(false);
+    COSMO_LOG(error) << "Unsupported operation.";
+    exit(EXIT_FAILURE);
   }
 
   COSMO_LOG(trace) << "Done!";
