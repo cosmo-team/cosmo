@@ -226,7 +226,5 @@ BOOST_AUTO_TEST_CASE ( create_graph_using_constructor )
   boost::filesystem::remove(temp_file);
   test_graph_directly(db2);
 
-  /*
   test_graph_via_boost(db);
-  */
 }
