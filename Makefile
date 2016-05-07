@@ -23,10 +23,15 @@ BANNER='Copyright Alex Bowe (c) 2016'
 CPP_FLAGS+=-DVERSION=\"$(VERSION)\" -DBANNER=\"$(BANNER)\"
 
 k?=32
+# TODO: quantize k
 CPP_FLAGS+=-DK_LEN=$(k)
 
 colors?=64
 CPP_FLAGS+=-DNUM_COLS=$(colors)
+
+ifeq ($(asm),1)
+CPP_FLAGS+=-S -fverbose-asm
+endif
 
 ifeq ($(optimise),0)
 CPP_FLAGS+=$(NOPT_FLAGS)
@@ -44,18 +49,6 @@ ifeq ($(verbose),1)
 CPP_FLAGS+=-DVERBOSE
 endif
 
-ifneq ($(revcomps),0)
-CPP_FLAGS+=-DADD_REVCOMPS
-endif
-
-ifneq ($(dummies),0)
-CPP_FLAGS+=-DALL_DUMMIES
-endif
-
-ifeq ($(varord),1)
-CPP_FLAGS+=-DVAR_ORDER
-endif
-
 KMC_OBJS=$(KMC_PATH)/kmc_api/kmc_file.o $(KMC_PATH)/kmc_api/kmer_api.o $(KMC_PATH)/kmc_api/mmer.o
 BUILD_REQS=lut.hpp debug.hpp utility.hpp io.hpp sort.hpp kmer.hpp dummies.hpp debruijn_graph.hpp
 COLOR_REQS=colored_debruijn_graph.hpp io.hpp debug.hpp
@@ -63,13 +56,18 @@ BINARIES=cosmo-build cosmo-color cosmo-test
 
 default: all
 
-lut.hpp: make_lut.py
-		python make_lut.py > lut.hpp
+# Stores last compiled options to know whether we need to recompile when comp variables change
+.PHONY: force
+compiler_flags: force
+	@echo $(CPP_FLAGS) | cmp -s - $@ || echo $(CPP_FLAGS) > $@
 
-cosmo-build: cosmo-build.cpp $(BUILD_REQS)
+lut.hpp: make_lut.py
+	python make_lut.py > lut.hpp
+
+cosmo-build: cosmo-build.cpp $(BUILD_REQS) compiler_flags
 	$(CXX) $(CPP_FLAGS) -o $@ $< $(KMC_OBJS) $(DEP_FLAGS) -lstxxl
 
-cosmo-color: cosmo-color.cpp $(BUILD_REQS)
+cosmo-color: cosmo-color.cpp $(BUILD_REQS) compiler_flags
 	$(CXX) $(CPP_FLAGS) -o $@ $< $(KMC_OBJS) $(DEP_FLAGS)
 
 #cosmo-benchmark: cosmo-benchmark.cpp $(ASSEM_REQS) wt_algorithm.hpp debruijn_hypergraph.hpp
@@ -78,7 +76,7 @@ cosmo-color: cosmo-color.cpp $(BUILD_REQS)
 #cosmo-test: cosmo-test.cpp catch.hpp $(wildcard *_test.cpp) $(wildcard $(subst _test.cpp,.hpp,$(wildcard *_test.cpp)))
 #	$(CXX) $(CPP_FLAGS) -o $@ $(filter-out %.hpp,$^) $(DEP_FLAGS) -lstxxl -fopenmp -lsdsl
 
-cosmo-test: debruijn_graph_test.cpp $(BUILD_REQS) bgl_sdb_adapter.hpp multi_bit_vector.hpp
+cosmo-test: debruijn_graph_test.cpp $(BUILD_REQS) bgl_sdb_adapter.hpp multi_bit_vector.hpp compiler_flags
 	$(CXX) $(CPP_FLAGS) -o $@ $< $(DEP_FLAGS) -lboost_unit_test_framework
 
 test: cosmo-test
