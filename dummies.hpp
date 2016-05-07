@@ -49,15 +49,14 @@ template <typename kmer_t, typename InputRange1, typename InputRange2, typename 
 void find_incoming_dummy_nodes(const InputRange1 a_range, const InputRange2 b_range, uint32_t k, Func out_f) {
   //typedef decltype(*a_range.begin()) kmer_t;
   //typedef typename OutputIterator::value_type pair_t;
-  // TODO: http://www.boost.org/doc/libs/1_58_0/libs/range/doc/html/range/reference/adaptors/reference/indexed.html
   size_t idx = 0;
   kmer_t temp;
-  auto a_lam    = std::function<kmer_t(kmer_t)>([&](kmer_t x) -> kmer_t {
+  auto a_lam = std::function<kmer_t(kmer_t)>([&](kmer_t x) -> kmer_t {
     temp = x;
     return get_start_node(x);
   });
   auto b_lam   = std::function<kmer_t(kmer_t)>([k](kmer_t x) -> kmer_t {return get_end_node(x,k);});
-  auto a = a_range | transformed(a_lam) | filtered(uniq<kmer_t>()) | indexed(0);
+  auto a = a_range | transformed(a_lam) | filtered(uniq<kmer_t>());
   auto b = b_range | transformed(b_lam) | filtered(uniq<kmer_t>());
 
   auto pairer  = [&](kmer_t) { out_f(idx++, temp); };
@@ -68,20 +67,19 @@ void find_incoming_dummy_nodes(const InputRange1 a_range, const InputRange2 b_ra
   //__gnu_parallel::set_difference(a.begin(), a.end(), b.begin(), b.end(), paired_out);
 }
 
+// TODO: use set_symmetric_difference with each wrapped with a tag that is ignored during the comparison
+// that way we can find both dummy types at same time
 template <typename kmer_t, typename InputRange1, typename InputRange2, typename Func>
 void find_outgoing_dummy_nodes(const InputRange1 a_range, const InputRange2 b_range, uint32_t k, Func out_f) {
-  //typedef decltype(*a_range.begin()) kmer_t;
-  //typedef typename OutputIterator::value_type pair_t;
-  // TODO: http://www.boost.org/doc/libs/1_58_0/libs/range/doc/html/range/reference/adaptors/reference/indexed.html
   kmer_t temp;
-  auto a_lam    = std::function<kmer_t(kmer_t)>([](kmer_t x) -> kmer_t {
+  auto a_lam = std::function<kmer_t(kmer_t)>([](kmer_t x) -> kmer_t {
     return get_start_node(x);
   });
   auto b_lam = std::function<kmer_t(kmer_t)>([&](kmer_t x) -> kmer_t {return get_end_node((temp = x),k);});
   auto a = a_range | transformed(a_lam) | filtered(uniq<kmer_t>());
   auto b = b_range | transformed(b_lam) | filtered(uniq<kmer_t>());
 
-  auto pairer  = [&](kmer_t x) { out_f(temp); };
+  auto pairer = [&](kmer_t) { out_f(temp); };
   auto paired_out = boost::make_function_output_iterator(pairer);
   boost::set_difference(b, a, paired_out);
   // GPU: http://thrust.github.io/doc/group__set__operations.html
@@ -288,13 +286,13 @@ void merge_dummies(InputRange1 & a_range, InputRange2 & o_range, InputRange3 & i
 }
 
 // TODO: Try a parallell merge (and set difference) on the internal STXXL blocks
-/*
 template <typename InputRange1, typename InputRange2, typename InputRange3, class Visitor>
-void merge_dummies(InputRange1 & a, InputRange2 & o, InputRange3 & i, Visitor visit) {
+void merge_dummies_with_shifts(InputRange1 & a, InputRange2 & i, InputRange3 & o, Visitor visit) {
   using namespace boost::heap;
   // make non-incoming-dummies dummies with k-length so we can compare them easily
   //auto a_dummies = a | transformed([](decltype(*a))
 
+  /*
   // Make sure queue can hold references to each variant of range
   typedef heap_item<kmer_t, InputRange1*, InputRange2*, InputRange3*> h_t;
 
@@ -326,8 +324,8 @@ void merge_dummies(InputRange1 & a, InputRange2 & o, InputRange3 & i, Visitor vi
     else q.increase(input.handle);
     //if (!input.empty()) q.push(input);
   }
+  */
 }
-*/
 
 template <typename kmer_t>
 uint8_t get_w(edge_tag tag, const kmer_t & x) {

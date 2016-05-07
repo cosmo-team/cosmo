@@ -9,6 +9,7 @@
 #include <stxxl/deque>
 
 #include <boost/tuple/tuple.hpp>
+#include <boost/dynamic_bitset.hpp>
 #include <boost/range/iterator_range_core.hpp>
 #include <boost/range/iterator_range.hpp>
 
@@ -29,11 +30,19 @@ namespace {
 
 // Should be unrolled and inlined, making good use of registers
 template <typename kmer_t>
-void kmer_shifts(const kmer_t & x, kmer_t * a) {
-  size_t width = bitwidth<kmer_t>::width / 2;
-  for (size_t i = 0; i < width; ++i) {
-    a[i] = (x << (i*2));
+inline void kmer_shifts(const kmer_t & x, kmer_t * a, const size_t num_shifts) {
+  //const size_t num_shifts = bitwidth<kmer_t>::width / 2;
+
+  // NOTE: misses off final shift (which makes 0)
+  for (size_t i = 1; i < num_shifts; ++i) {
+    a[i] = (x << (2*i));
   }
+}
+
+template <typename kmer_t>
+inline void kmer_shifts(const kmer_t & x, kmer_t * a) {
+  const size_t num_shifts = bitwidth<kmer_t>::width / 2;
+  return kmer_shifts(x, a, num_shifts);
 }
 
 template <typename T, typename iterator>
@@ -68,8 +77,10 @@ struct node_less {
   typedef kmer_t value_type;
   bool operator() (const value_type & a, const value_type & b) const {
     //return get_start_node(a) < get_start_node(b);
-    if (get_start_node(a) < get_start_node(b)) return true;
-    if (get_start_node(a) == get_start_node(b)) return (get_edge_label(a) < get_edge_label(b));
+    auto a_node = get_start_node(a);
+    auto b_node = get_start_node(b);
+    if (a_node < b_node) return true;
+    if (a_node == b_node) return (a < b);
     return false;
   }
   value_type min_value() const { return std::numeric_limits<value_type>::min(); }
@@ -172,7 +183,7 @@ struct dbg_builder {
     bool is_first_prefix;
     bool is_first_suffix;
     //size_t k; // for variable order (when we later have dummy shifts)
-    //size_t lcs; // for variable order
+    size_t lcs; // for variable order
   };
 
   typedef stxxl::vector<record_t, 1, stxxl::lru_pager<8>, block_size> record_vector_t;
@@ -183,13 +194,16 @@ struct dbg_builder {
   typedef kmer_less<kmer_t>       edge_comparator_t;
   typedef dummy_less<dummy_t>    dummy_comparator_t;
   typedef stxxl::sorter<record_t, record_comparator_t, block_size> record_sorter_t;
+  //typedef stxxl::sorter<kmer_t, node_comparator_t, block_size>     node_sorter_t;
   typedef stxxl::sorter<kmer_t,     edge_comparator_t, block_size>   edge_sorter_t;
   typedef stxxl::sorter<dummy_t,   dummy_comparator_t, block_size>  dummy_sorter_t;
 
   private:
   size_t k;
   size_t M;
-  bool   do_swap;
+  const bool   do_swap;
+  const bool   shift_dummies;
+  const bool   variable_order; // TODO: make this based off input dbg type
   string out_file_base;
   reverse_complement<kmer_t> rc;
   reverse_nt<kmer_t>         revnt;
@@ -202,6 +216,8 @@ struct dbg_builder {
   public:
   template <typename parameters_t>
   dbg_builder(const parameters_t & parameters) : k(parameters.k), M(parameters.m), do_swap(parameters.swap),
+                                                 shift_dummies(parameters.shift_dummies),
+                                                 variable_order(parameters.variable_order),
                                                  rc(k),
                                                  record_sorter(record_comparator_t(), M/2),
                                                  edge_sorter(edge_comparator_t(),   M/2) {
@@ -254,64 +270,147 @@ struct dbg_builder {
     t1.join();
     t2.join();
 
-    std::function<kmer_t(record_t)> record_key([](record_t x) -> kmer_t {
-      return get<0>(x);
-    });
-
-    std::function<kmer_t(dummy_t)> dummy_key([](dummy_t x) -> kmer_t {
+    auto get_key([](auto x) -> kmer_t {
       return get<0>(x);
     });
 
     // Can write dummy labels and positions instead (for non variable order)
     // stxxl::syscall_file dum_file(basename(parameters.input_filename) + ".dummies", stxxl::file::DIRECT | stxxl::file::RDWR | stxxl::file::CREAT);
     stxxl::deque<size_t> incoming_dummy_positions;
+    stxxl::deque<kmer_t> incoming_dummies;
+    stxxl::vector<dummy_t> incoming_dummies_v;
 
     // NOTE: need to sort incoming dummies if we want all shifts (currently needed for variable order)
-    //dummy_vector_t incoming_dummies;
-    //dummy_sorter_t incoming_dummy_sorter(dummy_comparator_t(), M);
+    dummy_sorter_t incoming_dummy_sorter(dummy_comparator_t(), M);
 
-    // Try with just queue
     stxxl::deque<kmer_t> outgoing_dummies_q;
     edge_sorter_t outgoing_dummy_sorter(edge_comparator_t(), M);
-    kmer_vector_t outgoing_dummies;
+    kmer_vector_t outgoing_dummies_v;
 
     // Detect incoming dummies
-    //std::thread t3([&]()
+    // TODO: add flags to turn off adding revcomps and instead find unary dBG paths (ala bcalm)
+    // TODO: when single stranded support is added (i.e. no need for revcomps)
+    // then we should run both B-A and A-B to find outgoing and incoming dummy edges respectively
+    // (as we wont be able to use the revcomp trick). Can be run in two threads.
+    // TODO: OR, we can use set_symmetric_difference with each wrapped with a tag that is ignored during the comparison
     {
-      COSMO_LOG(trace) << "Searching for nodes requiring incoming dummy edges...";
+      COSMO_LOG(trace) << "Searching for nodes requiring dummy edges...";
       typename record_vector_t::bufreader_type a_reader(kmers_a);
       typename kmer_vector_t::bufreader_type   b_reader(kmers_b);
 
       auto a = boost::make_iterator_range(make_typed_iterator<record_t>(a_reader.begin()),
                                           make_typed_iterator<record_t>(a_reader.end()))
-                                        | transformed(record_key);
+                                        | transformed(get_key);
       auto b = boost::make_iterator_range(make_typed_iterator<kmer_t>(b_reader.begin()),
                                           make_typed_iterator<kmer_t>(b_reader.end()));
 
-      // TODO: use set_symmetric_difference with each wrapped with a tag that is ignored during the comparison
-      // TODO: producer consumer queues or streams
-      find_incoming_dummy_nodes<kmer_t>(a, b, k, [&](size_t idx, kmer_t x) {
-        incoming_dummy_positions.push_back(idx);
+      //kmer_t shifts[bitwidth<kmer_t>::width/2];
+      //const size_t in_mem_shifts = 16;
+      //const size_t max_shift = k - in_mem;
+      size_t num_incoming_dummies = 0;
+      if (shift_dummies) {
+        // B - A
         // We can add reverse complements and sort them to get outgoing dummies
-        auto y = (rc(x<<2));
-        outgoing_dummy_sorter.push(y);
-      });
+        // So the set difference direction doesn't matter
+        /*
+        typedef boost::dynamic_bitset<> bits;
+        array<bits, in_mem> low_shifts;
+        for (size_t i = 0; i < in_mem; ++i) {
+          size_t num_shifts = 1<<(2*(i+1));
+          low_shifts[i] = bits(num_shifts);
+        }
+        */
+
+        kmer_t prev_kmer{};
+        size_t idx = 0;
+        find_outgoing_dummy_nodes<kmer_t>(a, b, k, [&](kmer_t x) {
+          num_incoming_dummies++;
+          outgoing_dummies_q.push_back((x<<2)>>2); // replace edge symbol with A
+          kmer_t y = (rc(x<<2)); // dummy node with T as outgoing edge (requires shifting)
+          // kmer_shifts(y, shifts);
+          // These come out in reverse order... not that it matters but why not push to front instead :)
+          //incoming_dummies.push_front(y);
+          size_t lcp_len = (idx++>0)*lcp(y, prev_kmer, k);
+          prev_kmer = y;
+          size_t this_max = k-lcp_len; //std::min(k - lcp_len, max_shift);
+          //cerr << kmer_to_string(y, k) << " " << lcp_len << endl;
+          for (size_t i = 1; i < this_max; ++i) {
+            incoming_dummy_sorter.push(dummy_t(y<<(2*i), k-i));
+          }
+          // generate final shifts in memory if we need to
+          /*
+          for (size_t i = this_max; i < k - lcp_len; ++i) {
+            size_t this_k = k - i;
+            auto idx = y<<(2*i);
+            auto edge = idx >> (bitwidth<kmer_t>::width - 2);
+            idx = (idx << 2) >> (bitwidth<kmer_t>::width - this_k * 2);
+            idx |= edge;
+            //if (this_k > in_mem) {
+              //COSMO_LOG(info) << "this_k, i, lcp_len, this_max : " << this_k << " " << i << " " << lcp_len << " " << this_max;
+            //}
+            //low_shifts[this_k-1][idx] = 1;
+            auto original = (idx << (bitwidth<kmer_t>::width - 2)) | ((idx >> 2) << (bitwidth<kmer_t>::width - this_k * 2));
+          }
+          */
+        });
+      // TODO: producer consumer queues or streams (so we can start merging straight away in another thread)
+      } else {
+        // A - B
+        // We do it this way to get indices of incoming dummies instead
+        // Although it means we have to sort the outgoing dummies
+        find_incoming_dummy_nodes<kmer_t>(a, b, k, [&](size_t idx, kmer_t x) {
+          incoming_dummy_positions.push_back(idx);
+          auto y = (rc(x<<2)); // dummy node with A as outgoing edge
+          outgoing_dummy_sorter.push(y);
+        });
+      }
 
       kmers_b.clear();
 
-      COSMO_LOG(trace) << "Sorting outgoing dummies...";
-      outgoing_dummy_sorter.sort();
-      outgoing_dummies.resize(outgoing_dummy_sorter.size());
-      COSMO_LOG(trace) << "Materializing outgoing dummies...";
-      stxxl::stream::materialize(outgoing_dummy_sorter, outgoing_dummies.begin(), outgoing_dummies.end());
-      outgoing_dummy_sorter.finish_clear();
+      if (shift_dummies) {
+        // Create shifts
+        // Can sorting be skipped in favour of counting symbols in each position + radix sort-like approach?
+        COSMO_LOG(info) << "# out dummies      : " << outgoing_dummies_q.size();
+        COSMO_LOG(info) << "# inc dummies      : " << num_incoming_dummies;
+        /*
+        kmer_t prev_kmer{};
+        size_t idx = 0;
+        const size_t in_mem = 12; // all shifts but the last in_mem shifts
+        const size_t max_shift = k - in_mem;
+        for (auto x:incoming_dummies) {
+          size_t lcp_len = (idx++>0)*lcp(x, prev_kmer, k);
+          prev_kmer = x;
+          // TODO: if I end up sorting just the dummies again
+          // (no shifts i.e. if I work out how to generate them in order),
+          // move this back up to the finding dummies loop, and add LCP field
+          size_t this_max = std::min(k - lcp_len, max_shift);
+          for (size_t i = 1; i < this_max; ++i) {
+            incoming_dummy_sorter.push(dummy_t(x<<(2*i), k-i));
+            //cerr << kmer_to_string(x, k) << " " << lcp_len << endl;
+          }
+          cerr << kmer_to_string(x, k) << " " << lcp_len << " " << this_max << endl;
+          */
+        //}
+        //incoming_dummies.clear();
+        COSMO_LOG(info) << "# inc dummy shifts : " << incoming_dummy_sorter.size();
+        COSMO_LOG(trace) << "Sorting dummies...";
+        incoming_dummy_sorter.sort();
+        COSMO_LOG(trace) << "Materializing dummies...";
+        incoming_dummies_v.resize(incoming_dummy_sorter.size());
+        stxxl::stream::materialize(incoming_dummy_sorter, incoming_dummies_v.begin(), incoming_dummies_v.end());
+        incoming_dummy_sorter.finish_clear();
+        // TODO: Fix merge code to support this representation too
+      } else {
+        COSMO_LOG(info) << "# out dummies: " << outgoing_dummy_sorter.size();
+        COSMO_LOG(info) << "# inc dummies: " << incoming_dummy_positions.size();
+        COSMO_LOG(trace) << "Sorting dummies...";
+        outgoing_dummy_sorter.sort();
+        COSMO_LOG(trace) << "Materializing dummies...";
+        outgoing_dummies_v.resize(outgoing_dummy_sorter.size());
+        stxxl::stream::materialize(outgoing_dummy_sorter, outgoing_dummies_v.begin(), outgoing_dummies_v.end());
+        outgoing_dummy_sorter.finish_clear();
+      }
     }
-    //);
-    //t3.join();
-    // TODO: add flags to turn off adding revcomps and instead find unary dBG paths (ala bcalm)
-    // TODO: add flag to toggle outputting bitvector marking incoming dummies, or full dummy shifts
-    COSMO_LOG(info) << "# inc dummies: " << incoming_dummy_positions.size();
-    COSMO_LOG(info) << "# out dummies: " << outgoing_dummies.size();
 
     /*
     cout << "incoming dummies:" << endl;
@@ -328,24 +427,24 @@ struct dbg_builder {
     }
     cout << endl;
     */
-    pre_merge(kmers_a.size() + outgoing_dummies.size());
+    // Call pre-merge visitor if it exists
+    pre_merge(kmers_a.size() + outgoing_dummies_v.size());
 
     typename record_vector_t::bufreader_type a_reader(kmers_a);
-    typename kmer_vector_t::bufreader_type   o_reader(outgoing_dummies);
-    //typename dummy_vector_t::bufreader_type  i_reader(incoming_dummies);
+    typename kmer_vector_t::bufreader_type   o_reader(outgoing_dummies_v);
+    //typename dummy_vector_t::bufreader_type  i_reader(incoming_dummies_v);
 
     auto a = boost::make_iterator_range(make_typed_iterator<record_t>(a_reader.begin()),
                                         make_typed_iterator<record_t>(a_reader.end()));
-                                       //| transformed(record_key);
     auto o = boost::make_iterator_range(make_typed_iterator<kmer_t>(o_reader.begin()),
                                         make_typed_iterator<kmer_t>(o_reader.end()));
     //auto i = boost::make_iterator_range(make_typed_iterator<dummy_t>(i_reader.begin()),
-    //                                   | transfonode dummy_key);
+    //                                    make_typed_iterator<dummy_t>(i_reader.end()));
 
     COSMO_LOG(trace) << "Merging in dummies...";
 
     using namespace sdsl;
-    int_vector<8> output(kmers_a.size() + outgoing_dummies.size(), 0);
+    int_vector<8> output(kmers_a.size() + outgoing_dummies_v.size(), 0);
     //stxxl::syscall_file dummy_file(out_file_base + ".dummies", stxxl::file::DIRECT | stxxl::file::RDWR | stxxl::file::CREAT);
     // TODO: make dBG have stxxl vector for dummies instead
     //stxxl::vector<kmer_t> dummies_ext(&dummy_file);
@@ -354,43 +453,54 @@ struct dbg_builder {
     vector<kmer_t> dummies;
     dummies.reserve(incoming_dummy_positions.size());
     // TODO: look into swapping bit_vector's underlying vector with stxxl vector
-    bit_vector node_starts(kmers_a.size() + outgoing_dummies.size());
-    bit_vector dummy_flags(kmers_a.size() + outgoing_dummies.size());
+    bit_vector node_starts(kmers_a.size() + outgoing_dummies_v.size());
+    bit_vector dummy_flags(kmers_a.size() + outgoing_dummies_v.size());
     array<size_t, 5> counts{0,0,0,0,0};
 
     size_t idx = 0;
+    kmer_t prev_edge = 0;
     FirstStartNodeFlagger is_first_start_node(k);
     FirstEndNodeFlagger   is_first_end_node(k);
-    merge_dummies(a, o, incoming_dummy_positions, [&](edge_tag tag, record_t rec){
-      auto x = rec.get_head();
-      auto payload = rec.get_tail();
-      bool is_first_prefix = is_first_start_node(x, k);
-      bool is_first_suffix = is_first_end_node(tag, x, k);
-      output_t result{tag, x, payload, is_first_prefix, is_first_suffix};
+    if (shift_dummies) {
+      //merge_dummies_with_shifts(a, i, o, [&](edge_tag tag, record_t rec) {
+      //});
+    } else {
+      merge_dummies(a, o, incoming_dummy_positions, [&](edge_tag tag, record_t rec){
+        auto x = rec.get_head();
+        auto payload = rec.get_tail();
+        bool is_first_prefix = is_first_start_node(x, k);
+        bool is_first_suffix = is_first_end_node(tag, x, k);
+        size_t common_suffix_length = 0;
+        if (variable_order && idx > 0) {
+          common_suffix_length = node_lcs(x, prev_edge, k);
+        }
+        output_t result{tag, x, payload, is_first_prefix, is_first_suffix, common_suffix_length};
 
-      visit(result);
+        visit(result);
 
-      char label = get_edge_label(x);
-      int  node_last_sym = get_nt(x, 1);
-      bool is_out_dummy = (tag == out_dummy);
-      // TODO: change to use ascii (consistently) coz these symbols are annoyiinnng
-      char w_idx = is_out_dummy?0:((1+label)<<1) | (!result.is_first_suffix);
-      //cerr << (int) w_idx << endl;
-      //char w = is_out_dummy?'$':(DNA_ALPHA "ACGT")[w_idx];
-      output[idx]=w_idx;
-      counts[1 + node_last_sym]++;
-      if (result.tag == in_dummy) {
-        dummies.push_back(x<<2); // remove edge symbol
-        //dummy_writer << get<0>(x);
-      }
-      node_starts[idx]   = !is_first_prefix; // inverted so sparse bv is sparser
-      dummy_flags[idx] = (result.tag == in_dummy) || !is_first_prefix;
-      idx++;
-    });
+        char label = get_edge_label(x);
+        int  node_last_sym = get_nt(x, 1);
+        bool is_out_dummy = (tag == out_dummy);
+        // TODO: change to use ascii (consistently) coz these symbols are annoyiinnng
+        char w_idx = is_out_dummy?0:((1+label)<<1) | (!result.is_first_suffix);
+        //cerr << (int) w_idx << endl;
+        //char w = is_out_dummy?'$':(DNA_ALPHA "ACGT")[w_idx];
+        output[idx]=w_idx;
+        counts[1 + node_last_sym]++;
+        if (result.tag == in_dummy) {
+          dummies.push_back(x<<2); // remove edge symbol
+          //dummy_writer << get<0>(x);
+        }
+        node_starts[idx]   = !is_first_prefix; // inverted so sparse bv is sparser
+        dummy_flags[idx] = (result.tag == in_dummy) || !is_first_prefix;
+        prev_edge = x;
+        idx++;
+      });
+    }
 
     // Cleanup
     kmers_a.clear();
-    outgoing_dummies.clear();
+    outgoing_dummies_v.clear();
     incoming_dummy_positions.clear();
 
     // TODO: get these types from the input dBG instead

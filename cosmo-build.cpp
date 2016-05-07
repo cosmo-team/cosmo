@@ -32,9 +32,9 @@ struct parameters_t {
   std::string output_base    = "";
   size_t k = 0;
   size_t m = 0;
-  bool swap = true;
+  bool swap = false;
   bool variable_order = false;
-//  bool shift_dummies  = true;
+  bool shift_dummies  = false;
 };
 
 parameters_t parse_arguments(int argc, char **argv) {
@@ -43,14 +43,13 @@ parameters_t parse_arguments(int argc, char **argv) {
   TCLAP::ValueArg<size_t> kmer_length_arg("k", "kmer_length", "Length of edges (node is k-1). Needed for raw/DSK input.", false, 0, "length", cmd);
   TCLAP::ValueArg<size_t> mem_size_arg("m", "mem_size", "Internal memory to use (MB).", false, default_mem_size, "mem_size", cmd);
   TCLAP::ValueArg<std::string> output_prefix_arg("o", "output_prefix", "Output prefix.", false, "", "output_prefix", cmd);
-  // TODO: add variable order support to builder
-  //TCLAP::SwitchArg varord_arg("v", "variable_order", "Output .lcs file for variable order support.", cmd, false);
+  TCLAP::SwitchArg varord_arg("v", "variable_order", "Output .lcs file for variable order support.", cmd, false);
+  TCLAP::SwitchArg shift_arg("d", "shift_dummies", "Shift all incoming dummies (slower but compresses better, and necessary for variable order without losing information).", cmd, false);
   // TODO: make this detect if directory by reading it
   //TCLAP::SwitchArg mono_arg("", "monochrome", "If multiple files are specified, don't add color data.");
   TCLAP::UnlabeledValueArg<std::string> input_filename_arg("input", "Input file.", true, "", "input_file", cmd);
   //TCLAP::UnlabeledMultiArg<string> input_filenames_arg("input", "file names", true, "", "input_file", cmd);
   //cmd.add( input_filename_arg );
-  //TCLAP::SwitchArg shift_arg("s", "shift_dummies", "Don't shift all incoming dummies (faster, but loses some information).", cmd, false);
   // TODO: add option for no reverse complements (e.g. if using bcalm input)
   // TODO: ASCII outputter: -a for last symbol, -aa for whole kmer
   // TODO: add DSK count parser (-c)
@@ -58,11 +57,11 @@ parameters_t parse_arguments(int argc, char **argv) {
   // TODO: add option for mutliple files being merged for colour
   cmd.parse( argc, argv );
   params.input_filename  = input_filename_arg.getValue();
+  //params.temp_dir        = "";
   params.k               = kmer_length_arg.getValue();
   params.m               = mem_size_arg.getValue() * mb_to_bytes;
-  //params.variable_order  = varord_arg.getValue();
-  //params.shift_dummies   = !shift_arg.getValue();
-  //params.temp_dir        = "";
+  params.variable_order  = varord_arg.getValue();
+  params.shift_dummies   = shift_arg.getValue();
   params.output_prefix   = output_prefix_arg.getValue();
   return params;
 }
@@ -145,9 +144,11 @@ int main(int argc, char* argv[]) {
       builder.push(x);
     }
     // TODO: move dbg decl out of block and create copy constructor/operator etc
+    //auto dbg = builder.build();
     auto dbg = builder.build([k](auto x){
       auto kmer = x.edge;
-      cerr << kmer_to_string(kmer,k) << endl;
+      auto l = x.lcs;
+      //cerr << kmer_to_string(kmer, k) << " " << l << endl;
     });
     sdsl::store_to_file(dbg, params.output_prefix + params.output_base + ".dbg");
   }
