@@ -95,8 +95,7 @@ struct dummy_less {
 
   //node_less<kmer_t> n_less;
   bool operator() (const value_type & a, const value_type & b) const {
-    return a < b;//n_less(get<0>(a), get<0>(b)) && (get<1>(a) < get<1>(b));
-    /*
+    //return a < b;//n_less(get<0>(a), get<0>(b)) && (get<1>(a) < get<1>(b));
     kmer_t   a_node = get_start_node(get<0>(a));
     kmer_t   b_node = get_start_node(get<0>(b));
     uint64_t a_edge = get_edge_label(get<0>(a));
@@ -110,7 +109,6 @@ struct dummy_less {
       else return (get<1>(a) < get<1>(b));
     }
     else return (a_node < b_node);
-    */
   }
   value_type min_value() const { return dummy_t(); }
   value_type max_value() const { return dummy_t(std::numeric_limits<kmer_t>::max(),
@@ -182,7 +180,7 @@ struct dbg_builder {
     decltype(record_t().get_tail()) payload;
     bool is_first_prefix;
     bool is_first_suffix;
-    //size_t k; // for variable order (when we later have dummy shifts)
+    size_t k; // for variable order (when we later have dummy shifts)
     size_t lcs; // for variable order
   };
 
@@ -278,7 +276,7 @@ struct dbg_builder {
     // stxxl::syscall_file dum_file(basename(parameters.input_filename) + ".dummies", stxxl::file::DIRECT | stxxl::file::RDWR | stxxl::file::CREAT);
     stxxl::deque<size_t> incoming_dummy_positions;
     stxxl::deque<kmer_t> incoming_dummies;
-    stxxl::vector<dummy_t> incoming_dummies_v;
+    dummy_vector_t incoming_dummies_v;
 
     // NOTE: need to sort incoming dummies if we want all shifts (currently needed for variable order)
     dummy_sorter_t incoming_dummy_sorter(dummy_comparator_t(), M);
@@ -325,17 +323,17 @@ struct dbg_builder {
         size_t idx = 0;
         find_outgoing_dummy_nodes<kmer_t>(a, b, k, [&](kmer_t x) {
           num_incoming_dummies++;
-          outgoing_dummies_q.push_back((x<<2)>>2); // replace edge symbol with A
-          kmer_t y = (rc(x<<2)); // dummy node with T as outgoing edge (requires shifting)
+          outgoing_dummies_q.push_back((x<<2)>>2); // replace edge symbol with A for (possibly) simpler merging
+          kmer_t y = ((rc(x))<<2)>>2; // dummy node with A as outgoing edge (requires shifting)
           // kmer_shifts(y, shifts);
-          // These come out in reverse order... not that it matters but why not push to front instead :)
-          //incoming_dummies.push_front(y);
           size_t lcp_len = (idx++>0)*lcp(y, prev_kmer, k);
           prev_kmer = y;
           size_t this_max = k-lcp_len; //std::min(k - lcp_len, max_shift);
           //cerr << kmer_to_string(y, k) << " " << lcp_len << endl;
           for (size_t i = 1; i < this_max; ++i) {
-            incoming_dummy_sorter.push(dummy_t(y<<(2*i), k-i));
+            auto dum = y<<(2*i);
+            //cerr << kmer_to_string(dum, k, k-i) << " (" << k-i << "/" << k-lcp_len << ")" << endl;
+            incoming_dummy_sorter.push(dummy_t(dum, k-i));
           }
           // generate final shifts in memory if we need to
           /*
@@ -399,7 +397,11 @@ struct dbg_builder {
         incoming_dummies_v.resize(incoming_dummy_sorter.size());
         stxxl::stream::materialize(incoming_dummy_sorter, incoming_dummies_v.begin(), incoming_dummies_v.end());
         incoming_dummy_sorter.finish_clear();
-        // TODO: Fix merge code to support this representation too
+        /*
+        for (auto x : incoming_dummies_v) {
+          cerr << kmer_to_string(get<0>(x), k, get<1>(x)) << endl;
+        }
+        */
       } else {
         COSMO_LOG(info) << "# out dummies: " << outgoing_dummy_sorter.size();
         COSMO_LOG(info) << "# inc dummies: " << incoming_dummy_positions.size();
@@ -413,14 +415,6 @@ struct dbg_builder {
     }
 
     /*
-    cout << "incoming dummies:" << endl;
-    for (auto x : incoming_dummies) {
-      cout << kmer_to_string(get<0>(x), k, get<1>(x)) << endl;
-    }
-    cout << endl;
-    */
-
-    /*
     cout << "outgoing dummies:" << endl;
     for (auto x : outgoing_dummies) {
       cout << kmer_to_string(x, k) << endl;
@@ -428,23 +422,23 @@ struct dbg_builder {
     cout << endl;
     */
     // Call pre-merge visitor if it exists
-    pre_merge(kmers_a.size() + outgoing_dummies_v.size());
+    pre_merge(kmers_a.size() + outgoing_dummies_q.size() + outgoing_dummies_v.size() + incoming_dummies_v.size());
 
     typename record_vector_t::bufreader_type a_reader(kmers_a);
     typename kmer_vector_t::bufreader_type   o_reader(outgoing_dummies_v);
-    //typename dummy_vector_t::bufreader_type  i_reader(incoming_dummies_v);
+    typename dummy_vector_t::bufreader_type  i_reader(incoming_dummies_v);
 
     auto a = boost::make_iterator_range(make_typed_iterator<record_t>(a_reader.begin()),
                                         make_typed_iterator<record_t>(a_reader.end()));
     auto o = boost::make_iterator_range(make_typed_iterator<kmer_t>(o_reader.begin()),
                                         make_typed_iterator<kmer_t>(o_reader.end()));
-    //auto i = boost::make_iterator_range(make_typed_iterator<dummy_t>(i_reader.begin()),
-    //                                    make_typed_iterator<dummy_t>(i_reader.end()));
+    auto i = boost::make_iterator_range(make_typed_iterator<dummy_t>(i_reader.begin()),
+                                        make_typed_iterator<dummy_t>(i_reader.end()));
 
     COSMO_LOG(trace) << "Merging in dummies...";
 
     using namespace sdsl;
-    int_vector<8> output(kmers_a.size() + outgoing_dummies_v.size(), 0);
+    int_vector<8> output(kmers_a.size() + outgoing_dummies_q.size() + outgoing_dummies_v.size() + incoming_dummies_v.size(), 0);
     //stxxl::syscall_file dummy_file(out_file_base + ".dummies", stxxl::file::DIRECT | stxxl::file::RDWR | stxxl::file::CREAT);
     // TODO: make dBG have stxxl vector for dummies instead
     //stxxl::vector<kmer_t> dummies_ext(&dummy_file);
@@ -453,55 +447,77 @@ struct dbg_builder {
     vector<kmer_t> dummies;
     dummies.reserve(incoming_dummy_positions.size());
     // TODO: look into swapping bit_vector's underlying vector with stxxl vector
-    bit_vector node_starts(kmers_a.size() + outgoing_dummies_v.size());
-    bit_vector dummy_flags(kmers_a.size() + outgoing_dummies_v.size());
+    bit_vector node_starts((!shift_dummies) * (kmers_a.size() + outgoing_dummies_v.size()));
+    bit_vector dummy_flags((!shift_dummies) * (kmers_a.size() + outgoing_dummies_v.size()));
     array<size_t, 5> counts{0,0,0,0,0};
 
     size_t idx = 0;
-    kmer_t prev_edge = 0;
+    kmer_t prev_edge{};
+    uint8_t prev_k = 0;
     FirstStartNodeFlagger is_first_start_node(k);
     FirstEndNodeFlagger   is_first_end_node(k);
-    if (shift_dummies) {
-      //merge_dummies_with_shifts(a, i, o, [&](edge_tag tag, record_t rec) {
-      //});
-    } else {
-      merge_dummies(a, o, incoming_dummy_positions, [&](edge_tag tag, record_t rec){
-        auto x = rec.get_head();
-        auto payload = rec.get_tail();
-        bool is_first_prefix = is_first_start_node(x, k);
-        bool is_first_suffix = is_first_end_node(tag, x, k);
-        size_t common_suffix_length = 0;
-        if (variable_order && idx > 0) {
-          common_suffix_length = node_lcs(x, prev_edge, k);
+
+
+    auto merge_visitor = [&] (edge_tag tag, record_t rec, uint8_t this_k) {
+      auto x = rec.get_head();
+      auto payload = rec.get_tail();
+      bool is_first_prefix = is_first_start_node(x, this_k);
+      bool is_first_suffix = is_first_end_node(tag, x, this_k);
+      size_t common_suffix_length = 0;
+      if (variable_order && idx > 0) {
+        common_suffix_length = node_lcs(x, prev_edge, std::min(this_k, prev_k));
+        // If dummy edge length is equal, and the LCS length is the length of the non-dummy node suffix,
+        // include the $ signs as well (not sure if this is needed)
+        // TODO : test turning this off - functionality the same?
+        if (prev_k == this_k && this_k == common_suffix_length + 1) {
+          common_suffix_length = k - 1;
         }
-        output_t result{tag, x, payload, is_first_prefix, is_first_suffix, common_suffix_length};
+      }
+      output_t result{tag, x, payload, is_first_prefix, is_first_suffix, this_k, common_suffix_length};
 
-        visit(result);
+      visit(result);
 
-        char label = get_edge_label(x);
-        int  node_last_sym = get_nt(x, 1);
-        bool is_out_dummy = (tag == out_dummy);
-        // TODO: change to use ascii (consistently) coz these symbols are annoyiinnng
-        char w_idx = is_out_dummy?0:((1+label)<<1) | (!result.is_first_suffix);
-        //cerr << (int) w_idx << endl;
-        //char w = is_out_dummy?'$':(DNA_ALPHA "ACGT")[w_idx];
-        output[idx]=w_idx;
-        counts[1 + node_last_sym]++;
+      char label = get_edge_label(x);
+      int  node_last_sym = (tag == in_dummy && this_k == 1)? 0:1+get_nt(x, 1);
+      bool is_out_dummy = (tag == out_dummy);
+      // TODO: change to use ascii (consistently) coz these symbols are annoyiinnng
+      char w_idx = is_out_dummy?0:((1+label)<<1) | (!result.is_first_suffix);
+      //cerr << (int) w_idx << endl;
+      //char w = is_out_dummy?'$':(DNA_ALPHA "ACGT")[w_idx];
+      output[idx]=w_idx;
+      counts[node_last_sym]++;
+
+
+      if (!shift_dummies) {
         if (result.tag == in_dummy) {
-          dummies.push_back(x<<2); // remove edge symbol
+          dummies.push_back(x<<2); // remove edge symbol and add to vector
           //dummy_writer << get<0>(x);
         }
         node_starts[idx]   = !is_first_prefix; // inverted so sparse bv is sparser
         dummy_flags[idx] = (result.tag == in_dummy) || !is_first_prefix;
-        prev_edge = x;
-        idx++;
-      });
+      }
+
+      prev_edge = x;
+      prev_k = this_k;
+      idx++;
+    };
+
+    if (shift_dummies) {
+      merge_dummies_with_shifts(a, outgoing_dummies_q, i, k, merge_visitor);
+    } else {
+      merge_dummies(a, o, incoming_dummy_positions, k, merge_visitor);
     }
 
     // Cleanup
     kmers_a.clear();
     outgoing_dummies_v.clear();
     incoming_dummy_positions.clear();
+
+    // Prefix sum counts
+    counts[0] = 0;
+    for (size_t i = 1; i < 5; ++i) {
+      counts[i] += counts[i - 1];
+    }
 
     // TODO: get these types from the input dBG instead
     COSMO_LOG(trace) << "Building dBG...";
@@ -515,22 +531,22 @@ struct dbg_builder {
     //construct_im(edges_mbv, output);
     // TODO: add parameter to keep temp files
     //boost::filesystem::remove(out_file_base+".edges");
-    sd_vector<> node_bv(node_starts);
-    sd_vector<> dum_pos_bv(dummy_flags);
+    //if (!shift_dummies) {
+      sd_vector<> node_bv(node_starts);
+      sd_vector<> dum_pos_bv(dummy_flags);
 
-    // Prefix sum counts
-    counts[0] = 0;
-    for (size_t i = 1; i < 5; ++i) {
-      counts[i] += counts[i - 1];
-    }
+      // TODO : make overloaded function that accepts multiple things
+      dbg_t graph(k, node_bv, edges, counts, "$ACGT", dum_pos_bv, dummies);
+    //}
 
     COSMO_LOG(info) << "size of WT: " << size_in_mega_bytes(edges) << " MB";
     //COSMO_LOG(info) << "size of MBV: " << size_in_mega_bytes(edges_mbv) << " MB";
     COSMO_LOG(info) << "size of node BV: " << size_in_mega_bytes(node_bv) << " MB";
-    COSMO_LOG(info) << "size of dummy BV: " << size_in_mega_bytes(dum_pos_bv) << " MB";
-    COSMO_LOG(info) << "size of dummy vec: " << size_in_mega_bytes(dummies) << " MB";
+    if (!shift_dummies) {
+      COSMO_LOG(info) << "size of dummy BV: " << size_in_mega_bytes(dum_pos_bv) << " MB";
+      COSMO_LOG(info) << "size of dummy vec: " << size_in_mega_bytes(dummies) << " MB";
+    }
 
-    dbg_t graph(k, node_bv, edges, counts, "$ACGT", dum_pos_bv, dummies);
     COSMO_LOG(info) << "size of DBG: " << size_in_mega_bytes(graph) << " MB";
     return graph;
   }

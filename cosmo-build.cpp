@@ -145,10 +145,19 @@ int main(int argc, char* argv[]) {
     }
     // TODO: move dbg decl out of block and create copy constructor/operator etc
     //auto dbg = builder.build();
-    auto dbg = builder.build([k](auto x){
+    vector<string> flags({"-", " "});
+    auto dbg = builder.build([&](auto x){
       auto kmer = x.edge;
       auto l = x.lcs;
-      //cerr << kmer_to_string(kmer, k) << " " << l << endl;
+      string flag = flags[x.is_first_suffix];
+      //cerr << x.is_first_prefix << " ";
+      if (x.tag == in_dummy) {
+        cerr << kmer_to_string(kmer, k, x.k) << flag << " " << l << endl;
+      } else if (x.tag == out_dummy) {
+        cerr << kmer_to_string(kmer<<2, k-1) << "$ " << l << endl;
+      } else {
+        cerr << kmer_to_string(kmer, k) << flag << " " << l << endl;
+      }
     });
     sdsl::store_to_file(dbg, params.output_prefix + params.output_base + ".dbg");
   }

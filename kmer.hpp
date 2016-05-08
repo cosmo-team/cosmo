@@ -268,9 +268,11 @@ size_t node_lcs(const kmer_t & a, const kmer_t & b, size_t k) {
   kmer_t x(a);
   kmer_t y(b);
   // TODO: make position-templated set_nt()
-  ((uint64_t*)&x)[1] &= 0x3FFFFFFFFFFFFFFF;
-  ((uint64_t*)&y)[1] &= 0x3FFFFFFFFFFFFFFF;
-  return lcs(x,y,k) - 1;
+  //((uint64_t*)&x)[1] &= 0x3FFFFFFFFFFFFFFF;
+  //((uint64_t*)&y)[1] &= 0x3FFFFFFFFFFFFFFF;
+  auto result = lcs(x<<2,y<<2,k-1);
+  //COSMO_LOG(info) << "lcs: " << result;
+  return result;//(result)?result - 1:0;
 }
 
 /*
