@@ -221,19 +221,45 @@ size_t lcs(const kmer_t & a, const kmer_t & b, size_t k) {
   size_t total = 0;
   // This should unroll. for 128 bits its only 2 iters
   for (size_t i = 0; i < num_blocks; i++) {
-    if (p[i] == q[i]) {
+    size_t index = num_blocks - i - 1;
+    if (p[index] == q[index]) {
       total += BLOCK_WIDTH;
-      continue;
-    }
-    else {
+    } else {
       // COUNT *LEADING* ZEROS - we store kmers backwards
-      total += clz(p[i] ^ q[i]);
+      total += clz(p[index] ^ q[index]);
       break;
     }
   }
   total /= NT_WIDTH;
   return std::min(total, k);
 }
+
+// Longest common prefix
+// The arithmetic may not work properly if uint64_ts are longer than 64 bits (which is possible but unlikely)
+// or the kmer type is not an exact multiple of that type
+template <typename kmer_t>
+size_t lcp(const kmer_t & a, const kmer_t & b, size_t k) {
+  static const size_t width = bitwidth<kmer_t>::width;
+  static const size_t num_blocks = width/BLOCK_WIDTH;
+  //kmer_t x = a ^ b; // Do this in the loop below instead to potentially save some cycles
+  size_t padding = width - k*NT_WIDTH;
+  uint64_t * p = (uint64_t*)&a;
+  uint64_t * q = (uint64_t*)&b;
+  size_t total = 0;
+  // This should unroll. for 128 bits its only 2 iters
+  for (size_t i = 0; i < num_blocks; i++) {
+    if (p[i] == q[i]) {
+      total += BLOCK_WIDTH;
+    } else {
+      // COUNT *TRAILING* ZEROS - we store kmers backwards
+      total += ctz(p[i] ^ q[i]);
+      break;
+    }
+  }
+  total = (total-padding) / NT_WIDTH;
+  return total;
+}
+
 
 template <typename kmer_t>
 size_t node_lcs(const kmer_t & a, const kmer_t & b, size_t k) {
@@ -242,9 +268,11 @@ size_t node_lcs(const kmer_t & a, const kmer_t & b, size_t k) {
   kmer_t x(a);
   kmer_t y(b);
   // TODO: make position-templated set_nt()
-  ((uint64_t*)&x)[0] &= 0x3FFFFFFFFFFFFFFF;
-  ((uint64_t*)&y)[0] &= 0x3FFFFFFFFFFFFFFF;
-  return lcs(x,y,k) - 1;
+  //((uint64_t*)&x)[1] &= 0x3FFFFFFFFFFFFFFF;
+  //((uint64_t*)&y)[1] &= 0x3FFFFFFFFFFFFFFF;
+  auto result = lcs(x<<2,y<<2,k-1);
+  //COSMO_LOG(info) << "lcs: " << result;
+  return result;//(result)?result - 1:0;
 }
 
 /*

@@ -7,6 +7,10 @@
 
 #include <stxxl.h>
 
+#include <sdsl/int_vector.hpp>
+#include <sdsl/bit_vectors.hpp>
+#include <sdsl/wavelet_trees.hpp>
+
 #include <boost/log/trivial.hpp>
 #include <boost/log/core.hpp>
 #include <boost/log/expressions.hpp>
@@ -24,6 +28,7 @@
 #include "sort.hpp"
 #include "dummies.hpp"
 #include "debruijn_graph.hpp"
+#include "debruijn_graph_shifted.hpp"
 #include "kmc_api/kmc_file.h"
 
 struct parameters_t {
@@ -32,9 +37,9 @@ struct parameters_t {
   std::string output_base    = "";
   size_t k = 0;
   size_t m = 0;
-  bool swap = true;
+  bool swap = false;
   bool variable_order = false;
-//  bool shift_dummies  = true;
+  bool shift_dummies  = false;
 };
 
 parameters_t parse_arguments(int argc, char **argv) {
@@ -43,14 +48,13 @@ parameters_t parse_arguments(int argc, char **argv) {
   TCLAP::ValueArg<size_t> kmer_length_arg("k", "kmer_length", "Length of edges (node is k-1). Needed for raw/DSK input.", false, 0, "length", cmd);
   TCLAP::ValueArg<size_t> mem_size_arg("m", "mem_size", "Internal memory to use (MB).", false, default_mem_size, "mem_size", cmd);
   TCLAP::ValueArg<std::string> output_prefix_arg("o", "output_prefix", "Output prefix.", false, "", "output_prefix", cmd);
-  // TODO: add variable order support to builder
-  //TCLAP::SwitchArg varord_arg("v", "variable_order", "Output .lcs file for variable order support.", cmd, false);
+  TCLAP::SwitchArg varord_arg("v", "variable_order", "Output .lcs file for variable order support.", cmd, false);
+  TCLAP::SwitchArg shift_arg("d", "shift_dummies", "Shift all incoming dummies (slower but compresses better, and necessary for variable order without losing information).", cmd, false);
   // TODO: make this detect if directory by reading it
   //TCLAP::SwitchArg mono_arg("", "monochrome", "If multiple files are specified, don't add color data.");
   TCLAP::UnlabeledValueArg<std::string> input_filename_arg("input", "Input file.", true, "", "input_file", cmd);
   //TCLAP::UnlabeledMultiArg<string> input_filenames_arg("input", "file names", true, "", "input_file", cmd);
   //cmd.add( input_filename_arg );
-  //TCLAP::SwitchArg shift_arg("s", "shift_dummies", "Don't shift all incoming dummies (faster, but loses some information).", cmd, false);
   // TODO: add option for no reverse complements (e.g. if using bcalm input)
   // TODO: ASCII outputter: -a for last symbol, -aa for whole kmer
   // TODO: add DSK count parser (-c)
@@ -58,11 +62,11 @@ parameters_t parse_arguments(int argc, char **argv) {
   // TODO: add option for mutliple files being merged for colour
   cmd.parse( argc, argv );
   params.input_filename  = input_filename_arg.getValue();
+  //params.temp_dir        = "";
   params.k               = kmer_length_arg.getValue();
   params.m               = mem_size_arg.getValue() * mb_to_bytes;
-  //params.variable_order  = varord_arg.getValue();
-  //params.shift_dummies   = !shift_arg.getValue();
-  //params.temp_dir        = "";
+  params.variable_order  = varord_arg.getValue();
+  params.shift_dummies   = shift_arg.getValue();
   params.output_prefix   = output_prefix_arg.getValue();
   return params;
 }
@@ -127,31 +131,101 @@ int main(int argc, char* argv[]) {
     exit(1);
   }
 
-  // TODO: support varord
-  typedef debruijn_graph<> dbg_t;
-
   if (fmt == input_format::dsk || fmt == input_format::raw) {
-    // stxxl::syscall_file out_file(file_name + ".boss", stxxl::file::DIRECT | stxxl::file::RDWR | stxxl::file::CREAT);
-    typedef dbg_builder<dbg_t, kmer_t> builder_t;
-    typedef builder_t::record_vector_t record_vector_t;
+    // TODO: refactor this pleasssse
+    if (params.shift_dummies) {
+      typedef debruijn_graph_shifted<> dbg_t;
+      //typedef debruijn_graph<> dbg_t;
+      // stxxl::syscall_file out_file(file_name + ".boss", stxxl::file::DIRECT | stxxl::file::RDWR | stxxl::file::CREAT);
+      typedef dbg_builder<dbg_t, kmer_t> builder_t;
+      typedef typename builder_t::record_vector_t record_vector_t;
 
-    stxxl::syscall_file in_file(file_name, stxxl::file::DIRECT | stxxl::file::RDONLY);
-    record_vector_t in_vec(&in_file);
-    record_vector_t::bufreader_type reader(in_vec);
-    builder_t builder(params);
+      stxxl::syscall_file in_file(file_name, stxxl::file::DIRECT | stxxl::file::RDONLY);
+      record_vector_t in_vec(&in_file);
+      typename record_vector_t::bufreader_type reader(in_vec);
+      builder_t builder(params);
 
-    COSMO_LOG(trace) << "Reading input and creating runs...";
-    for (auto & x : reader) {
-      builder.push(x);
+      COSMO_LOG(trace) << "Reading input and creating runs...";
+      for (auto & x : reader) {
+        builder.push(x);
+      }
+      // TODO: move dbg decl out of block and create copy constructor/operator etc
+      //auto dbg = builder.build();
+      //vector<string> flags({"-", " "});
+      string temp_lcs_file = params.output_prefix + params.output_base + ".lcs.temp";
+      COSMO_LOG(info) << "Writing to: " << temp_lcs_file;
+      stxxl::syscall_file lcs_file(temp_lcs_file, stxxl::file::DIRECT | stxxl::file::RDWR /*WRONLY*/ | stxxl::file::CREAT | stxxl::file::TRUNC);
+      stxxl::vector<uint8_t> * lcs_v;
+      typename stxxl::vector<uint8_t>::bufwriter_type * lcs_writer;
+      //sdsl::int_vector<8> lcs_v;
+      size_t idx = 0;
+      {
+        auto dbg = builder.build([&](size_t num_rows) {
+          //lcs_v = sdsl::int_vector<8>((params.variable_order)*num_rows);
+          lcs_file.set_size((params.variable_order)*num_rows);
+          // a bit hacky. Should seperate finding dummies from merging them in builder,
+          // so I can get the number of rows as a function call
+          lcs_v = new stxxl::vector<uint8_t>(&lcs_file);
+          lcs_writer = new stxxl::vector<uint8_t>::bufwriter_type(*lcs_v);
+          //lcs_v.resize((params.variable_order)*num_rows);
+        }, [&](auto x){
+          //auto kmer = x.edge;
+          if (params.variable_order) {
+            auto l = x.lcs;
+            //lcs_v[idx++] = l;
+            idx++;
+            *lcs_writer << (uint8_t)l;
+          }
+          /*
+          // Comment left in for potential verbose mode
+          if (x.tag == in_dummy) {
+            cerr << kmer_to_string(kmer, k, x.k) << flag << " " << l << endl;
+          } else if (x.tag == out_dummy) {
+            cerr << kmer_to_string(kmer<<2, k-1) << "$ " << l << endl;
+          } else {
+            cerr << kmer_to_string(kmer, k) << flag << " " << l << endl;
+          }
+          */
+        });
+        COSMO_LOG(info) << "size of DBG: " << size_in_mega_bytes(dbg) << " MB";
+        sdsl::store_to_file(dbg, params.output_prefix + params.output_base + ".dbg");
+      }
+
+      delete lcs_writer;
+      delete lcs_v;
+
+      if (params.variable_order) {
+        sdsl::wt_int<sdsl::rrr_vector<63>> lcs_wt;
+        // TODO: make SDSL accept a templated type for forward iteration
+        sdsl::construct(lcs_wt, temp_lcs_file, 1);
+        COSMO_LOG(info) << "size of LCS WT: " << size_in_mega_bytes(lcs_wt) << " MB";
+        sdsl::store_to_file(lcs_wt, params.output_prefix + params.output_base + ".lcs");
+        //lcs_v->clear();
+        lcs_file.close_remove();
+      }
+    } else {
+      // stxxl::syscall_file out_file(file_name + ".boss", stxxl::file::DIRECT | stxxl::file::RDWR | stxxl::file::CREAT);
+      typedef debruijn_graph<> dbg_t;
+      typedef dbg_builder<dbg_t, kmer_t> builder_t;
+      typedef typename builder_t::record_vector_t record_vector_t;
+
+      stxxl::syscall_file in_file(file_name, stxxl::file::DIRECT | stxxl::file::RDONLY);
+      record_vector_t in_vec(&in_file);
+      typename record_vector_t::bufreader_type reader(in_vec);
+      builder_t builder(params);
+
+      COSMO_LOG(trace) << "Reading input and creating runs...";
+      for (auto & x : reader) {
+        builder.push(x);
+      }
+
+      auto dbg = builder.build();
+      COSMO_LOG(info) << "size of DBG: " << size_in_mega_bytes(dbg) << " MB";
+      sdsl::store_to_file(dbg, params.output_prefix + params.output_base + ".dbg");
     }
-    // TODO: move dbg decl out of block and create copy constructor/operator etc
-    auto dbg = builder.build([k](auto x){
-      auto kmer = x.edge;
-      cerr << kmer_to_string(kmer,k) << endl;
-    });
-    sdsl::store_to_file(dbg, params.output_prefix + params.output_base + ".dbg");
   }
   else if (fmt == input_format::kmc) {
+    typedef debruijn_graph<> dbg_t;
     typedef dbg_builder<dbg_t, kmer_t, color_bv> builder_t;
 
     std::vector<CKMCFile*> kmer_data_bases;
@@ -206,6 +280,7 @@ int main(int argc, char* argv[]) {
       edge_idx++;
     });
 
+    COSMO_LOG(info) << "size of DBG: " << size_in_mega_bytes(dbg) << " MB";
     sdsl::store_to_file(dbg, params.output_prefix + params.output_base + ".dbg");
 
     rrr_vector<63> color_rrr(color_bv);

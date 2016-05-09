@@ -165,5 +165,6 @@ std::string random_string(std::string alphabet, size_t n) {
 
 // TODO: This may not work in VS etc... Add code to support other compilers?
 #define clz(x) __builtin_clzll((x))
+#define ctz(x) __builtin_ctzll((x))
 
 #endif

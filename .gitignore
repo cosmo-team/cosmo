@@ -5,6 +5,9 @@ cosmo-color
 cosmo-benchmark
 cosmo-test
 
+# Compiling
+compiler_flags
+
 # STXXL
 .stxxl*
 
