@@ -1,6 +1,6 @@
 #pragma once
-#ifndef _DEBRUIJN_GRAPH_H
-#define _DEBRUIJN_GRAPH_H
+#ifndef _DEBRUIJN_GRAPH_SHIFTED_H
+#define _DEBRUIJN_GRAPH_SHIFTED_H
 
 #include <algorithm>
 #include <fstream>
@@ -22,30 +22,28 @@ using namespace std;
 using namespace sdsl;
 
 // TODO: convert asserts into exceptions? (Copy Boost)
-template <size_t t_sigma            = 4, // default: DNA, TODO: change to 0 and make dynamic
-          class  t_bit_vector_type  = sd_vector<>,
-          class  t_bv_rank_type     = typename t_bit_vector_type::rank_0_type, // We invert the bits so it is 0 instead
-          class  t_bv_select_type   = typename t_bit_vector_type::select_0_type,
-          class  t_edge_vector_type = wt_huff<rrr_vector<63>>,
-          class  t_symbol_type      = typename t_edge_vector_type::value_type,
-          class  t_label_type       = string> // can define basic_string<t_symbol_type>, but need to use correct print func
-class debruijn_graph {
-  static_assert(t_sigma == 4, "Alphabet sizes other than 4 are not yet supported.");
-
+template <class  t_edge_vector_type  = wt_huff<rrr_vector<63>>,
+          class  t_bit_vector_type   = sd_vector<>,
+          class  t_dummy_vector_type = vector<kmer_t>> // used to store dummies
+class debruijn_graph_shifted {
   public:
-  const static size_t sigma = t_sigma;
-  typedef t_symbol_type symbol_type;
-  typedef t_label_type  label_type;
-  typedef typename t_bit_vector_type::size_type size_type;
+  typedef string label_type;
+  const static size_t sigma = 4;
+  typedef t_edge_vector_type edge_vector_type;
+  typedef t_bit_vector_type  bit_vector_type;
+  typedef t_dummy_vector_type  dummy_vector_type;
+  typedef typename edge_vector_type::value_type symbol_type;
+  typedef typename bit_vector_type::size_type size_type;
+  typedef typename dummy_vector_type::value_type kmer_t;
   typedef size_t edge_type;
   typedef pair<edge_type, edge_type> node_type;
 
   const size_t           k{};
 
-  const t_bit_vector_type      m_node_flags{};
-  const t_bv_rank_type         m_node_rank{};
-  const t_bv_select_type       m_node_select{};
-  const t_edge_vector_type     m_edges{};
+  const bit_vector_type                         m_node_flags{};
+  const typename bit_vector_type::rank_0_type   m_node_rank{};
+  const typename bit_vector_type::select_0_type m_node_select{};
+  const edge_vector_type     m_edges{};
   // This is the "F table" in the blog/paper. It stores the starting positions of the sorted runs
   // of the k-1th symbol of the edge (or, last symbol of the node)
   // Could be implemented as the start positions, but here we store the cumulative sum (i.e. run ends)
@@ -53,12 +51,19 @@ class debruijn_graph {
   const array<size_t, 1+sigma> m_edge_max_ranks{};
   const label_type             m_alphabet{};
   const size_t                 m_num_nodes{};
+  const t_bit_vector_type m_dummy_flags;
+  const typename t_bit_vector_type::rank_1_type m_dummy_rank_1;
+  // TODO: Add IO for these
+  const typename t_bit_vector_type::rank_0_type m_dummy_rank_0;
+  const typename t_bit_vector_type::select_0_type m_dummy_select_0;
+  // TODO: support STXXL vectors as dummy labels may not need to be in memory
+  const vector<kmer_t> m_dummies;
 
   public:
-  debruijn_graph() {}
+  debruijn_graph_shifted() {}
 
   // TODO: make each of these a range instead (so it doesnt depend on the type)
-  debruijn_graph(size_t in_k, const t_bit_vector_type & node_flags, const t_edge_vector_type & edges, const array<size_t, 1+sigma>& symbol_ends, const label_type& alphabet)
+  debruijn_graph_shifted(size_t in_k, const t_bit_vector_type & node_flags, const t_edge_vector_type & edges, const array<size_t, 1+sigma>& symbol_ends, const label_type& alphabet)
     : k(in_k), m_node_flags(node_flags), m_node_rank(&m_node_flags), m_node_select(&m_node_flags), m_edges(edges),
       m_symbol_ends(symbol_ends),
       m_edge_max_ranks(_init_max_ranks(edges)),
@@ -76,76 +81,6 @@ class debruijn_graph {
   }
 
   public:
-  static debruijn_graph load_from_packed_edges(istream & input, label_type alphabet=label_type{}/*, vector<size_t> * v=nullptr*/) {
-    // ifstream input(filename, ios::in|ios::binary|ios::ate);
-    // check length
-    streampos size = input.tellg();
-    // should be exceptions...
-    assert(size/sizeof(uint64_t) >= (sigma+2)); // space for footer info
-    assert(((size_t)size - (sigma+2) * sizeof(uint64_t))%sizeof(uint64_t) == 0); // sequence of uint64_ts
-
-    // read footer
-    cerr << "Reading counts..." << endl;
-    input.seekg(-(sigma+2) * sizeof(uint64_t), ios::end);
-    array<size_t,1+sigma> counts{};
-    uint64_t k = 0;
-    input.read((char*)&counts[0], (sigma+1) * sizeof(uint64_t));
-    input.read((char*)&k, sizeof(uint64_t));
-    size_t num_edges = counts[sigma];
-
-    size_t num_blocks = size_t(size)/sizeof(uint64_t) - (sigma+2);
-    input.seekg(0, ios::beg); // rewind
-
-    // TODO: sanity check the inputs (e.g. tally things, convert the above asserts)
-    // So we avoid a huge malloc if someone gives us a bad file
-    t_bit_vector_type bv;
-    string temp_file_name = "cosmo.temp";
-
-    {
-    // This doesn't use more space than loading an unpacked edge vector from disk directly.
-    // This way increases I/Os, but potentially decreases disk seeks.
-    // But personally id prefer to output individual bit-packed vectors
-    // Maybe if I take input from Megahit instead, itd be easier to build the bit vector in memory, and stream the edges
-    cerr << "Allocating vector space..." << endl;
-    int_vector<1> first(num_edges,0);
-    int_vector<8> edges(num_edges);
-    // would be nice to fix wavelet trees so the constructor
-    // can accept a int_vector<4> instead (which is all we need for DNA)
-
-    cerr << "Reading packed edges..." << endl;
-    for (size_t current_edge = 0, current_block = 0; current_edge < num_edges && current_block < num_blocks;) {
-      uint64_t block;
-      input.read((char*)&block, sizeof(uint64_t));
-      for (size_t i = 0; current_edge < num_edges && i < PACKED_CAPACITY; ++i, ++current_edge) {
-        auto x = unpack_to_tuple(get_packed_edge_from_block(block, i));
-        first[current_edge] = bool(1-get<1>(x)); // convert 0s to 1s so we can have a sparse bit vector
-        edges[current_edge] = (get<0>(x) << 1) | !bool(get<2>(x));
-      }
-    }
-
-    cerr << "Writing unpacked edges to temp-file (for semi-external construction)..." << endl;
-    store_to_file(edges, temp_file_name);
-    cerr << "Creating compressed bit-vector..." << endl;
-
-    bv = t_bit_vector_type(first);
-    }
-
-    t_edge_vector_type wt;
-    cerr << "Constructing Wavelet-Tree..." << endl;
-    construct(wt, temp_file_name);
-    cerr << "Cleaning up..." << endl;
-    sdsl::remove(temp_file_name);
-    cerr << "Constructing de Bruijn graph..." << endl;
-    #ifdef VERBOSE
-      for (size_t i = 0; i < num_edges; i++) {
-        cout << "01"[bv[i]] << " " << "$acgt"[wt[i]>>1] << endl;
-      }
-    #endif
-    return debruijn_graph(k, bv, wt, counts, alphabet);
-  }
-
-  // Loaders/Writers for sdsl-serialized and JSON
-  // size_in_bytes:
 
   // API
   size_t outdegree(size_t v) const {
@@ -301,6 +236,7 @@ class debruijn_graph {
 
   size_t num_edges() const { return m_node_flags.size(); }
   size_t num_nodes() const { return m_num_nodes; /*m_node_rank(num_edges());*/ }
+  size_type size() const { return m_node_flags.size(); }
 
   private:
   size_t _symbol_start(symbol_type x) const {
@@ -504,13 +440,6 @@ class debruijn_graph {
     read_member(deconst(m_alphabet), in);
     read_member(deconst(m_num_nodes), in);
   }
-
-  size_type size() const { return num_edges(); }
 };
-
-template <typename Container>
-double bits_per_element(const Container & c) {
-  return size_in_bytes(c) * 8.0 / c.size();
-}
 
 #endif

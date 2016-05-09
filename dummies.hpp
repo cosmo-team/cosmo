@@ -272,7 +272,7 @@ struct heap_item {
 };
 
 template <typename InputRange1, typename InputRange2, typename InputRange3, class Visitor>
-void merge_dummies(InputRange1 & a_range, InputRange2 & o_range, InputRange3 & i_range, uint8_t k, Visitor visit) {
+void merge_dummies(const InputRange1 & a_range, const InputRange2 & o_range, const InputRange3 & i_range, uint8_t k, Visitor visit) {
   typedef typename InputRange1::value_type record_t;
   typedef typename InputRange2::value_type kmer_t;
 
@@ -304,7 +304,7 @@ void merge_dummies(InputRange1 & a_range, InputRange2 & o_range, InputRange3 & i
 
 // TODO: Try a parallell merge (and set difference) on the internal STXXL blocks
 template <typename InputRange1, typename InputRange2, typename InputRange3, class Visitor>
-void merge_dummies_with_shifts(InputRange1 & a_range, InputRange2 & o_range, InputRange3 & i_range, const uint8_t k, Visitor visit) {
+void merge_dummies_with_shifts(const InputRange1 & a_range, const InputRange2 & o_range, const InputRange3 & i_range, const uint8_t k, Visitor visit) {
   using namespace boost::heap;
   typedef typename InputRange1::value_type record_t;
   typedef boost::tuple<record_t, uint8_t, edge_tag> element_t;

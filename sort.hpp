@@ -17,6 +17,7 @@
 #include <sdsl/bit_vectors.hpp>
 #include <sdsl/wavelet_trees.hpp>
 
+#include "debruijn_graph_shifted.hpp"
 #include "dummies.hpp"
 #include "kmer.hpp"
 #include "debug.hpp"
@@ -27,6 +28,24 @@
 namespace cosmo {
 
 namespace {
+
+template <class dbg_t>
+struct make_dbg {
+  template <class t_bit_vector_type, class t_edge_vector_type, class label_type, class dummy_vector_type>
+  dbg_t operator()(size_t k, const t_bit_vector_type & node_flags, const t_edge_vector_type & edges, const array<size_t, 5>& symbol_ends, const label_type& alphabet,
+    const t_bit_vector_type & dummy_flags, const dummy_vector_type & dummies) {
+    return dbg_t(k, node_flags, edges, symbol_ends, alphabet, dummy_flags, dummies);
+  }
+};
+
+template <>
+struct make_dbg<debruijn_graph_shifted<>> {
+  template <class t_bit_vector_type, class t_edge_vector_type, class label_type, class dummy_vector_type>
+  debruijn_graph_shifted<> operator()(size_t k, const t_bit_vector_type & node_flags, const t_edge_vector_type & edges, const array<size_t, 5>& symbol_ends, const label_type& alphabet,
+    const t_bit_vector_type &, const dummy_vector_type &) {
+    return debruijn_graph_shifted<>(k, node_flags, edges, symbol_ends, alphabet);
+  }
+};
 
 // Should be unrolled and inlined, making good use of registers
 template <typename kmer_t>
@@ -438,17 +457,20 @@ struct dbg_builder {
     COSMO_LOG(trace) << "Merging in dummies...";
 
     using namespace sdsl;
-    int_vector<8> output(kmers_a.size() + outgoing_dummies_q.size() + outgoing_dummies_v.size() + incoming_dummies_v.size(), 0);
-    //stxxl::syscall_file dummy_file(out_file_base + ".dummies", stxxl::file::DIRECT | stxxl::file::RDWR | stxxl::file::CREAT);
+    string temp_edge_file = out_file_base + ".w.temp";
+    stxxl::syscall_file edge_file(temp_edge_file, stxxl::file::DIRECT | stxxl::file::RDWR | stxxl::file::CREAT | stxxl::file::TRUNC);
+    edge_file.set_size(kmers_a.size() + outgoing_dummies_q.size() + outgoing_dummies_v.size() + incoming_dummies_v.size());
+    // using pointers so can call destructor later, which seems to stop the file from growing randomly and causing errors. A little hacky.
+    stxxl::vector<uint8_t> * output = new stxxl::vector<uint8_t>(&edge_file);
+    typename stxxl::vector<uint8_t>::bufwriter_type * edge_writer = new stxxl::vector<uint8_t>::bufwriter_type(*output);
+    //int_vector<8> output(kmers_a.size() + outgoing_dummies_q.size() + outgoing_dummies_v.size() + incoming_dummies_v.size(), 0);
     // TODO: make dBG have stxxl vector for dummies instead
-    //stxxl::vector<kmer_t> dummies_ext(&dummy_file);
-    //dummies_ext.resize(incoming_dummy_positions.size());
     //typename stxxl::vector<kmer_t>::bufwriter_type dummy_writer(dummies_ext);
     vector<kmer_t> dummies;
     dummies.reserve(incoming_dummy_positions.size());
     // TODO: look into swapping bit_vector's underlying vector with stxxl vector
-    bit_vector node_starts((!shift_dummies) * (kmers_a.size() + outgoing_dummies_v.size()));
-    bit_vector dummy_flags((!shift_dummies) * (kmers_a.size() + outgoing_dummies_v.size()));
+    bit_vector * node_starts = new bit_vector(kmers_a.size() + outgoing_dummies_v.size() + outgoing_dummies_q.size() + incoming_dummies_v.size());
+    bit_vector * dummy_flags = new bit_vector((!shift_dummies) * (kmers_a.size() + outgoing_dummies_v.size()));
     array<size_t, 5> counts{0,0,0,0,0};
 
     size_t idx = 0;
@@ -484,17 +506,18 @@ struct dbg_builder {
       char w_idx = is_out_dummy?0:((1+label)<<1) | (!result.is_first_suffix);
       //cerr << (int) w_idx << endl;
       //char w = is_out_dummy?'$':(DNA_ALPHA "ACGT")[w_idx];
-      output[idx]=w_idx;
+      //output[idx]=w_idx;
+      *edge_writer << w_idx;
       counts[node_last_sym]++;
 
+      (*node_starts)[idx]   = !is_first_prefix; // inverted so sparse bv is sparser
 
       if (!shift_dummies) {
         if (result.tag == in_dummy) {
           dummies.push_back(x<<2); // remove edge symbol and add to vector
           //dummy_writer << get<0>(x);
         }
-        node_starts[idx]   = !is_first_prefix; // inverted so sparse bv is sparser
-        dummy_flags[idx] = (result.tag == in_dummy) || !is_first_prefix;
+        (*dummy_flags)[idx] = (result.tag == in_dummy) || !is_first_prefix;
       }
 
       prev_edge = x;
@@ -519,36 +542,37 @@ struct dbg_builder {
       counts[i] += counts[i - 1];
     }
 
+    delete edge_writer;
+    delete output;
+
     // TODO: get these types from the input dBG instead
     COSMO_LOG(trace) << "Building dBG...";
     typedef wt_huff<rrr_vector<63>> wt_t;
     wt_t edges;
-    //multi_bit_vector<> edges_mbv;
-    //construct(edges, out_file_base+".edges", 1);
-    // TODO: make not use in-mem construction
-    construct_im(edges, output);
+    construct(edges, temp_edge_file, 1);
+    edge_file.close_remove();
 
     //construct_im(edges_mbv, output);
     // TODO: add parameter to keep temp files
     //boost::filesystem::remove(out_file_base+".edges");
-    //if (!shift_dummies) {
-      sd_vector<> node_bv(node_starts);
-      sd_vector<> dum_pos_bv(dummy_flags);
-
-      // TODO : make overloaded function that accepts multiple things
-      dbg_t graph(k, node_bv, edges, counts, "$ACGT", dum_pos_bv, dummies);
-    //}
+    sd_vector<> node_bv(*node_starts);
+    delete node_starts;
+    sd_vector<> dum_pos_bv;
+    if (!shift_dummies) {
+      dum_pos_bv = sd_vector<>(*dummy_flags);
+    }
+    delete dummy_flags;
 
     COSMO_LOG(info) << "size of WT: " << size_in_mega_bytes(edges) << " MB";
     //COSMO_LOG(info) << "size of MBV: " << size_in_mega_bytes(edges_mbv) << " MB";
     COSMO_LOG(info) << "size of node BV: " << size_in_mega_bytes(node_bv) << " MB";
+
     if (!shift_dummies) {
       COSMO_LOG(info) << "size of dummy BV: " << size_in_mega_bytes(dum_pos_bv) << " MB";
       COSMO_LOG(info) << "size of dummy vec: " << size_in_mega_bytes(dummies) << " MB";
     }
 
-    COSMO_LOG(info) << "size of DBG: " << size_in_mega_bytes(graph) << " MB";
-    return graph;
+    return make_dbg<dbg_t>()(k, node_bv, edges, counts, "$ACGT", dum_pos_bv, dummies);
   }
 
   template <class Visitor>
