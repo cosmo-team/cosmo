@@ -18,7 +18,7 @@ OPT_FLAGS=-O3 -mmmx -msse -msse2 -msse3 -msse4 -msse4.2 -march=native -fno-stric
 NOPT_FLAGS=-O0
 
 # Using Semantic Versioning: http://semver.org/
-VERSION=0.6.0
+VERSION=0.7.0
 BANNER='Copyright Alex Bowe (c) 2016'
 CPP_FLAGS+=-DVERSION=\"$(VERSION)\" -DBANNER=\"$(BANNER)\"
 

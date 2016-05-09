@@ -5,12 +5,12 @@
                    888       888   888 `"Y88b.   888   888   888  888   888 
                    888   .o8 888   888 o.  )88b  888   888   888  888   888 
                    `Y8bod8P' `Y8bod8P' 8""888P' o888o o888o o888o `Y8bod8P' 
-                                                                  ver 0.6.0
+                                                                  ver 0.7.0
 
 
 # Cosmo
 
-[**Version**][semver]: 0.6.0
+[**Version**][semver]: 0.7.0
 
 Cosmo is a fast, low-memory DNA assembler that uses a [succinct de Bruijn graph][succ].
 
