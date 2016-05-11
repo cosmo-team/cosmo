@@ -79,6 +79,10 @@ int main(int argc, char* argv[]) {
   std::string file_name = params.input_filename;
   params.output_base = boost::filesystem::path(file_name).stem().string();
   size_t k = params.k;
+  
+  stxxl::stats * stats = stxxl::stats::get_instance();
+  stxxl::stats_data stats_begin(*stats);
+  stxxl::block_manager * bm = stxxl::block_manager::get_instance();
 
   // Set logging level
   // TODO: make verbosity parameter
@@ -301,6 +305,9 @@ int main(int argc, char* argv[]) {
   }
 
   COSMO_LOG(trace) << "Done!";
-
+  COSMO_LOG(info) << endl
+    << (stxxl::stats_data(*stats) - stats_begin)
+    << " Peak disk allocs                           : " << bm->get_maximum_allocation()/1048576.0
+    << " MB";
   return 0;
 }
