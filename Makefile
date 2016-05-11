@@ -52,7 +52,7 @@ endif
 KMC_OBJS=$(KMC_PATH)/kmc_api/kmc_file.o $(KMC_PATH)/kmc_api/kmer_api.o $(KMC_PATH)/kmc_api/mmer.o
 BUILD_REQS=lut.hpp debug.hpp utility.hpp io.hpp sort.hpp kmer.hpp dummies.hpp debruijn_graph.hpp debruijn_graph_shifted.hpp
 COLOR_REQS=colored_debruijn_graph.hpp io.hpp debug.hpp
-BINARIES=cosmo-build cosmo-color cosmo-test cosmo-benchmark
+BINARIES=cosmo-build cosmo-color cosmo-test cosmo-benchmark cosmo-benchmark-varord
 
 default: all
 
@@ -72,6 +72,9 @@ cosmo-color: cosmo-color.cpp $(BUILD_REQS) compiler_flags
 
 cosmo-benchmark: cosmo-benchmark.cpp $(BUILD_REQS) wt_algorithm.hpp debruijn_hypergraph.hpp
 	$(CXX) $(CPP_FLAGS) -o $@ $< $(DEP_FLAGS)
+
+cosmo-benchmark-varord: cosmo-benchmark.cpp $(BUILD_REQS) wt_algorithm.hpp debruijn_hypergraph.hpp
+	$(CXX) $(CPP_FLAGS) -o $@ $< $(DEP_FLAGS) -DVAR_ORDER
 
 #cosmo-test: cosmo-test.cpp catch.hpp $(wildcard *_test.cpp) $(wildcard $(subst _test.cpp,.hpp,$(wildcard *_test.cpp)))
 #	$(CXX) $(CPP_FLAGS) -o $@ $(filter-out %.hpp,$^) $(DEP_FLAGS) -lstxxl -fopenmp -lsdsl
