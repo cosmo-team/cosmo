@@ -1,5 +1,3 @@
-#define VAR_ORDER
-
 #include <iostream>
 #include <fstream>
 #include <algorithm>
@@ -58,8 +56,9 @@ int main(int argc, char* argv[]) {
   parameters_t p;
   parse_arguments(argc, argv, p);
 
-  auto base_name = boost::filesystem::path(p.input_filename).stem().string();
-  string outfilename = ((p.output_prefix == "")? base_name : p.output_prefix);
+  auto base_path = boost::filesystem::path(p.input_filename).parent_path().string();
+  auto base_name = base_path + "/" + boost::filesystem::path(p.input_filename).stem().string();
+  COSMO_LOG(debug) << base_name;
 
   // TO LOAD:
   debruijn_graph_shifted<> g;
