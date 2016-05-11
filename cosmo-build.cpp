@@ -151,13 +151,12 @@ int main(int argc, char* argv[]) {
       }
       // TODO: move dbg decl out of block and create copy constructor/operator etc
       //auto dbg = builder.build();
-      //vector<string> flags({"-", " "});
+      vector<string> flags({"-", " "});
       string temp_lcs_file = params.output_prefix + params.output_base + ".lcs.temp";
       COSMO_LOG(info) << "Writing to: " << temp_lcs_file;
       stxxl::syscall_file lcs_file(temp_lcs_file, stxxl::file::DIRECT | stxxl::file::RDWR /*WRONLY*/ | stxxl::file::CREAT | stxxl::file::TRUNC);
       stxxl::vector<uint8_t> * lcs_v;
       typename stxxl::vector<uint8_t>::bufwriter_type * lcs_writer;
-      //sdsl::int_vector<8> lcs_v;
       size_t idx = 0;
       {
         auto dbg = builder.build([&](size_t num_rows) {
@@ -169,23 +168,26 @@ int main(int argc, char* argv[]) {
           lcs_writer = new stxxl::vector<uint8_t>::bufwriter_type(*lcs_v);
           //lcs_v.resize((params.variable_order)*num_rows);
         }, [&](auto x){
-          //auto kmer = x.edge;
+          size_t l;
           if (params.variable_order) {
-            auto l = x.lcs;
+            l = x.lcs;
             //lcs_v[idx++] = l;
             idx++;
             *lcs_writer << (uint8_t)l;
           }
-          /*
           // Comment left in for potential verbose mode
+          auto kmer = x.edge;
+          string flag = flags[x.is_first_suffix];
+          cerr << (int) x.is_first_prefix << " ";
           if (x.tag == in_dummy) {
-            cerr << kmer_to_string(kmer, k, x.k) << flag << " " << l << endl;
+            cerr << kmer_to_string(kmer, k, x.k) << flag << " ";
           } else if (x.tag == out_dummy) {
-            cerr << kmer_to_string(kmer<<2, k-1) << "$ " << l << endl;
+            assert(x.is_first_prefix);
+            cerr << kmer_to_string(kmer<<2, k-1) << "$ ";
           } else {
-            cerr << kmer_to_string(kmer, k) << flag << " " << l << endl;
+            cerr << kmer_to_string(kmer, k) << flag << " ";
           }
-          */
+          cerr << l << endl;
         });
         COSMO_LOG(info) << "size of DBG: " << size_in_mega_bytes(dbg) << " MB";
         sdsl::store_to_file(dbg, params.output_prefix + params.output_base + ".dbg");

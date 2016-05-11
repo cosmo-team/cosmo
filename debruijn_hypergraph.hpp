@@ -75,8 +75,11 @@ class debruijn_hypergraph {
   optional<node_type> outgoing(const node_type & v, symbol_type x) const {
     assert(x < m_dbg.sigma + 1);
     if (x == 0) return optional<node_type>();
+    //COSMO_LOG(debug) << "A";
     auto max = maxlen(v, x);
+    //COSMO_LOG(debug) << max;
     if (!max) return optional<node_type>();
+    //COSMO_LOG(debug) << "B";
     ssize_t i = m_dbg._outgoing_edge_pair(get<0>(*max), get<1>(*max), x);
     assert (i != -1); // we do this check in maxlen
     size_t j = m_dbg._last_edge_of_node(m_dbg._edge_to_node(i));
@@ -131,21 +134,27 @@ class debruijn_hypergraph {
     // Range_start must also be a start of a node at the top level context, so find the next top level node to find the range
     // TODO: make (or check if it exists) uniform interface for rank/select, so I can easily make next(), prev(), etc
     // could easily scan as well - might be faster (but its already super fast... only do this if maxlen is called repeatedly)
-    size_t end = m_dbg._last_edge_of_node(m_dbg._edge_to_node(start));
+    size_t node = m_dbg._edge_to_node(start);
+    size_t end = m_dbg._last_edge_of_node(node);
     return node_type(start, end, m_dbg.k-1);
   }
 
   optional<node_type> maxlen(const node_type & v, const symbol_type x) const {
     assert(x < m_dbg.sigma + 1);
     // For both flagged and nonflagged symbol in W
+    // Find edge in range
     for (symbol_type flag : {0,1}) {
+      //COSMO_LOG(debug) << "flag: " << (int)flag;
       symbol_type x_with_flag = m_dbg._with_edge_flag(x, flag);
-      size_t prev_count = m_dbg.m_edges.rank(get<0>(v)+1, x_with_flag);
-      size_t most_recent = m_dbg.m_edges.select(prev_count, x_with_flag);
+      //COSMO_LOG(debug) << "symbol : " << "$ACGT"[x_with_flag>>1] << string((flag==1)?"-":"");
+      size_t prev_count = m_dbg.m_edges.rank(get<0>(v), x_with_flag);
+      //COSMO_LOG(debug) << "prev_count: " << prev_count;
+      size_t next = m_dbg.m_edges.select(prev_count+1, x_with_flag);
+      //COSMO_LOG(debug) << "next: " << next;
       // check if edge falls outside our range...
-      if (get<0>(v) <= most_recent && most_recent <= get<1>(v)) {
+      if (get<0>(v) <= next && next <= get<1>(v)) {
         // Find node range
-        size_t node_rank = m_dbg._edge_to_node(most_recent);
+        size_t node_rank = m_dbg._edge_to_node(next);
         auto n_range = m_dbg._node_range(node_rank);
         return optional<node_type>(node_type(get<0>(n_range), get<1>(n_range), m_dbg.k-1));
       }

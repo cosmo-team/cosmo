@@ -342,7 +342,7 @@ struct dbg_builder {
         size_t idx = 0;
         find_outgoing_dummy_nodes<kmer_t>(a, b, k, [&](kmer_t x) {
           num_incoming_dummies++;
-          outgoing_dummies_q.push_back((x<<2)>>2); // replace edge symbol with A for (possibly) simpler merging
+          outgoing_dummies_q.push_back(get_end_node(x,k)>>2); // add edge symbol (A) for (possibly) simpler merging
           kmer_t y = ((rc(x))<<2)>>2; // dummy node with A as outgoing edge (requires shifting)
           // kmer_shifts(y, shifts);
           size_t lcp_len = (idx++>0)*lcp(y, prev_kmer, k);
@@ -537,7 +537,6 @@ struct dbg_builder {
     incoming_dummy_positions.clear();
 
     // Prefix sum counts
-    counts[0] = 0;
     for (size_t i = 1; i < 5; ++i) {
       counts[i] += counts[i - 1];
     }

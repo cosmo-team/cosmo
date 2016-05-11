@@ -1,3 +1,5 @@
+#define VAR_ORDER
+
 #include <iostream>
 #include <fstream>
 #include <algorithm>
@@ -13,10 +15,13 @@
 #include <boost/random.hpp>
 #include <boost/generator_iterator.hpp>
 #include <boost/iterator/function_input_iterator.hpp>
+#include <boost/filesystem/path.hpp>
+#include <boost/filesystem.hpp>
 //#include <boost_iterator/zip_iterator.hpp>
 
 #include "io.hpp"
 #include "debruijn_graph.hpp"
+#include "debruijn_graph_shifted.hpp"
 #include "debruijn_hypergraph.hpp"
 #include "algorithm.hpp"
 #include "wt_algorithm.hpp"
@@ -53,92 +58,123 @@ int main(int argc, char* argv[]) {
   parameters_t p;
   parse_arguments(argc, argv, p);
 
-  // The parameter should be const... On my computer the parameter
-  // isn't const though, yet it doesn't modify the string...
-  // This is still done AFTER loading the file just in case
-  char * base_name = basename(const_cast<char*>(p.input_filename.c_str()));
+  auto base_name = boost::filesystem::path(p.input_filename).stem().string();
   string outfilename = ((p.output_prefix == "")? base_name : p.output_prefix);
 
   // TO LOAD:
-  debruijn_graph<> g;
+  debruijn_graph_shifted<> g;
   load_from_file(g, p.input_filename);
 
+  auto dbg_size = size_in_mega_bytes(g);
   cerr << "k             : " << g.k << endl;
   cerr << "num_nodes()   : " << g.num_nodes() << endl;
   cerr << "num_edges()   : " << g.num_edges() << endl;
   cerr << "W size        : " << size_in_mega_bytes(g.m_edges) << " MB" << endl;
   cerr << "L size        : " << size_in_mega_bytes(g.m_node_flags) << " MB" << endl;
-  cerr << "Total size    : " << size_in_mega_bytes(g) << " MB" << endl;
+  cerr << "DBG size      : " << dbg_size << " MB" << endl;
   cerr << "Bits per edge : " << bits_per_element(g) << " Bits" << endl;
-
-  cerr << "Symbol ends: " << endl;
-  for (auto x:g.m_symbol_ends) {
-    cerr << x << endl;
-  }
 
   #ifdef VAR_ORDER
   wt_int<rrr_vector<63>> lcs;
-  load_from_file(lcs, p.input_filename + ".lcs.wt");
+  load_from_file(lcs, base_name + ".lcs");
 
-  cerr << "LCS size      : " << size_in_mega_bytes(lcs) << " MB" << endl;
+  auto lcs_size = size_in_mega_bytes(lcs);
+  auto total_size = dbg_size + lcs_size;
+  cerr << "LCS size      : " << lcs_size << " MB" << endl;
   cerr << "LCS bits/edge : " << bits_per_element(lcs) << " Bits" << endl;
+  cerr << "Total size    : " << total_size << " MB" << endl;
 
   typedef debruijn_hypergraph<> dbh;
   typedef dbh::node_type node_type;
   dbh h(g, lcs);
   #endif
 
-  int num_queries = 1e6;
-  size_t min_k = 0;
+  /*
+  cerr << "symbol ends:" << endl;
+  for (size_t i = 0; i<5; ++i) {
+    cerr << i << ": " << g.m_symbol_ends[i] << endl;
+  }
+  */
+
+  int num_queries = 2e4;
+  size_t min_k = 8;
   size_t max_k = g.k-1;
 
-  // Make RNG source
+  cerr << "Generating random queries" << endl;
+  // set up RNGs
   typedef boost::mt19937 rng_type;
   rng_type rng(time(0));
-
-  // Define random distributions
-  boost::uniform_int<size_t> node_distribution(0,g.num_nodes()-1); // inclusive range
+  boost::uniform_int<size_t> node_distribution(0, g.num_nodes()-1); // Randomly choose nodes from the graph
   boost::uniform_int<size_t> k_distribution(min_k, max_k);
-  boost::uniform_int<size_t> symbol_distribution(1, 4);
+  boost::uniform_int<size_t> symbol_distribution(1, 4); // A C G T in our WT (ignoring $=0)
+  boost::variate_generator<rng_type, boost::uniform_int<size_t>> random_node(rng, node_distribution);
+  boost::variate_generator<rng_type, boost::uniform_int<size_t>> random_k(rng, k_distribution);
+  boost::variate_generator<rng_type, boost::uniform_int<size_t>> random_symbol(rng, symbol_distribution);
 
-  // Create generators
-  // & is used so they all share the same random source (they usually make copies)
-  // I didnt want the k value to be dependant on the node id at all, for example
-  boost::variate_generator<rng_type &, boost::uniform_int<size_t>> random_node(rng, node_distribution);
-  boost::variate_generator<rng_type &, boost::uniform_int<size_t>> random_k(rng, k_distribution);
-  boost::variate_generator<rng_type &, boost::uniform_int<size_t>> random_symbol(rng, symbol_distribution);
-
-  // Generate random vars
   vector<size_t> query_nodes(boost::make_function_input_iterator(random_node,0),
                              boost::make_function_input_iterator(random_node,num_queries));
   vector<size_t> query_syms(boost::make_function_input_iterator(random_symbol,0),
                             boost::make_function_input_iterator(random_symbol,num_queries));
 
   #ifdef VAR_ORDER
+  vector<node_type> query_varnodes;
+  for (auto u:query_nodes) {
+    query_varnodes.push_back(h.get_node(u));
+  }
+
+  // Randomly change the order of random nodes
+  // TODO: WHY is this in this range?
+  // -2 because we need to remove the last character
+  auto random_low_bound_k = [&](size_t low)  {
+    assert(low >= min_k);
+    return boost::uniform_int<size_t>(low, max_k)(rng);
+  };
+  auto random_high_bound_k  = [&](size_t high) {
+    assert(high <= g.k-1);
+    return boost::uniform_int<size_t>(min_k, high)(rng);
+  };
+
+  // Make random nodes that have an order that we can increase a certain amount
+  const vector<size_t> query_order_deltas{1,2,4,8}; //,16}; // Try all ks?
+  size_t num_deltas = query_order_deltas.size();
+  vector<vector<node_type>> shorter_query_varnodes(query_order_deltas.size());
+  vector<vector<node_type>> longer_query_varnodes(query_order_deltas.size());
+
+  for (size_t i=0; i<query_order_deltas.size();++i) {
+    shorter_query_varnodes[i].reserve(num_queries);//= vector<node_type>(num_queries);
+    //longer_query_varnodes[i].reserve(num_queries);//= vector<node_type>(num_queries);
+    for (size_t node_idx=0; node_idx < (size_t)num_queries; ++node_idx) {
+      auto delta = query_order_deltas[i];
+      auto node = query_varnodes[node_idx];
+      // Nodes that are of at least a certain k so that we can shorten them later
+      auto shorter_k = random_low_bound_k(min_k+delta);
+      assert(min_k+delta <= shorter_k && shorter_k < g.k);
+      auto longer_k = random_high_bound_k(max_k-delta);
+      node_type new_shorter_node;
+      if (shorter_k == g.k-1) new_shorter_node = node;
+      else new_shorter_node = h.shorter(node, shorter_k);
+      shorter_query_varnodes[i].push_back(new_shorter_node);
+      longer_query_varnodes[i].push_back(h.shorter(node, longer_k));
+    }
+  }
+
   // Convert to variable order nodes
+  // Need: random lows for longer of each delta
+  // random highs for shorter of each delta
+  // random nodes for maxlen, maxlen*, backward, forward, etc
   vector<size_t> query_ks(boost::make_function_input_iterator(random_k,0),
                           boost::make_function_input_iterator(random_k,num_queries));
   vector<size_t> maxlen_syms(boost::make_function_input_iterator(random_symbol,0),
                             boost::make_function_input_iterator(random_symbol,num_queries));
 
-  vector<node_type> query_varnodes;
-  // Get the nodes (max k)
-  for (auto u:query_nodes) {
-    // TODO: Check this
-    auto temp = h.get_node(u);
-    query_varnodes.push_back(temp);
-    cerr << u << "->" << get<0>(temp) << ", " << get<1>(temp) << ", " << get<2>(temp) << endl;
-  }
-
-  // set shorter for each one that has a shorter than max k
+    // set shorter for each one that has a shorter k
   for (int i=0;i<num_queries;i++) {
-    // TODO: Check this
     if (query_ks[i] == g.k-1) continue;
     query_varnodes[i] = h.shorter(query_varnodes[i], query_ks[i]);
   }
-  exit(1);
   #else
-  vector<debruijn_graph<>::node_type> query_rangenodes;
+
+  vector<debruijn_graph_shifted<>::node_type> query_rangenodes;
   //transform(query_nodes.begin(), query_nodes.end(), query_varnodes.begin(),[&](size_t v){ return h.get_node(v); });
   for (auto u:query_nodes) {
     query_rangenodes.push_back(g.get_node(u));
@@ -151,23 +187,25 @@ int main(int argc, char* argv[]) {
   #ifndef VAR_ORDER // standard dbg
   // backward
   auto t1 = chrono::high_resolution_clock::now();
-  for (auto v : query_rangenodes) { g.all_preds(v); }
+  for (auto v : query_rangenodes) {
+    g.all_preds(v);
+  }
   auto t2 = chrono::high_resolution_clock::now();
   auto dur = chrono::duration_cast<unit>(t2-t1).count();
   //cerr << "backward total : " << dur << " ns" <<endl;
-  cerr << "backward mean : " << (double)dur/num_queries << unit_s <<endl;
+  cerr << "backward : " << (double)dur/num_queries << unit_s <<endl;
 
   // forward
   t1 = chrono::high_resolution_clock::now();
   for (size_t i=0;i<(size_t)num_queries;i++) {
     auto v = query_rangenodes[i];
-    auto   x = query_syms[i];
+    auto x = query_syms[i];
     g.interval_node_outgoing(v, x);
   }
   t2 = chrono::high_resolution_clock::now();
   dur = chrono::duration_cast<unit>(t2-t1).count();
   //cerr << "forward total : " << dur << " ns" <<endl;
-  cerr << "forward mean  : " << (double)dur/num_queries << unit_s <<endl;
+  cerr << "forward : " << (double)dur/num_queries << unit_s <<endl;
 
   // last_char
   t1 = chrono::high_resolution_clock::now();
@@ -175,31 +213,30 @@ int main(int argc, char* argv[]) {
   t2 = chrono::high_resolution_clock::now();
   dur = chrono::duration_cast<unit>(t2-t1).count();
   //cerr << "lastchar total : " << dur << " ns" <<endl;
-  cerr << "lastchar mean : " << (double)dur/num_queries << unit_s <<endl;
+  cerr << "lastchar : " << (double)dur/num_queries << unit_s <<endl;
   #else
-  cerr << "A" << endl;
   auto t1 = chrono::high_resolution_clock::now();
   // backward
   for (auto v : query_varnodes) {
-    //cerr << get<0>(v) << " " << get<1>(v) << " " << get<2>(v) << endl;
     h.backward(v);
   }
   auto t2 = chrono::high_resolution_clock::now();
   auto dur = chrono::duration_cast<unit>(t2-t1).count();
   //cerr << "backward total : " << dur << " ns" <<endl;
-  cerr << "backward mean : " << (double)dur/num_queries << unit_s <<endl;
+  cerr << "backward  : " << (double)dur/num_queries << unit_s <<endl;
 
   // forward
   t1 = chrono::high_resolution_clock::now();
   for (size_t i=0;i<(size_t)num_queries;i++) {
     auto v = query_varnodes[i];
     auto x = query_syms[i];
+    //cerr << "("<< get<0>(v) << ", " << get<1>(v) << ", "<< get<2>(v) << ") " << (int)x << endl;
     h.outgoing(v, x);
   }
   t2 = chrono::high_resolution_clock::now();
   dur = chrono::duration_cast<unit>(t2-t1).count();
   //cerr << "forward total : " << dur << " ns" <<endl;
-  cerr << "forward mean  : " << (double)dur/num_queries << unit_s <<endl;
+  cerr << "forward   : " << (double)dur/num_queries << unit_s <<endl;
 
   // last_char
   t1 = chrono::high_resolution_clock::now();
@@ -207,34 +244,53 @@ int main(int argc, char* argv[]) {
   t2 = chrono::high_resolution_clock::now();
   dur = chrono::duration_cast<unit>(t2-t1).count();
   //cerr << "lastchar total : " << dur << " ns" <<endl;
-  cerr << "lastchar mean : " << (double)dur/num_queries << unit_s <<endl;
+  cerr << "lastchar  : " << (double)dur/num_queries << unit_s <<endl;
 
   // shorter
+  for (size_t i=0; i<num_deltas; ++i) {
+    size_t delta = query_order_deltas[i];
+    t1 = chrono::high_resolution_clock::now();
+    for (size_t idx=0;idx<(size_t)num_queries;idx++) {
+      auto v = shorter_query_varnodes[i][idx];
+      size_t k = get<2>(v);
+      size_t new_k = k-delta;
+      assert(new_k >= min_k);
+      h.shorter(v, new_k);
+    }
+    t2 = chrono::high_resolution_clock::now();
+    dur = chrono::duration_cast<unit>(t2-t1).count();
+    cerr << "shorter_" << delta << " : " << (double)dur/(num_queries) << unit_s <<endl;
+  }
+
+  // longer
+  for (size_t i=0; i<num_deltas; ++i) {
+    size_t delta = query_order_deltas[i];
+    t1 = chrono::high_resolution_clock::now();
+    size_t total = 0;
+    for (size_t idx=0;idx<(size_t)num_queries;idx++) {
+      auto v = longer_query_varnodes[i][idx];
+      size_t k = get<2>(v);
+      size_t new_k = k+delta;
+      assert(new_k >= min_k);
+      assert(new_k < g.k);
+      auto result = h.longer(v, new_k);
+      total += result.size();
+    }
+    t2 = chrono::high_resolution_clock::now();
+    dur = chrono::duration_cast<unit>(t2-t1).count();
+    cerr << "longer_" << delta << "  : " << (double)dur/(num_queries) << unit_s <<endl;
+    cerr << "per node  : " << (double)dur/(total) << unit_s << " (" << total << ")" << endl;
+  }
+
+
+  /*
   size_t skipped = 0;
   for (size_t k : {1,2,4,8}) {
     t1 = chrono::high_resolution_clock::now();
     for (size_t i=0;i<(size_t)num_queries;i++) {
       auto v = query_varnodes[i];
-      if (get<2>(v) <= k) {
-        skipped++;
-        continue;
-      }
-      h.shorter(v, k);
-    }
-    t2 = chrono::high_resolution_clock::now();
-    dur = chrono::duration_cast<unit>(t2-t1).count();
-    //cerr << "shorter(v,-"<<k<<") total : " << dur << " ns" <<endl;
-    cerr << "skipped: " << skipped <<endl;
-    cerr << "shorter"<<" mean : " << (double)dur/(num_queries-skipped) << unit_s <<endl;
-  }
-
-  // longer
-  skipped = 0; // TODO: test this out out of scope
-  for (size_t k : {1,2,4,8}) {
-    t1 = chrono::high_resolution_clock::now();
-    for (size_t i=0;i<(size_t)num_queries;i++) {
-      auto v = query_varnodes[i];
-      if (get<2>(v) >= k) {
+      auto k = higher_ks[i];
+      if (get<2>(v) > k) {
         skipped++;
         continue;
       }
@@ -244,9 +300,9 @@ int main(int argc, char* argv[]) {
     t2 = chrono::high_resolution_clock::now();
     dur = chrono::duration_cast<unit>(t2-t1).count();
     //cerr << "longer(v,+"<<k<<") total : " << dur << " ns" <<endl;
-    cerr << "skipped: " << skipped <<endl;
     cerr << "longer"<<" mean  : " << (double)dur/(num_queries-skipped) << unit_s <<endl;
-  }
+  //}
+  */
 
   // maxlen with symbol
   t1 = chrono::high_resolution_clock::now();
@@ -258,7 +314,7 @@ int main(int argc, char* argv[]) {
   t2 = chrono::high_resolution_clock::now();
   dur = chrono::duration_cast<unit>(t2-t1).count();
   //cerr << "maxlen(v,c) total : " << dur << " ns" <<endl;
-  cerr << "maxlen mean   : " << (double)dur/num_queries << unit_s <<endl;
+  cerr << "maxlen    : " << (double)dur/num_queries << unit_s <<endl;
 
   // Regular maxlen
   t1 = chrono::high_resolution_clock::now();
@@ -266,7 +322,7 @@ int main(int argc, char* argv[]) {
   t2 = chrono::high_resolution_clock::now();
   dur = chrono::duration_cast<unit>(t2-t1).count();
   //cerr << "maxlen(v,*) total : " << dur << " ns" <<endl;
-  cerr << "maxlen* mean  : " << (double)dur/num_queries << unit_s <<endl;
+  cerr << "maxlen*   : " << (double)dur/num_queries << unit_s <<endl;
   #endif
 
 }

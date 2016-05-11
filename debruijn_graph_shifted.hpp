@@ -93,16 +93,25 @@ class debruijn_graph_shifted {
     return count - (count == 1 && _strip_edge_flag(m_edges[first]) == 0);
   }
 
+  // returns a vector of predecessors for fair comparison with variable order
   vector<node_type> all_preds(const node_type & v) const {
     //assert(v < num_nodes());
     // node u -> v : edge i -> j
     size_t j = get<0>(v);
+    //COSMO_LOG(info) << "node   : (" << j << ", " << get<1>(v) << ")";
     symbol_type y = _symbol_access(j);
+    // If node ends with $, return empty vector
     if (y == 0) return vector<node_type>(0);
+    //COSMO_LOG(info) << "c      : " << (int) y;
     size_t i_first = _backward(j);
+    //COSMO_LOG(info) << "i_first: " << i_first;
+    //COSMO_LOG(trace) << "C";
     size_t i_last  = _next_edge(i_first, y);
+    //COSMO_LOG(trace) << "D";
     size_t base_rank = m_edges.rank(i_first, _with_edge_flag(y, true));
+    //COSMO_LOG(trace) << "E";
     size_t last_rank = m_edges.rank(i_last, _with_edge_flag(y, true));
+    //COSMO_LOG(trace) << "F";
     size_t num_predecessors = last_rank - base_rank + 1;
     // binary search over first -> first + count;
     auto selector = [&](size_t i) -> size_t {
@@ -344,6 +353,7 @@ class debruijn_graph_shifted {
 
   size_t _backward(size_t i) const {
     assert(i < num_edges());
+    //COSMO_LOG(debug) << "backward("<<i<<")";
     symbol_type x  = _symbol_access(i);
     //cerr << "$acgt"[x] << endl;
     // This handles x = $ so that we have the all-$ edge at position 0
@@ -352,16 +362,22 @@ class debruijn_graph_shifted {
     // NOTE: this will only happen if we added all incoming dummy edge shifts
     if (x == 0) return 0;
     size_t x_start = _symbol_start(x);
-    //cerr << x_start << endl;
+    //COSMO_LOG(debug) << "x_start  : " << x_start;
     // rank is over [0,i) and select is 1-based
     size_t nth = _rank_distance(x_start, i+1);
-    //cerr << "nth: " << nth << endl;
+    //COSMO_LOG(debug) << "nth      : " << nth;
+    //COSMO_LOG(debug) << "size     : " << size();
+    //auto rank = m_edges.rank(size(), _with_edge_flag(x, false));
+    //COSMO_LOG(debug) << "rank     : " << rank;
+    //COSMO_LOG(debug) << "select i : " << nth+1;
     // no minus flag because we want the FIRST
     // ACTUALLY we might need this now, since we wont have all the shifts in some cases
     //cerr << nth + 1 << " <=? " 
     //     << m_edges.rank(m_edges.size(), _with_edge_flag(x, false))
     //     << endl;
-    return m_edges.select(nth+1, _with_edge_flag(x, false));
+    auto result = m_edges.select(nth+1, _with_edge_flag(x, false));
+    //COSMO_LOG(debug) << "O";
+    return result;
   }
 
   size_t backward(size_t v) const {
