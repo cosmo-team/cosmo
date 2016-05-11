@@ -562,14 +562,16 @@ struct dbg_builder {
     }
     delete dummy_flags;
 
-    COSMO_LOG(info) << "size of WT: " << size_in_mega_bytes(edges) << " MB";
+    //COSMO_LOG(info) << "size of WT: " << size_in_mega_bytes(edges) << " MB";
     //COSMO_LOG(info) << "size of MBV: " << size_in_mega_bytes(edges_mbv) << " MB";
-    COSMO_LOG(info) << "size of node BV: " << size_in_mega_bytes(node_bv) << " MB";
+    //COSMO_LOG(info) << "size of node BV: " << size_in_mega_bytes(node_bv) << " MB";
 
+    /*
     if (!shift_dummies) {
       COSMO_LOG(info) << "size of dummy BV: " << size_in_mega_bytes(dum_pos_bv) << " MB";
       COSMO_LOG(info) << "size of dummy vec: " << size_in_mega_bytes(dummies) << " MB";
     }
+    */
 
     return make_dbg<dbg_t>()(k, node_bv, edges, counts, "$ACGT", dum_pos_bv, dummies);
   }

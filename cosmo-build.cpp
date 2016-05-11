@@ -153,7 +153,6 @@ int main(int argc, char* argv[]) {
       //auto dbg = builder.build();
       vector<string> flags({"-", " "});
       string temp_lcs_file = params.output_prefix + params.output_base + ".lcs.temp";
-      COSMO_LOG(info) << "Writing to: " << temp_lcs_file;
       stxxl::syscall_file lcs_file(temp_lcs_file, stxxl::file::DIRECT | stxxl::file::RDWR /*WRONLY*/ | stxxl::file::CREAT | stxxl::file::TRUNC);
       stxxl::vector<uint8_t> * lcs_v;
       typename stxxl::vector<uint8_t>::bufwriter_type * lcs_writer;
@@ -176,6 +175,7 @@ int main(int argc, char* argv[]) {
             *lcs_writer << (uint8_t)l;
           }
           // Comment left in for potential verbose mode
+          /*
           auto kmer = x.edge;
           string flag = flags[x.is_first_suffix];
           cerr << (int) x.is_first_prefix << " ";
@@ -188,8 +188,9 @@ int main(int argc, char* argv[]) {
             cerr << kmer_to_string(kmer, k) << flag << " ";
           }
           cerr << l << endl;
+          */
         });
-        COSMO_LOG(info) << "size of DBG: " << size_in_mega_bytes(dbg) << " MB";
+        //COSMO_LOG(info) << "size of DBG: " << size_in_mega_bytes(dbg) << " MB";
         sdsl::store_to_file(dbg, params.output_prefix + params.output_base + ".dbg");
       }
 
@@ -200,7 +201,7 @@ int main(int argc, char* argv[]) {
         sdsl::wt_int<sdsl::rrr_vector<63>> lcs_wt;
         // TODO: make SDSL accept a templated type for forward iteration
         sdsl::construct(lcs_wt, temp_lcs_file, 1);
-        COSMO_LOG(info) << "size of LCS WT: " << size_in_mega_bytes(lcs_wt) << " MB";
+        //COSMO_LOG(info) << "size of LCS WT: " << size_in_mega_bytes(lcs_wt) << " MB";
         sdsl::store_to_file(lcs_wt, params.output_prefix + params.output_base + ".lcs");
         //lcs_v->clear();
         lcs_file.close_remove();
@@ -222,7 +223,7 @@ int main(int argc, char* argv[]) {
       }
 
       auto dbg = builder.build();
-      COSMO_LOG(info) << "size of DBG: " << size_in_mega_bytes(dbg) << " MB";
+      //COSMO_LOG(info) << "size of DBG: " << size_in_mega_bytes(dbg) << " MB";
       sdsl::store_to_file(dbg, params.output_prefix + params.output_base + ".dbg");
     }
   }
