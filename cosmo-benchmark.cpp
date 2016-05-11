@@ -96,10 +96,11 @@ int main(int argc, char* argv[]) {
   */
 
   int num_queries = 2e4;
-  size_t min_k = 8;
-  size_t max_k = g.k-1;
+  size_t min_k = 8; // this could be 0, but it affects longer too much
+  size_t max_k = g.k-2; // K is the edge length, and K-1 node lenght.
+  // Time will be identical if we measure K-1
 
-  cerr << "Generating random queries" << endl;
+  cerr << "Generating " << num_queries << " random queries" << endl;
   // set up RNGs
   typedef boost::mt19937 rng_type;
   rng_type rng(time(0));
@@ -126,7 +127,7 @@ int main(int argc, char* argv[]) {
   // -2 because we need to remove the last character
   auto random_low_bound_k = [&](size_t low)  {
     assert(low >= min_k);
-    return boost::uniform_int<size_t>(low, max_k)(rng);
+    return boost::uniform_int<size_t>(low, g.k-1)(rng);
   };
   auto random_high_bound_k  = [&](size_t high) {
     assert(high <= g.k-1);
@@ -134,7 +135,7 @@ int main(int argc, char* argv[]) {
   };
 
   // Make random nodes that have an order that we can increase a certain amount
-  const vector<size_t> query_order_deltas{1,2,4,8}; //,16}; // Try all ks?
+  const vector<size_t> query_order_deltas{1,2,4,8,16}; // Try all ks?
   size_t num_deltas = query_order_deltas.size();
   vector<vector<node_type>> shorter_query_varnodes(query_order_deltas.size());
   vector<vector<node_type>> longer_query_varnodes(query_order_deltas.size());
@@ -146,9 +147,11 @@ int main(int argc, char* argv[]) {
       auto delta = query_order_deltas[i];
       auto node = query_varnodes[node_idx];
       // Nodes that are of at least a certain k so that we can shorten them later
+      // Note that we dont adhere to the max_k since these operations
+      // arent possible on the standard dbg
       auto shorter_k = random_low_bound_k(min_k+delta);
       assert(min_k+delta <= shorter_k && shorter_k < g.k);
-      auto longer_k = random_high_bound_k(max_k-delta);
+      auto longer_k = random_high_bound_k(g.k-1-delta);
       node_type new_shorter_node;
       if (shorter_k == g.k-1) new_shorter_node = node;
       else new_shorter_node = h.shorter(node, shorter_k);
