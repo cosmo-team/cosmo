@@ -135,7 +135,7 @@ int main(int argc, char* argv[]) {
   };
 
   // Make random nodes that have an order that we can increase a certain amount
-  const vector<size_t> query_order_deltas{1,2,4,8,16}; // Try all ks?
+  const vector<size_t> query_order_deltas{1,2,4,8}; // Try all ks?
   size_t num_deltas = query_order_deltas.size();
   vector<vector<node_type>> shorter_query_varnodes(query_order_deltas.size());
   vector<vector<node_type>> longer_query_varnodes(query_order_deltas.size());
