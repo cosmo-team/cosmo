@@ -26,7 +26,7 @@ class debruijn_hypergraph {
 
   typedef typename t_debruijn_graph::symbol_type symbol_type;
   const t_debruijn_graph & m_dbg;
-  const t_lcs_vector       m_lcs;
+  const t_lcs_vector     & m_lcs;
 
   debruijn_hypergraph(const t_debruijn_graph & dbg, const t_lcs_vector & lcs) : m_dbg(dbg), m_lcs(lcs) {}
 
