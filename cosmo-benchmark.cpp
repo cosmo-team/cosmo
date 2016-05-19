@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <chrono>
 #include <libgen.h> // basename
+#include <sys/mman.h> // mlockall
 
 #include "tclap/CmdLine.h"
 
@@ -183,6 +184,7 @@ int main(int argc, char* argv[]) {
   }
   #endif
 
+  mlockall(MCL_CURRENT);
   typedef chrono::nanoseconds unit;
   string unit_s = " ns";
 
@@ -326,6 +328,6 @@ int main(int argc, char* argv[]) {
   //cerr << "maxlen(v,*) total : " << dur << " ns" <<endl;
   cerr << "maxlen*   : " << (double)dur/num_queries << unit_s <<endl;
   #endif
-
+  munlockall();
 }
 
