@@ -142,7 +142,7 @@ int main(int argc, char* argv[]) {
 
   for (size_t i=0; i<query_order_deltas.size();++i) {
     shorter_query_varnodes[i].reserve(num_queries);//= vector<node_type>(num_queries);
-    //longer_query_varnodes[i].reserve(num_queries);//= vector<node_type>(num_queries);
+    longer_query_varnodes[i].reserve(num_queries);//= vector<node_type>(num_queries);
     for (size_t node_idx=0; node_idx < (size_t)num_queries; ++node_idx) {
       auto delta = query_order_deltas[i];
       auto node = query_varnodes[node_idx];
