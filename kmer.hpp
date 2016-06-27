@@ -24,7 +24,7 @@ typedef std::bitset<NUM_COLS> color_bv;
 
 void clear_bv(color_bv &bv);
 void set_bit(color_bv &bv, uint32_t j);
-void serialize_color_bv(std::ofstream &cfs, std::vector<color_bv>::iterator &colors, uint64_t index);
+void serialize_color_bv(std::ofstream &cfs, const color_bv &colors);
 void deserialize_color_bv(std::ifstream &colorfile, color_bv &value);
 using namespace cosmo;
 

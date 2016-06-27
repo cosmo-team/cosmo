@@ -5,12 +5,13 @@ CPP_FLAGS=-pipe -m64 -std=c++14 -pedantic-errors -W -Wall -Wextra -Wpointer-arit
 					-Wunused -Wwrite-strings #-Wcast-qual #-Werror
 
 CLANG_WARNINGS=-Wbool-conversions -Wshift-overflow -Wliteral-conversion # CLANG ONLY
+BOOST_PATH=/home/martin_muggli/local/boost_1_54_0
 
-DEP_PATH=/usr/local
-KMC_PATH=./KMC
-INC=-isystem $(DEP_PATH)/include
-LIB=-L$(DEP_PATH)/lib -L./
-BOOST_FLAGS=-DBOOST_LOG_DYN_LINK -lboost_log -lboost_system -lboost_filesystem
+DEP_PATH=3rd_party_inst
+KMC_PATH=./3rd_party_src/KMC
+INC=-isystem $(DEP_PATH)/include -isystem $(BOOST_PATH)/include
+LIB=-L$(DEP_PATH)/lib -L./ -L$(BOOST_PATH)/lib
+BOOST_FLAGS= -lboost_system -lboost_filesystem
 DEP_FLAGS=$(INC) $(LIB) $(BOOST_FLAGS) -isystem $(KMC_PATH) -lsdsl -fopenmp #openmp is needed for logging
 DEBUG_FLAGS=-pg -gstabs
 NDEBUG_FLAGS=-DNDEBUG
@@ -26,7 +27,7 @@ k?=32
 # TODO: quantize k
 CPP_FLAGS+=-DK_LEN=$(k)
 
-colors?=64
+colors?=128
 CPP_FLAGS+=-DNUM_COLS=$(colors)
 
 ifeq ($(asm),1)
@@ -69,6 +70,7 @@ cosmo-build: cosmo-build.cpp $(BUILD_REQS) compiler_flags
 
 cosmo-color: cosmo-color.cpp $(BUILD_REQS) compiler_flags
 	$(CXX) $(CPP_FLAGS) -o $@ $< $(KMC_OBJS) $(DEP_FLAGS)
+
 
 cosmo-benchmark: cosmo-benchmark.cpp $(BUILD_REQS) wt_algorithm.hpp debruijn_hypergraph.hpp
 	$(CXX) $(CPP_FLAGS) -o $@ $< $(DEP_FLAGS)

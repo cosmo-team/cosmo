@@ -66,7 +66,6 @@ static inline uint64_t nibblet_reverse(const uint64_t &word)
     return ret_val;
 }
 
-
 inline void clear_bv(color_bv &bv) {
   bv.reset();
 }
@@ -78,7 +77,7 @@ inline void set_bit(color_bv &bv, uint32_t j) {
 // code from http://www.cplusplus.com/reference/queue/priority_queue/priority_queue/
 // with the polarity reversed
 // FIXME: don't compare strings!!!
-typedef std::pair<unsigned, CKmerAPI > queue_entry;
+typedef std::tuple<unsigned, CKmerAPI, uint64 > queue_entry;    
 
 class mylessthan
 {
@@ -90,8 +89,8 @@ public:
         {
             // if (reverse) return (const_cast<CKmerAPI*>(&(lhs.second))->to_string() > const_cast<CKmerAPI*>(&(rhs.second))->to_string());
             // else return (const_cast<CKmerAPI*>(&(lhs.second))->to_string() < const_cast<CKmerAPI*>(&(rhs.second))->to_string());
-            if (reverse) return ( *const_cast<CKmerAPI*>(&(rhs.second)) < *const_cast<CKmerAPI*>(&(lhs.second))); 
-            else return (*const_cast<CKmerAPI*>(&(lhs.second)) < *const_cast<CKmerAPI*>(&(rhs.second)));
+            if (reverse) return ( *const_cast<CKmerAPI*>(&(std::get<1>(rhs))) < *const_cast<CKmerAPI*>(&(std::get<1>(lhs))));
+            else return (*const_cast<CKmerAPI*>(&(std::get<1>(lhs))) < *const_cast<CKmerAPI*>(&(std::get<1>(rhs))));
         }
 };
 
@@ -104,7 +103,7 @@ static inline int push(mypq_type& queue, const std::vector<CKMCFile *>& kmer_dat
     CKmerAPI kmer_object(k);
     uint64 counter = 0;// for coverage
     if (kmer_data_bases[i]->ReadNextKmer(kmer_object, counter)) {
-        queue_entry entry = std::make_pair(i, kmer_object);
+        queue_entry entry = std::make_tuple(i, kmer_object, counter);
         queue.push(entry);
         //std::cout << "queue.push" << print_entry(entry) << std::endl;
         num_pushed += 1;
@@ -118,7 +117,7 @@ static inline queue_entry pop_replace(mypq_type& queue, const std::vector<CKMCFi
     queue_entry popped_value = queue.top();
     queue.pop();
 
-    push(queue, kmer_data_bases, popped_value.first, k);
+    push(queue, kmer_data_bases, std::get<0>(popped_value), k);
     return popped_value;
 }
 
@@ -163,6 +162,7 @@ inline bool kmc_read_header(std::string db_fname, uint32_t & k, size_t &min_unio
             }
             max_union += _total_kmers;
             //std::string str;
+            COSMO_LOG(info) << " max kmer count: " << _max_count << " total kmers: " << _total_kmers << std::endl;
         }
     }
     assert(kmer_data_bases.size() > 0);
@@ -171,9 +171,47 @@ inline bool kmc_read_header(std::string db_fname, uint32_t & k, size_t &min_unio
         
 }
 
+void update_multiplicity(const queue_entry& current, std::vector<uint64>& max_multiplicity, std::vector<uint64>& multiplicity_histogram)
+{
+    unsigned count = std::get<2>(current);
+    unsigned queuenum = std::get<0>(current);
+    if (max_multiplicity[queuenum] < count) max_multiplicity[queuenum] = count;
+    unsigned bin = count ;
+    if (bin < 256) {
+        multiplicity_histogram[bin] += 1;
+    }
+}
+
+
 
 template <class Visitor>
 size_t kmc_read_kmers(std::vector<CKMCFile *> &kmer_data_bases, uint32_t k, Visitor visit) {
+
+    // keep some stats per kmer database. FIXME: This is somewhat redundant with header info we report above
+    std::vector<uint64> max_multiplicity(kmer_data_bases.size());
+    std::vector<uint64> kmers_read(kmer_data_bases.size());
+    std::vector<uint64> total_kmers(kmer_data_bases.size());
+    std::vector<uint64> multiplicity_histogram(256);
+
+    for (unsigned int i = 0; i < multiplicity_histogram.size(); ++i) {
+        multiplicity_histogram[i] = 0;
+    }
+    
+    for (unsigned int i = 0; i < max_multiplicity.size(); ++i) {
+        max_multiplicity[i] = 0;
+        kmers_read[i] = 0;
+        uint32 _mode;
+        uint32 _counter_size;
+        uint32 _lut_prefix_length;
+        uint32 _signature_len;
+        uint32 _min_count;
+        uint64 _max_count;
+        uint64 _total_kmers;
+        kmer_data_bases[i]->Info(k, _mode, _counter_size, _lut_prefix_length, _signature_len, _min_count, _max_count, _total_kmers);
+        total_kmers[i] = _total_kmers;
+    }
+                                           
+    
     const mylessthan gt_comparitor(true);
     const mylessthan lt_comparitor(false);
 
@@ -190,7 +228,10 @@ size_t kmc_read_kmers(std::vector<CKMCFile *> &kmer_data_bases, uint32_t k, Visi
 
     // pop the first element into 'current' to initialize our state (and init any other state here such as this one's color)
     queue_entry current = pop_replace(queue, kmer_data_bases, k);
-    color.set(current.first); // FIXME: make sure not using << operator elsewhere!
+    update_multiplicity(current, max_multiplicity, multiplicity_histogram);
+    kmers_read[std::get<0>(current)]++;
+    
+    color.set(std::get<0>(current)); // FIXME: make sure not using << operator elsewhere!
     //std::cout << "current = " << print_entry(current) << " = queue.pop()" << std::endl;    
 
     //
@@ -199,18 +240,39 @@ size_t kmc_read_kmers(std::vector<CKMCFile *> &kmer_data_bases, uint32_t k, Visi
         // std::string s1 = const_cast<CKmerAPI*>(&(queue.top().second))->to_string();
         // std::string s2 = const_cast<CKmerAPI*>(&(current.second))->to_string();
         // if (s1 == s2) { // if this is the same kmer we've seen before
-        if (*const_cast<CKmerAPI*>(&(queue.top().second)) == *const_cast<CKmerAPI*>(&(current.second))) { // if this is the same kmer we've seen before
+        if (*const_cast<CKmerAPI*>(&(std::get<1>(queue.top()))) == *const_cast<CKmerAPI*>(&(std::get<1>(current)))) { // if this is the same kmer we've seen before
             queue_entry additional_instance = pop_replace(queue, kmer_data_bases, k);
-            color.set(additional_instance.first);
+            update_multiplicity(additional_instance, max_multiplicity, multiplicity_histogram);
+            kmers_read[std::get<0>(additional_instance)]++;
+            color.set(std::get<0>(additional_instance));
             //std::cout << "additional_instance = " << print_entry(additional_instance) << " = queue.pop()" << std::endl;
         } else { // if the top of the queue contains a new instance
 
             // emit our current state
             std::vector<unsigned long long /*uint64*/> kmer;            
-            current.second.to_long(kmer);
+            std::get<1>(current).to_long(kmer);
             num_merged_kmers++;
             if (num_merged_kmers % 1000000 == 0) {
-                std::cout << "Number of merged k-mers: " << num_merged_kmers << std::endl;
+                uint64 global_max_mult = 0;
+                float progress_sum = 0.0;
+                for (unsigned int i = 0; i < max_multiplicity.size(); ++i) {
+                    if (max_multiplicity[i] > global_max_mult) global_max_mult = max_multiplicity[i];
+                    progress_sum += (float)(kmers_read[i]) / (float)(total_kmers[i]);
+                }
+
+                float progress = progress_sum / max_multiplicity.size();
+                std::cout << "Number of merged k-mers: " << num_merged_kmers
+                          << " Max multiplicity seen: " << global_max_mult
+                          << " fraction complete: " << progress  
+                          << " Estimated total: " << (unsigned long long) (num_merged_kmers / progress)
+                          << std::endl;
+                std::cout << "Global Mult hist: [";
+                for (unsigned int i = 0; i < multiplicity_histogram.size(); ++i) {
+                    std::cout << multiplicity_histogram[i]  << ", ";
+                }
+                std::cout << "]" << std::endl;
+
+
             }
 
             //std::cout << const_cast<CKmerAPI*>(&(current.second))->to_string() << " : " << color << std::endl;
@@ -225,15 +287,17 @@ size_t kmc_read_kmers(std::vector<CKMCFile *> &kmer_data_bases, uint32_t k, Visi
 
             // now initialize our current state with the top
             current = pop_replace(queue, kmer_data_bases, k);
+            kmers_read[std::get<0>(current)]++;
+            update_multiplicity(current, max_multiplicity, multiplicity_histogram);
             //std::cout << "current = " << print_entry(current) << " = queue.pop()" << std::endl;
 
-            color.set(current.first); // FIXME: make sure not using << operator elsewhere!
+            color.set(std::get<0>(current)); // FIXME: make sure not using << operator elsewhere!
         }
     }
 
     // and finally emit our current state    
     std::vector<unsigned long long /*uint64*/> kmer;            
-    current.second.to_long(kmer);
+    std::get<1>(current).to_long(kmer);
         
 
     //FIXME: the following line is to fix a bug in the kmc2 API where it shifts word[0] << 64 when k=63 which results in "word[1] =  word[0] + word[1]" the next line compensates; not sure how pervasive this is in the k>32 space.

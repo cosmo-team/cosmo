@@ -11,9 +11,9 @@
 #include <sdsl/bit_vectors.hpp>
 #include <sdsl/wavelet_trees.hpp>
 
-#include <boost/log/trivial.hpp>
-#include <boost/log/core.hpp>
-#include <boost/log/expressions.hpp>
+// #include <boost/log/trivial.hpp>
+// #include <boost/log/core.hpp>
+// #include <boost/log/expressions.hpp>
 #include <boost/filesystem/path.hpp>
 #include <boost/filesystem.hpp>
 
@@ -70,6 +70,10 @@ parameters_t parse_arguments(int argc, char **argv) {
   params.output_prefix   = output_prefix_arg.getValue();
   return params;
 }
+void serialize_color_bv(std::ofstream &cfs, const color_bv &color)//std::vector<color_bv>::iterator &colors, uint64_t index)
+{
+    cfs.write((char *)&color, sizeof(color_bv)); //FIXME: Is this the right way to serailize std::bitset?
+}
 
 int main(int argc, char* argv[]) {
   using namespace boost::adaptors;
@@ -86,9 +90,9 @@ int main(int argc, char* argv[]) {
 
   // Set logging level
   // TODO: make verbosity parameter
-  boost::log::core::get()->set_filter (
-    boost::log::trivial::severity != boost::log::trivial::debug
-  );
+  // boost::log::core::get()->set_filter (
+  //   boost::log::trivial::severity != boost::log::trivial::debug
+  //);
 
   // TEST FILE
   // TODO: add fastq/fasta input support, and read from stdin if no file
@@ -236,7 +240,7 @@ int main(int argc, char* argv[]) {
     typedef dbg_builder<dbg_t, kmer_t, color_bv> builder_t;
 
     std::vector<CKMCFile*> kmer_data_bases;
-    COSMO_LOG(trace) << "Reading KMC2 database list file...";
+    COSMO_LOG(trace) << "Reading KMC2 database list file..." << std::endl;
     size_t num_colors;
     size_t min_union;
     size_t max_union;
@@ -268,20 +272,25 @@ int main(int argc, char* argv[]) {
     COSMO_LOG(info) << "Percentage of min union : " << num_kmers_read/(double)min_union * 100 << "%";
     COSMO_LOG(info) << "Percentage of max union : " << num_kmers_read/(double)max_union * 100 << "%";
 
+
+    ofstream cfs;
+    cfs.open(file_name + ".colors", ios::out | ios::binary);
+    
     // TODO: improve the memory use for colors here (can SDSL use external vectors?)
-    bit_vector color_bv;
+//    bit_vector color_bv;
     size_t num_set = 0;
     size_t edge_idx = 0;
     auto dbg = builder.build([&](auto x) { // Pre merge
-      color_bv = bit_vector(x * num_colors);
+            // color_bv = bit_vector(x * num_colors);
     },[&](auto x) { // Merge visitor
       //auto kmer = x.edge;
       //cerr << kmer_to_string(kmer,k) << endl;
       auto color = get<0>(x.payload);
+      serialize_color_bv(cfs, color);
       for (size_t color_idx = 0; color_idx < num_colors; color_idx++) {
         // TODO: try complemented bits in color-major form in a *sd_vector* for large data set.
         //color_bv[color_idx * num_colors + edge_idx] = !color[color_idx];
-        color_bv[edge_idx * num_colors + color_idx] = color[color_idx];
+//        color_bv[edge_idx * num_colors + color_idx] = color[color_idx];
         num_set += color[color_idx];
       }
       edge_idx++;
@@ -290,15 +299,17 @@ int main(int argc, char* argv[]) {
     COSMO_LOG(info) << "size of DBG: " << size_in_mega_bytes(dbg) << " MB";
     sdsl::store_to_file(dbg, params.output_prefix + params.output_base + ".dbg");
 
-    rrr_vector<63> color_rrr(color_bv);
-    sd_vector<> color_sd(color_bv);
+//    rrr_vector<63> color_rrr(color_bv);
+    //sd_vector<> color_sd(color_bv);
     size_t total_colors = edge_idx * num_colors;
     COSMO_LOG(info) << "Color density : " << num_set/(double)total_colors * 100 << "%";
-    COSMO_LOG(info) << "size of color_bv  : " << size_in_mega_bytes(color_bv) << " MB";
-    COSMO_LOG(info) << "size of color_rrr : " << size_in_mega_bytes(color_rrr) << " MB";
+//    COSMO_LOG(info) << "size of color_bv  : " << size_in_mega_bytes(color_bv) << " MB";
+//    COSMO_LOG(info) << "size of color_rrr : " << size_in_mega_bytes(color_rrr) << " MB";
     //COSMO_LOG(info) << "size of color_sd  : " << size_in_mega_bytes(color_sd) << " MB";
-    sdsl::store_to_file(color_rrr, params.output_prefix + params.output_base + ".rrr");
+//    sdsl::store_to_file(color_rrr, params.output_prefix + params.output_base + ".rrr");
+    cfs.close();
   }
+    
   else {
     COSMO_LOG(error) << "Unsupported operation.";
     exit(EXIT_FAILURE);
