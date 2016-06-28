@@ -561,6 +561,50 @@ class debruijn_graph {
   }
 
   size_type size() const { return m_node_flags.size(); }
+
+    symbol_type _encode_symbol(uint8_t c) const {
+        return lower_bound(m_alphabet.begin(), m_alphabet.end(), c) - m_alphabet.begin();
+    }
+
+    template <class InputIterator>
+    boost::optional<node_type> index(InputIterator in) const {
+        auto c = *in++;
+        symbol_type first_symbol = _encode_symbol(c);
+        // Range is from first edge of first, to last edge of last
+        size_t start = _symbol_start(first_symbol);
+        size_t end   = m_symbol_ends[first_symbol]-1;
+        size_t first = 0, last = 0;
+
+        // find c-labeled pred edge
+        // if outside of range, find c- labeled pred edge
+        for (size_t i = 0; i < k - 2; i++) {
+            c = *in++;
+            symbol_type x = _encode_symbol(c);
+            // update range; Within current range, find first and last occurence of c or c-
+            // first -> succ(x, first)
+            for (uint8_t y=x<<1; y<(x<<1)+1; y++) {
+                first = m_edges.select((m_edges.rank(start, y)) + 1, y);
+                if (start <= first && first <= end) break;
+            }
+            if (!(start <= first && first <= end)) return boost::optional<node_type>();
+            // last -> pred(x, last)
+            if (start == end) {
+                last = first;
+            } else {
+                for (uint8_t y=x<<1; y<(x<<1)+1; y++) {
+                    last = m_edges.select((m_edges.rank(end + 1, y)), y);
+                    if (start <= last && last <= end) break;
+                }
+            }
+            assert(start <= last && last <= end);
+            // Follow each edge forward
+            start = _forward(first, x);
+            end   = _forward(last, x);
+            end   = _last_edge_of_node(_edge_to_node(end));
+        }
+        return boost::optional<node_type>(node_type(start, end));
+    }
+    
 };
 
 #endif
