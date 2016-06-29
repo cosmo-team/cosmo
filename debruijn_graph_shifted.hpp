@@ -4,7 +4,6 @@
 
 #include <algorithm>
 #include <fstream>
-#include <iterator>
 #include <vector>
 #include <array>
 #include <string>
@@ -16,34 +15,36 @@
 #include "algorithm.hpp"
 #include "utility.hpp"
 #include "io.hpp"
-#include "debug.hpp"
+//#include "debug.h"
 
 using namespace std;
 using namespace sdsl;
 
 // TODO: convert asserts into exceptions? (Copy Boost)
-template <class  t_edge_vector_type  = wt_huff<rrr_vector<63>>,
-          class  t_bit_vector_type   = sd_vector<>,
-          class  t_dummy_vector_type = vector<kmer_t>> // used to store dummies
+template <size_t t_sigma            = 4, // default: DNA, TODO: change to 0 and make dynamic
+          class  t_bit_vector_type  = sd_vector<>,
+          class  t_bv_rank_type     = typename t_bit_vector_type::rank_0_type, // We invert the bits so it is 0 instead
+          class  t_bv_select_type   = typename t_bit_vector_type::select_0_type,
+          class  t_edge_vector_type = wt_huff<rrr_vector<63>>,
+          class  t_symbol_type      = typename t_edge_vector_type::value_type,
+          class  t_label_type       = string> // can define basic_string<t_symbol_type>, but need to use correct print func
 class debruijn_graph_shifted {
+  static_assert(t_sigma == 4, "Alphabet sizes other than 4 are not yet supported.");
+
   public:
-  typedef string label_type;
-  const static size_t sigma = 4;
-  typedef t_edge_vector_type edge_vector_type;
-  typedef t_bit_vector_type  bit_vector_type;
-  typedef t_dummy_vector_type  dummy_vector_type;
-  typedef typename edge_vector_type::value_type symbol_type;
-  typedef typename bit_vector_type::size_type size_type;
-  typedef typename dummy_vector_type::value_type kmer_t;
+  const static size_t sigma = t_sigma;
+  typedef t_symbol_type symbol_type;
+  typedef t_label_type  label_type;
+  typedef typename t_bit_vector_type::size_type size_type;
   typedef size_t edge_type;
   typedef pair<edge_type, edge_type> node_type;
 
   const size_t           k{};
 
-  const bit_vector_type                         m_node_flags{};
-  const typename bit_vector_type::rank_0_type   m_node_rank{};
-  const typename bit_vector_type::select_0_type m_node_select{};
-  const edge_vector_type     m_edges{};
+  const t_bit_vector_type      m_node_flags{};
+  const t_bv_rank_type         m_node_rank{};
+  const t_bv_select_type       m_node_select{};
+  const t_edge_vector_type     m_edges{};
   // This is the "F table" in the blog/paper. It stores the starting positions of the sorted runs
   // of the k-1th symbol of the edge (or, last symbol of the node)
   // Could be implemented as the start positions, but here we store the cumulative sum (i.e. run ends)
@@ -51,25 +52,18 @@ class debruijn_graph_shifted {
   const array<size_t, 1+sigma> m_edge_max_ranks{};
   const label_type             m_alphabet{};
   const size_t                 m_num_nodes{};
-  const t_bit_vector_type m_dummy_flags;
-  const typename t_bit_vector_type::rank_1_type m_dummy_rank_1;
-  // TODO: Add IO for these
-  const typename t_bit_vector_type::rank_0_type m_dummy_rank_0;
-  const typename t_bit_vector_type::select_0_type m_dummy_select_0;
-  // TODO: support STXXL vectors as dummy labels may not need to be in memory
-  const vector<kmer_t> m_dummies;
 
   public:
   debruijn_graph_shifted() {}
 
-  // TODO: make each of these a range instead (so it doesnt depend on the type)
+
   debruijn_graph_shifted(size_t in_k, const t_bit_vector_type & node_flags, const t_edge_vector_type & edges, const array<size_t, 1+sigma>& symbol_ends, const label_type& alphabet)
     : k(in_k), m_node_flags(node_flags), m_node_rank(&m_node_flags), m_node_select(&m_node_flags), m_edges(edges),
       m_symbol_ends(symbol_ends),
       m_edge_max_ranks(_init_max_ranks(edges)),
       m_alphabet(alphabet),
-      m_num_nodes(m_node_rank(m_node_flags.size())) {}
-
+      m_num_nodes(m_node_rank(m_symbol_ends[sigma])) {
+  }
   private:
   array<size_t, 1+sigma> _init_max_ranks(const t_edge_vector_type & edges) {
     array<size_t, 1+sigma> max_ranks;
@@ -81,6 +75,57 @@ class debruijn_graph_shifted {
   }
 
   public:
+  static debruijn_graph_shifted load_from_packed_edges(istream & input, label_type alphabet=label_type{}, vector<size_t> * v=nullptr) {
+    // ifstream input(filename, ios::in|ios::binary|ios::ate);
+    // check length
+    streampos size = input.tellg();
+    // should be exceptions...
+    assert(size/sizeof(uint64_t) >= (sigma+2)); // space for footer info
+    assert(((size_t)size - (sigma+2) * sizeof(uint64_t))%sizeof(uint64_t) == 0); // sequence of uint64_ts
+
+    // read footer
+    input.seekg(-(sigma+2) * sizeof(uint64_t), ios::end);
+    array<size_t,1+sigma> counts{};
+    uint64_t k = 0;
+    input.read((char*)&counts[0], (sigma+1) * sizeof(uint64_t));
+    input.read((char*)&k, sizeof(uint64_t));
+    size_t num_edges = counts[sigma];
+
+    size_t num_blocks = size_t(size)/sizeof(uint64_t) - (sigma+2);
+    input.seekg(0, ios::beg); // rewind
+
+    // TODO: Loop through this while reading from file instead (to avoid memory waste)
+    vector<uint64_t> blocks(num_blocks,0);
+    input.read((char*)&blocks[0], sizeof(uint64_t) * num_blocks);
+
+    // TODO: sanity check the inputs (e.g. tally things, convert the above asserts)
+    // So we avoid a huge malloc if someone gives us a bad file
+    int_vector<1> first(num_edges,0);
+    // would be nice to fix wavelet trees so the constructor
+    // can accept a int_vector<4> instead (which is all we need for DNA)
+    int_vector<8> edges(num_edges);
+
+    bool prev_was_minus = false;
+    for (size_t i = 0; i < num_edges; i++) {
+      auto x = get_edge(blocks.begin(), i);
+      first[i] = 1-get<1>(x); // convert 0s to 1s so we can have a sparse bit vector
+      // For branchy graphs it might be better to change this and use RRR
+      edges[i] = (get<0>(x) << 1) | !get<2>(x);
+      if (v && get<0>(x) && !get<2>(x) && !prev_was_minus) {
+        v->push_back(i);
+        prev_was_minus = true;
+      }
+      else if (v && get<0>(x) && get<2>(x)) prev_was_minus = false;
+    }
+
+    t_bit_vector_type bv(first);
+    t_edge_vector_type wt;
+    construct_im(wt, edges);
+    return debruijn_graph_shifted(k, bv, wt, counts, alphabet);
+  }
+
+  // Loaders/Writers for sdsl-serialized and JSON
+  // size_in_bytes:
 
   // API
   size_t outdegree(size_t v) const {
@@ -93,25 +138,15 @@ class debruijn_graph_shifted {
     return count - (count == 1 && _strip_edge_flag(m_edges[first]) == 0);
   }
 
-  // returns a vector of predecessors for fair comparison with variable order
   vector<node_type> all_preds(const node_type & v) const {
-    //assert(v < num_nodes());
     // node u -> v : edge i -> j
     size_t j = get<0>(v);
-    //COSMO_LOG(info) << "node   : (" << j << ", " << get<1>(v) << ")";
     symbol_type y = _symbol_access(j);
-    // If node ends with $, return empty vector
     if (y == 0) return vector<node_type>(0);
-    //COSMO_LOG(info) << "c      : " << (int) y;
     size_t i_first = _backward(j);
-    //COSMO_LOG(info) << "i_first: " << i_first;
-    //COSMO_LOG(trace) << "C";
     size_t i_last  = _next_edge(i_first, y);
-    //COSMO_LOG(trace) << "D";
     size_t base_rank = m_edges.rank(i_first, _with_edge_flag(y, true));
-    //COSMO_LOG(trace) << "E";
     size_t last_rank = m_edges.rank(i_last, _with_edge_flag(y, true));
-    //COSMO_LOG(trace) << "F";
     size_t num_predecessors = last_rank - base_rank + 1;
     // binary search over first -> first + count;
     auto selector = [&](size_t i) -> size_t {
@@ -144,6 +179,18 @@ class debruijn_graph_shifted {
   // which is a saturated debruijn graph of k=31. Which is unlikely.
   // Hopefully an iterator-based API (like BGL) will fix this issue
   ssize_t outgoing(size_t u, symbol_type x) const {
+    ssize_t edge = outgoing_edge(u, x);
+    if (edge == -1)
+      return -1;
+    else
+      return _edge_to_node(edge);
+  }
+
+  // The signed return type is worrying, since it halves the possible answers...
+  // but it will only face problems with graphs that have over 2^63 ~= 4^31 edges,
+  // which is a saturated debruijn graph of k=31. Which is unlikely.
+  // Hopefully an iterator-based API (like BGL) will fix this issue
+  ssize_t outgoing_edge(size_t u, symbol_type x) const {
     assert(u < num_nodes());
     assert(x < sigma + 1);
     if (x == 0) return -1;
@@ -152,11 +199,14 @@ class debruijn_graph_shifted {
     size_t last  = get<1>(range);
     // Try both with and without a flag
     for (symbol_type c = _with_edge_flag(x,false); c <= _with_edge_flag(x, true); c++) {
-      size_t most_recent = m_edges.select(m_edges.rank(last+1, c), c);
+      size_t rnk = m_edges.rank(last+1, c);
+      if (rnk == 0)
+	continue;
+      size_t most_recent = m_edges.select(rnk, c);
       // if within range, follow forward
       if (first <= most_recent && most_recent <= last) {
         // Don't have to check fwd for -1 since we checked for $ above
-        return _edge_to_node(_forward(most_recent));
+        return _forward(most_recent);
       }
     }
     return -1;
@@ -243,9 +293,8 @@ class debruijn_graph_shifted {
     return label;
   }
 
-  size_t num_edges() const { return m_node_flags.size(); }
+  size_t num_edges() const { return m_symbol_ends[sigma]; /*_node_flags.size();*/ }
   size_t num_nodes() const { return m_num_nodes; /*m_node_rank(num_edges());*/ }
-  size_type size() const { return m_node_flags.size(); }
 
   private:
   size_t _symbol_start(symbol_type x) const {
@@ -261,8 +310,7 @@ class debruijn_graph_shifted {
 
   size_t _edge_to_node(size_t i) const {
     assert(i < num_edges());
-    size_t x = m_node_rank(i+1)-1;
-    return x;
+    return m_node_rank(i+1)-1;
   }
 
   // This should be moved to a helper file...
@@ -341,11 +389,18 @@ class debruijn_graph_shifted {
   ssize_t _forward(size_t i, symbol_type & x) const {
     assert(i < num_edges());
     x = _strip_edge_flag(m_edges[i]);
+    symbol_type fullx =_with_edge_flag(x, false);
     // if x == 0 ($) then we can't follow the edge
     // (should maybe make backward consistent with this, but using the edge 0 loop for node label generation).
     if (x == 0) return -1;
+
+    // if this is flagged, then reset i to the corresponding unflagged symbol and use that as the starting point
+    if (m_edges[i] & 1) {
+      i = m_edges.select(m_edges.rank(i, fullx), fullx);
+    }
+
     size_t start = _symbol_start(x);
-    size_t nth   = m_edges.rank(i, _with_edge_flag(x, false));
+    size_t nth   = m_edges.rank(i, fullx);
     size_t next  = m_node_select(m_node_rank(start+1) + nth);
     return next;
   }
@@ -353,31 +408,15 @@ class debruijn_graph_shifted {
 
   size_t _backward(size_t i) const {
     assert(i < num_edges());
-    //COSMO_LOG(debug) << "backward("<<i<<")";
     symbol_type x  = _symbol_access(i);
-    //cerr << "$acgt"[x] << endl;
     // This handles x = $ so that we have the all-$ edge at position 0
-    // As we use the same symbol for outgoing dummy edges, which actually
-    // DONT point back to the incoming dummy edges.
-    // NOTE: this will only happen if we added all incoming dummy edge shifts
-    if (x == 0) return 0;
+    // but probably shouldn't be called this way in the normal case
     size_t x_start = _symbol_start(x);
-    //COSMO_LOG(debug) << "x_start  : " << x_start;
     // rank is over [0,i) and select is 1-based
-    size_t nth = _rank_distance(x_start, i+1);
-    //COSMO_LOG(debug) << "nth      : " << nth;
-    //COSMO_LOG(debug) << "size     : " << size();
-    //auto rank = m_edges.rank(size(), _with_edge_flag(x, false));
-    //COSMO_LOG(debug) << "rank     : " << rank;
-    //COSMO_LOG(debug) << "select i : " << nth+1;
+    size_t nth = _rank_distance(x_start+1, i+1);
+    if (x == 0) return 0;
     // no minus flag because we want the FIRST
-    // ACTUALLY we might need this now, since we wont have all the shifts in some cases
-    //cerr << nth + 1 << " <=? " 
-    //     << m_edges.rank(m_edges.size(), _with_edge_flag(x, false))
-    //     << endl;
-    auto result = m_edges.select(nth+1, _with_edge_flag(x, false));
-    //COSMO_LOG(debug) << "O";
-    return result;
+    return m_edges.select(nth+1, _with_edge_flag(x, false));
   }
 
   size_t backward(size_t v) const {
@@ -390,14 +429,13 @@ class debruijn_graph_shifted {
 
   size_t _first_edge_of_node(size_t v) const {
     assert(v < num_nodes());
-    // Why +1? because select is 1-based, but nodes are 0-based
+    // select is 1-based, but nodes are 0-based
     return m_node_select(v+1);
   }
 
   size_t _last_edge_of_node(size_t v) const {
     // find the *next* node's first edge and decrement
     // as long as a next node exists!
-    // TODO - test this
     assert(v + 1 <= num_nodes());
     if (v+1 == num_nodes()) return num_edges() - 1;
     else return _first_edge_of_node(v+1) - 1;
@@ -417,7 +455,50 @@ class debruijn_graph_shifted {
     // last should be one past end
     return last-1;
   }
+    symbol_type _encode_symbol(uint8_t c) const {
+        return lower_bound(m_alphabet.begin(), m_alphabet.end(), c) - m_alphabet.begin();
+    }
 
+    template <class InputIterator>
+    boost::optional<node_type> index(InputIterator in) const {
+        auto c = *in++;
+        symbol_type first_symbol = _encode_symbol(c);
+        // Range is from first edge of first, to last edge of last
+        size_t start = _symbol_start(first_symbol);
+        size_t end   = m_symbol_ends[first_symbol]-1;
+        size_t first, last;
+
+        // find c-labeled pred edge
+        // if outside of range, find c- labeled pred edge
+        for (size_t i = 0; i < k - 2; i++) {
+            c = *in++;
+            symbol_type x = _encode_symbol(c);
+            // update range; Within current range, find first and last occurence of c or c-
+            // first -> succ(x, first)
+            for (uint8_t y=x<<1; y<(x<<1)+1; y++) {
+                first = m_edges.select((m_edges.rank(start, y)) + 1, y);
+                if (start <= first && first <= end) break;
+            }
+            if (!(start <= first && first <= end)) return boost::optional<node_type>();
+            // last -> pred(x, last)
+            if (start == end) {
+                last = first;
+            } else {
+                for (uint8_t y=x<<1; y<(x<<1)+1; y++) {
+                    last = m_edges.select((m_edges.rank(end + 1, y)), y);
+                    if (start <= last && last <= end) break;
+                }
+            }
+            assert(start <= last && last <= end);
+            // Follow each edge forward
+            start = _forward(first, x);
+            end   = _forward(last, x);
+            end   = _last_edge_of_node(_edge_to_node(end));
+        }
+        return boost::optional<node_type>(node_type(start, end));
+    }
+
+    
   size_type serialize(ostream& out, structure_tree_node* v=NULL, string name="") const {
     structure_tree_node* child = structure_tree::add_child(v, name, util::class_name(*this));
     size_type written_bytes = 0;
@@ -457,119 +538,7 @@ class debruijn_graph_shifted {
     read_member(deconst(m_num_nodes), in);
   }
 
-    symbol_type _encode_symbol(uint8_t c) const {
-        return lower_bound(m_alphabet.begin(), m_alphabet.end(), c) - m_alphabet.begin();
-    }
-
-    template <class InputIterator>
-    boost::optional<node_type> index(InputIterator in) const {
-        auto c = *in++;
-        symbol_type first_symbol = _encode_symbol(c);
-        // Range is from first edge of first, to last edge of last
-        size_t start = _symbol_start(first_symbol);
-        size_t end   = m_symbol_ends[first_symbol]-1;
-        size_t first = 0, last = 0;
-        // std::cerr << "index lookup for symbol: " << c << ", "
-        // << start << ", "
-        // << end << ", "
-        // << first <<","
-        // << last << ","
-        // <<std::endl;
-
-        // find c-labeled pred edge
-        // if outside of range, find c- labeled pred edge
-        for (size_t i = 0; i < k - 2; i++) {
-            c = *in++;
-            // std::cerr << "index lookup for symbol: " << c << " ("
-            //           << start << ", "
-            //           << end << ", "
-            //           << first <<", "
-            //           << last << ")"
-            //           <<std::endl;
-
-            symbol_type x = _encode_symbol(c);
-            // update range; Within current range, find first and last occurence of c or c-
-            // first -> succ(x, first)
-            for (uint8_t y=x<<1; y<(x<<1)+1; y++) {
-                //std::cerr << "    x: " << (int)x << "y: " <<  (int)y  << std::endl;
-                first = m_edges.select((m_edges.rank(start, y)) + 1, y);
-                if (start <= first && first <= end) break;
-            }
-            if (!(start <= first && first <= end)) return boost::optional<node_type>();
-            // last -> pred(x, last)
-            if (start == end) {
-                last = first;
-            } else {
-                for (uint8_t y=x<<1; y<(x<<1)+1; y++) {
-                    //std::cerr << "    (2) x: " << (int)x << "y: " <<  (int)y  << std::endl;
-                    auto rank_temp = m_edges.rank(end + 1, y);
-                    //std::cerr << "rank_temp: " << rank_temp << std::endl;
-                    last = m_edges.select((rank_temp), y);
-                    //std::cerr << "select returned " << last << std::endl;
-                    if (start <= last && last <= end) break;
-                }
-            }
-            if (!(start <= last && last <= end)) {
-                //std::cerr << "assert(start <= last && last <= end) failed!" << std::endl;
-                assert(!"(start <= last && last <= end)");
-            }
-        
-            // Follow each edge forward
-            //std::cerr << "            // Follow each edge forward" << std::endl;
-            start = _forward(first, x);
-            //std::cerr << "start: " << start << std::endl;
-            end   = _forward(last, x);
-            //std::cerr << "end: " << end << start << std::endl;
-            end   = _last_edge_of_node(_edge_to_node(end));
-            //std::cerr << "second end: " << end << start << std::endl;
-        }
-        return boost::optional<node_type>(node_type(start, end));
-    }
-
-
-  // ssize_t outgoing_edge(size_t u, symbol_type x) const {
-  //   assert(u < num_nodes());
-  //   assert(x < sigma + 1);
-  //   if (x == 0) return -1;
-  //   auto range = _node_range(u);
-  //   size_t first = get<0>(range);
-  //   size_t last  = get<1>(range);
-  //   // Try both with and without a flag
-  //   for (symbol_type c = _with_edge_flag(x,false); c <= _with_edge_flag(x, true); c++) {
-  //     size_t rnk = m_edges.rank(last+1, c);
-  //     if (rnk == 0) continue;
-  //     size_t most_recent = m_edges.select(rnk, c);
-  //     // if within range, follow forward
-  //     if (first <= most_recent && most_recent <= last) {
-  //       // Don't have to check fwd for -1 since we checked for $ above
-  //       return _forward(most_recent);
-  //     }
-  //   }
-  //   return -1;
-  // }
-
-
-  ssize_t outgoing_edge(size_t u, symbol_type x) const {
-    assert(u < num_nodes());
-    assert(x < sigma + 1);
-    if (x == 0) return -1;
-    auto range = _node_range(u);
-    size_t first = get<0>(range);
-    size_t last  = get<1>(range);
-    // Try both with and without a flag
-    for (symbol_type c = _with_edge_flag(x,false); c <= _with_edge_flag(x, true); c++) {
-      size_t most_recent = m_edges.select(m_edges.rank(last+1, c), c);
-      // if within range, follow forward
-      if (first <= most_recent && most_recent <= last) {
-        // Don't have to check fwd for -1 since we checked for $ above
-        return _forward(most_recent);
-      }
-    }
-    return -1;
-  }
-
-    
-    
+  size_type size() const { return num_edges(); }
 };
 
 #endif
