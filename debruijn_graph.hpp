@@ -579,6 +579,7 @@ class debruijn_graph {
         // if outside of range, find c- labeled pred edge
         for (size_t i = 0; i < k - 2; i++) {
             c = *in++;
+
             symbol_type x = _encode_symbol(c);
             // update range; Within current range, find first and last occurence of c or c-
             // first -> succ(x, first)
@@ -592,11 +593,15 @@ class debruijn_graph {
                 last = first;
             } else {
                 for (uint8_t y=x<<1; y<(x<<1)+1; y++) {
-                    last = m_edges.select((m_edges.rank(end + 1, y)), y);
+                    auto rank_temp = m_edges.rank(end + 1, y);
+                    last = m_edges.select((rank_temp), y);
                     if (start <= last && last <= end) break;
                 }
             }
-            assert(start <= last && last <= end);
+            if (!(start <= last && last <= end)) {
+                assert(!"(start <= last && last <= end)");
+            }
+        
             // Follow each edge forward
             start = _forward(first, x);
             end   = _forward(last, x);

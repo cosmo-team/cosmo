@@ -114,7 +114,7 @@ int main(int argc, char* argv[]) {
     COSMO_LOG(info) << file_name << " looks like a " << fmt_s << " file.";
     // TODO: support multiple input files, add to vector
     if (fmt == input_format::kmc) {
-      COSMO_LOG(error) << "Single KMC files aren't yet supported (we're lazy).";
+      COSMO_LOG(error) << "Single KMC files aren't yet supported (we're lazy). But you can put it in a list file.";
       exit(1);
     }
   }
@@ -236,9 +236,13 @@ int main(int argc, char* argv[]) {
     }
   }
   else if (fmt == input_format::kmc) {
-    typedef debruijn_graph<> dbg_t;
+    typedef debruijn_graph_shifted<> dbg_t;
     typedef dbg_builder<dbg_t, kmer_t, color_bv> builder_t;
-
+    if (!params.shift_dummies) {
+      COSMO_LOG(error) << "Must use -d with KMC2 flow.";
+      exit(EXIT_FAILURE);
+    }
+        
     std::vector<CKMCFile*> kmer_data_bases;
     COSMO_LOG(trace) << "Reading KMC2 database list file..." << std::endl;
     size_t num_colors;
@@ -303,6 +307,8 @@ int main(int argc, char* argv[]) {
     //sd_vector<> color_sd(color_bv);
     size_t total_colors = edge_idx * num_colors;
     COSMO_LOG(info) << "Color density : " << num_set/(double)total_colors * 100 << "%";
+    COSMO_LOG(info) << "Set bits : " << num_set << std::endl;
+    COSMO_LOG(info) << "total bits : " << total_colors << std::endl;
 //    COSMO_LOG(info) << "size of color_bv  : " << size_in_mega_bytes(color_bv) << " MB";
 //    COSMO_LOG(info) << "size of color_rrr : " << size_in_mega_bytes(color_rrr) << " MB";
     //COSMO_LOG(info) << "size of color_sd  : " << size_in_mega_bytes(color_sd) << " MB";

@@ -53,6 +53,10 @@ void parse_arguments(int argc, char **argv, parameters_t & params)
                                                              "Input file. Currently only supports DSK's binary format (for k<=64).", true, "", "input_file", cmd);
     TCLAP::UnlabeledValueArg<std::string> num_colors_arg("num_colors",
                                                          "Number of colors", true, "", "num colors", cmd);
+    TCLAP::UnlabeledValueArg<std::string> n_arg("n",
+                                                         "sd_vector n=Vector size", true, "", "sd_vector n=Vector size", cmd);
+    TCLAP::UnlabeledValueArg<std::string> m_arg("m",
+                                                         "sd_vector m=The number of 1-bits", true, "", "sd_vector m=The number of 1-bits", cmd);
     std::string output_short_form = "output_prefix";
     TCLAP::ValueArg<std::string> output_prefix_arg("o", "output_prefix",
                                                    "Output prefix. Graph will be written to [" + output_short_form + "]" + file_extension + ". " +
@@ -60,6 +64,8 @@ void parse_arguments(int argc, char **argv, parameters_t & params)
     cmd.parse( argc, argv );
     params.input_filename  = input_filename_arg.getValue();
     params.num_colors  = atoi(num_colors_arg.getValue().c_str());
+    params.n  = atoll(n_arg.getValue().c_str());
+    params.m  = atoll(m_arg.getValue().c_str());
     params.output_prefix   = output_prefix_arg.getValue();
 
 }
@@ -90,9 +96,13 @@ int main(int argc, char * argv[])
     size_t num_color = params.num_colors;
     size_t num_edges = end / sizeof(color_bv);
     //size_t n = 4000000000000;
-    size_t n = 201136208922 + 7967979875878;
+    //size_t n = 201136208922 + 7967979875878; // 80 color set -d
+    // size_t n = 1049958 + 54489174; // ecoli6 -d
+    size_t n = params.n;
     //size_t m = 120543830541;
-    size_t m = 201136208922;
+    // size_t m = 201136208922; // 80 color set -d
+    //size_t m = 54489174; // ecoli6 -d
+    size_t m = params.m;
     std::cerr << "stack allocing sdsl::sd_vector_builder base object with n=" << n
               << " m=" << m << std::endl;
     sdsl::sd_vector_builder b_builder(n, m);// = bit_vector(num_edges*num_color, 0);

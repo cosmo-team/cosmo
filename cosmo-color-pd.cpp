@@ -10,7 +10,7 @@
 #include <sdsl/wavelet_trees.hpp>
 
 #include "io.hpp"
-#include "debruijn_graph.hpp"
+#include "debruijn_graph_shifted.hpp"
 #include "algorithm.hpp"
 #include "cosmo-color-pd.hpp"
 
@@ -38,7 +38,7 @@ int getMilliSpan(int nTimeStart){
 
 string file_extension = ".dbg";
 
-
+unsigned long long global_t;
 
 void parse_arguments(int argc, char **argv, parameters_t & params)
 {
@@ -74,7 +74,8 @@ void parse_arguments(int argc, char **argv, parameters_t & params)
 static char base[] = {'?','A','C','G','T'};
 
 
-void test_symmetry(debruijn_graph<> dbg) {
+void test_symmetry(debruijn_graph_shifted<> dbg)
+{
   for (unsigned long x = 0; x<dbg.sigma+1;x++) {
     ssize_t in = dbg.incoming(43, x);
     if (in == -1)
@@ -90,21 +91,23 @@ void test_symmetry(debruijn_graph<> dbg) {
 
 
 
-void dump_nodes(debruijn_graph<> dbg, uint64_t * colors) {
+void dump_nodes(debruijn_graph_shifted<> dbg, uint64_t * colors)
+{
   for (size_t i = 0; i < dbg.num_nodes(); i++) {
     cout << i << ":" << dbg.node_label(i) << colors[dbg._node_to_edge(i)] << "\n";
   }
 }
 
 
-void dump_edges(debruijn_graph<> dbg, uint64_t * colors) {
+void dump_edges(debruijn_graph_shifted<> dbg, uint64_t * colors)
+{
   for (size_t i = 0; i < dbg.num_edges(); i++) {
     cout << i << "e:" << dbg.edge_label(i) << colors[i] << "\n";
   }
 }
 
 
-ssize_t get_first_node(debruijn_graph<> dbg, sd_vector<> &colors, uint64_t ref_color, std::string& ref_fasta_content)
+ssize_t get_first_node(debruijn_graph_shifted<> dbg, sd_vector<> &colors, uint64_t ref_color, std::string& ref_fasta_content)
 {
 
     
@@ -164,7 +167,7 @@ unsigned dna_ord(char c)
     };
 }
 
-void advance(debruijn_graph<> dbg, const std::string& ref_fasta_content, const unsigned amount, ssize_t& node_k, ssize_t& node_k_pos)
+void advance(debruijn_graph_shifted<> dbg, const std::string& ref_fasta_content, const unsigned amount, ssize_t& node_k, ssize_t& node_k_pos)
 {
     unsigned node_label_size = dbg.k - 1;  
     for (unsigned i = 0; i < amount; ++i) {
@@ -184,8 +187,9 @@ void advance(debruijn_graph<> dbg, const std::string& ref_fasta_content, const u
 unsigned colorgroups[] = {1, 25, 49, 57, 64, 80};
 unsigned num_colorgroups = 5;
     
-void dumping_advance(debruijn_graph<> dbg, const std::string& ref_fasta_content, const unsigned amount, ssize_t& node_k, ssize_t& node_k_pos, rank_support_sd<1>& color_ranks, std::vector<unsigned> group_counts)
+void dumping_advance(debruijn_graph_shifted<> dbg, const std::string& ref_fasta_content, const unsigned amount, ssize_t& node_k, ssize_t& node_k_pos, rank_support_sd<1>& color_ranks, std::vector<unsigned>& group_counts, unsigned num_colors)
 {
+    std::cout << dbg.node_label(node_k) << " ";
     unsigned node_label_size = dbg.k - 1;  
     for (unsigned i = 0; i < amount; ++i) {
         
@@ -196,8 +200,16 @@ void dumping_advance(debruijn_graph<> dbg, const std::string& ref_fasta_content,
         }
 
         for (unsigned i=0; i< num_colorgroups; ++i) {
-            group_counts[i] += color_ranks(colorgroups[i+1]-1) - color_ranks(colorgroups[i]-1);
+            group_counts[i] += color_ranks(edge * num_colors + colorgroups[i+1]-1) - color_ranks(edge * num_colors + colorgroups[i]-1);
         }
+
+        std::cout << "color group counts: ";
+        for (unsigned i=0; i< num_colorgroups; ++i) {
+            std::cout << group_counts[i] / (float)(colorgroups[i+1] - colorgroups[i]) / (float)ref_fasta_content.size() << " ";
+    }
+        
+        std::cout << " time: " << (getMilliCount() - global_t) / 1000.0 << " s"  << std::endl;
+        
 
         node_k = dbg._edge_to_node(edge);
         node_k_pos++;
@@ -207,7 +219,7 @@ void dumping_advance(debruijn_graph<> dbg, const std::string& ref_fasta_content,
 }
 
 
-int colored_outdegree(debruijn_graph<> dbg, ssize_t v, const uint64_t sample_mask, unsigned num_colors, sd_vector<> &colors)
+int colored_outdegree(debruijn_graph_shifted<> dbg, ssize_t v, const uint64_t sample_mask, unsigned num_colors, sd_vector<> &colors)
 {
     unsigned out_count = 0;
 
@@ -235,7 +247,7 @@ int colored_outdegree(debruijn_graph<> dbg, ssize_t v, const uint64_t sample_mas
     
 }
 
-int colored_indegree(debruijn_graph<> dbg, ssize_t v, const uint64_t sample_mask, unsigned num_colors, sd_vector<> &colors)
+int colored_indegree(debruijn_graph_shifted<> dbg, ssize_t v, const uint64_t sample_mask, unsigned num_colors, sd_vector<> &colors)
 {
     unsigned in_count = 0;
     
@@ -266,7 +278,7 @@ int colored_indegree(debruijn_graph<> dbg, ssize_t v, const uint64_t sample_mask
 //FIXME: add asserts to check the color for the reference genome; it's somewhat annoying user has to specify both the color and the reference genome; we should be able to derive one from the other for the overall flow and having the data replicated could lead to inconsistency errors.
 /*FIXME: sample_mask is limited to 64 colors*/
 // FIXME: how to handle multiple colors?  Treat them all the same? Or do we have to bookkeep individual color results during one traversal.  What to do about divergence in the latter case?
-void get_supernode(debruijn_graph<> dbg, const ssize_t& node_i, const uint64_t sample_mask , std::vector<ssize_t>& s, unsigned num_colors,  sd_vector<> &colors, int& node_i_pos_in_supernode)
+void get_supernode(debruijn_graph_shifted<> dbg, const ssize_t& node_i, const uint64_t sample_mask , std::vector<ssize_t>& s, unsigned num_colors,  sd_vector<> &colors, int& node_i_pos_in_supernode)
 {
     node_i_pos_in_supernode = 0;
 
@@ -322,7 +334,7 @@ void get_supernode(debruijn_graph<> dbg, const ssize_t& node_i, const uint64_t s
     }
 }
 
-// int get_divergent(debruijn_graph<> dbg, const std::string& ref_fasta_content, const std::vector<ssize_t>& s, ssize_t node_k, ssize_t node_k_pos)
+// int get_divergent(debruijn_graph_shifted<> dbg, const std::string& ref_fasta_content, const std::vector<ssize_t>& s, ssize_t node_k, ssize_t node_k_pos)
 // {
 //     for (unsigned i = 0;; ++i, advance(dbg, ref_fasta_content, 1, node_k, node_k_pos)) {
 //         if (node_k != s[i]) return i;
@@ -334,7 +346,7 @@ void get_supernode(debruijn_graph<> dbg, const ssize_t& node_i, const uint64_t s
 
 
 
-// int path_cmp(debruijn_graph<> dbg, const std::string& ref_fasta_content, const std::vector<ssize_t>& s, ssize_t s_pos, ssize_t node_k, ssize_t node_k_pos, const unsigned L)
+// int path_cmp(debruijn_graph_shifted<> dbg, const std::string& ref_fasta_content, const std::vector<ssize_t>& s, ssize_t s_pos, ssize_t node_k, ssize_t node_k_pos, const unsigned L)
 // {
 //     for (unsigned int i = 0; i < L; ++i, advance(dbg, ref_fasta_content, 1, node_k, node_k_pos), ++s_pos) {
 //         if (s[s_pos] != node_k) return 1;
@@ -343,7 +355,7 @@ void get_supernode(debruijn_graph<> dbg, const ssize_t& node_i, const uint64_t s
 //     return 0;
 // }
 // this is meant to roughly mimic strcmp(), will return 0 if the paths starting at s_pos and node_k_pos match for the first L nodes
-unsigned int match_length(debruijn_graph<> dbg, const std::string& ref_fasta_content, const std::vector<ssize_t>& s, ssize_t s_pos, ssize_t node_k, ssize_t node_k_pos, unsigned bound = -1)
+unsigned int match_length(debruijn_graph_shifted<> dbg, const std::string& ref_fasta_content, const std::vector<ssize_t>& s, ssize_t s_pos, ssize_t node_k, ssize_t node_k_pos, unsigned bound = -1)
 {
     unsigned int i = 0;
     
@@ -355,7 +367,7 @@ unsigned int match_length(debruijn_graph<> dbg, const std::string& ref_fasta_con
     
 }
 
-void dump_supernode(debruijn_graph<> dbg, const std::vector<ssize_t>& s, ssize_t start, ssize_t end, std::string &out)
+void dump_supernode(debruijn_graph_shifted<> dbg, const std::vector<ssize_t>& s, ssize_t start, ssize_t end, std::string &out)
 {
     assert(s.size());
     
@@ -391,7 +403,7 @@ const unsigned M = 200000; // "a maximum size M of variant to be searched for" -
 // for KMC2 k=32, Found fasta start at edge num 7471236
 //  and node_i_pos = 0. node_i = 7471236.
 
-void find_divergent_paths(debruijn_graph<> dbg, sd_vector<> &colors,  uint64_t sample_mask, std::string& ref_fasta_content)
+void find_divergent_paths(debruijn_graph_shifted<> dbg, sd_vector<> &colors,  uint64_t sample_mask, std::string& ref_fasta_content)
 {
     int variant_num = 0;
     int num_colors = colors.size() / dbg.num_edges();
@@ -512,25 +524,28 @@ void find_divergent_paths(debruijn_graph<> dbg, sd_vector<> &colors,  uint64_t s
     }
 }
 
-void walk_refs(debruijn_graph<> dbg, sd_vector<> &colors, std::string& ref_fasta_content)
+void walk_refs(debruijn_graph_shifted<> dbg, sd_vector<> &colors, std::string& ref_fasta_content, rank_support_sd<>& color_ranks)
 {
     
     unsigned long long t = getMilliCount();
 
     //int variant_num = 0;
     int num_colors = colors.size() / dbg.num_edges();
-    std::cerr << "num colors " << num_colors << std::endl;
-    unsigned node_label_size = dbg.k - 1;
-    std::cerr << "node label size " << node_label_size << std::endl;
-    std::string first_node_label(ref_fasta_content.substr(0, node_label_size + 1));
-    rank_support_sd<1> color_ranks(&colors);
 
+    unsigned node_label_size = dbg.k - 1;
+
+    std::string first_node_label(ref_fasta_content.substr(0, node_label_size + 1));
+
+
+
+    
     auto node = dbg.index(first_node_label.begin());
-    std::cerr << "dbg.index('" << first_node_label << "') =" << std::endl;
-    std::cerr << "node " << node << std::endl;
-    std::cerr << " a.k.a. (" << get<0>(*node) << ", "  << get<1>(*node) << ")" << std::endl;
+
+    if (!node) {
+        std::cerr << "ERROR: could not locate the first node specified by the reference sequence in the graph!" << std::endl;
+    }
     ssize_t first_node =  dbg._edge_to_node(get<0>(*node));
-    std::cerr << "first_node label = " << dbg.node_label(first_node) << std::endl;
+    std::cout << "first_node label = " << dbg.node_label(first_node) << std::endl;
 
     
     ssize_t node_i = first_node; // cdbg node labeled with a k-mer existing in the reference sequence
@@ -539,15 +554,15 @@ void walk_refs(debruijn_graph<> dbg, sd_vector<> &colors, std::string& ref_fasta
     std::vector<unsigned> group_counts(num_colorgroups, 0);
     
     while(node_i_pos < (ssize_t)ref_fasta_content.size() - node_label_size - 2 ) {
-        dumping_advance(dbg, ref_fasta_content, 1, node_i, node_i_pos, color_ranks, group_counts);
+        dumping_advance(dbg, ref_fasta_content, 1, node_i, node_i_pos, color_ranks, group_counts, num_colors);
         
     }
 
-    std::cout << "color group counts: ";
+    std::cout << "final color group counts: ";
     for (unsigned i=0; i< num_colorgroups; ++i) {
         std::cout << group_counts[i] / (float)(colorgroups[i+1] - colorgroups[i]) / (float)ref_fasta_content.size() << " ";
     }
-    std::cout << " time: " << getMilliCount() << t;
+    std::cout << " time: " << (getMilliCount() - t)/1000.0 << " s";
     std::cout << std::endl;
 
 
@@ -558,7 +573,7 @@ void walk_refs(debruijn_graph<> dbg, sd_vector<> &colors, std::string& ref_fasta
 
 char dna_bases[] = "$ACGT";
 
-void dump_node(debruijn_graph<> dbg, sd_vector<> &colors, ssize_t v)
+void dump_node(debruijn_graph_shifted<> dbg, sd_vector<> &colors, ssize_t v)
 {
     std::cout << dbg.node_label(v) ;
     int num_colors = colors.size() / dbg.num_edges();
@@ -640,7 +655,7 @@ void dump_node(debruijn_graph<> dbg, sd_vector<> &colors, ssize_t v)
 
 }
 
-void dump_graph(debruijn_graph<> dbg, sd_vector<> &colors)
+void dump_graph_shifted(debruijn_graph_shifted<> dbg, sd_vector<> &colors)
 {
 
     
@@ -651,7 +666,7 @@ void dump_graph(debruijn_graph<> dbg, sd_vector<> &colors)
 
 const char *const starts[] = {"GCCATACTGCGTCATGTCGCCCTGACGCGC","GCAGGTTCGAATCCTGCACGACCCACCAAT","GCTTAACCTCACAACCCGAAGATGTTTCTT","AAAACCCGCCGAAGCGGGTTTTTACGTAAA","AATCCTGCACGACCCACCAGTTTTAACATC","AGAGTTCCCCGCGCCAGCGGGGATAAACCG","GAATACGTGCGCAACAACCGTCTTCCGGAG"};
     
-void find_bubbles(debruijn_graph<> dbg, sd_vector<> &colors, uint64_t ref_color, uint64_t sample_mask)
+void find_bubbles(debruijn_graph_shifted<> dbg, sd_vector<> &colors, uint64_t ref_color, uint64_t sample_mask)
 {
     int t = getMilliCount();
     int num_colors = colors.size() / dbg.num_edges();
@@ -799,6 +814,7 @@ unsigned parse_fasta(const std::string& ref_fasta_fname, std::vector<std::string
 
 }
 
+
 int main(int argc, char* argv[]) {
   parameters_t p;
   parse_arguments(argc, argv, p);
@@ -808,17 +824,17 @@ int main(int argc, char* argv[]) {
   //vector<size_t> minus_positions;
 
   
-  debruijn_graph<> dbg;
+  debruijn_graph_shifted<> dbg;
   unsigned long long t = getMilliCount();
   std::cerr << "Loading succinct de Bruijn graph...";
   load_from_file(dbg, p.input_filename);
-  std::cerr << "time: " << (getMilliCount() - t) / 1000.0 << std::endl;
+  std::cerr << "time: " << (getMilliCount() - t) / 1000.0 << " s" << std::endl;
 
   sd_vector<> colors;
   unsigned long long t2 = getMilliCount();
   std::cerr << "Loading color matrix...";
   load_from_file(colors, p.color_filename);
-  std::cerr << "time: " << (getMilliCount() - t2) / 1000.0  << std::endl;
+  std::cerr << "time: " << (getMilliCount() - t2) / 1000.0  << " s" << std::endl;
 
 
 
@@ -831,9 +847,9 @@ int main(int argc, char* argv[]) {
   cerr << "Bits per edge : " << bits_per_element(dbg) << " Bits" << endl;
   cerr << "Color size    : " << size_in_mega_bytes(colors) << " MB" << endl;
 
-  // std::cout << "BEGIN dump_graph" << std::endl;
-  // dump_graph(dbg, colors);
-  // std::cout << "END dump_graph" << std::endl;
+  // std::cout << "BEGIN dump_graph_shifted" << std::endl;
+  // dump_graph_shifted(dbg, colors);
+  // std::cout << "END dump_graph_shifted" << std::endl;
   
   //dump_nodes(dbg, colors);
   //dump_edges(dbg, colors);
@@ -845,9 +861,14 @@ int main(int argc, char* argv[]) {
   std::cerr << "Loading reference FASTA file " << p.ref_fasta  << "...";
   std::cerr << "Loaded " << parse_fasta(p.ref_fasta, ref_fastas, ids) << " sequences" << std::endl;
   int i = 0;
+  rank_support_sd<1> color_ranks(&colors);
   for (std::vector<std::string>::iterator rf = ref_fastas.begin(); rf != ref_fastas.end(); ++i, ++rf) {
-      std::cerr << "Processing reference sequence" << i << " '"<< ids[i] << "', containing " << rf->size() << " nucleotides." << std::endl;
-      walk_refs(dbg, colors,   *rf);
+        unsigned long long t3 = getMilliCount();
+        global_t = getMilliCount();
+        std::cerr << "Processing reference sequence" << i << " '"<< ids[i] << "', containing " << rf->size() << " nucleotides." << std::endl;
+        walk_refs(dbg, colors,   *rf, color_ranks);
+        std::cerr << "time: " << (getMilliCount() - t3) / 1000.0  << " s" << std::endl;
+
   }
 
 }

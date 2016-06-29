@@ -456,6 +456,120 @@ class debruijn_graph_shifted {
     read_member(deconst(m_alphabet), in);
     read_member(deconst(m_num_nodes), in);
   }
+
+    symbol_type _encode_symbol(uint8_t c) const {
+        return lower_bound(m_alphabet.begin(), m_alphabet.end(), c) - m_alphabet.begin();
+    }
+
+    template <class InputIterator>
+    boost::optional<node_type> index(InputIterator in) const {
+        auto c = *in++;
+        symbol_type first_symbol = _encode_symbol(c);
+        // Range is from first edge of first, to last edge of last
+        size_t start = _symbol_start(first_symbol);
+        size_t end   = m_symbol_ends[first_symbol]-1;
+        size_t first = 0, last = 0;
+        // std::cerr << "index lookup for symbol: " << c << ", "
+        // << start << ", "
+        // << end << ", "
+        // << first <<","
+        // << last << ","
+        // <<std::endl;
+
+        // find c-labeled pred edge
+        // if outside of range, find c- labeled pred edge
+        for (size_t i = 0; i < k - 2; i++) {
+            c = *in++;
+            // std::cerr << "index lookup for symbol: " << c << " ("
+            //           << start << ", "
+            //           << end << ", "
+            //           << first <<", "
+            //           << last << ")"
+            //           <<std::endl;
+
+            symbol_type x = _encode_symbol(c);
+            // update range; Within current range, find first and last occurence of c or c-
+            // first -> succ(x, first)
+            for (uint8_t y=x<<1; y<(x<<1)+1; y++) {
+                //std::cerr << "    x: " << (int)x << "y: " <<  (int)y  << std::endl;
+                first = m_edges.select((m_edges.rank(start, y)) + 1, y);
+                if (start <= first && first <= end) break;
+            }
+            if (!(start <= first && first <= end)) return boost::optional<node_type>();
+            // last -> pred(x, last)
+            if (start == end) {
+                last = first;
+            } else {
+                for (uint8_t y=x<<1; y<(x<<1)+1; y++) {
+                    //std::cerr << "    (2) x: " << (int)x << "y: " <<  (int)y  << std::endl;
+                    auto rank_temp = m_edges.rank(end + 1, y);
+                    //std::cerr << "rank_temp: " << rank_temp << std::endl;
+                    last = m_edges.select((rank_temp), y);
+                    //std::cerr << "select returned " << last << std::endl;
+                    if (start <= last && last <= end) break;
+                }
+            }
+            if (!(start <= last && last <= end)) {
+                //std::cerr << "assert(start <= last && last <= end) failed!" << std::endl;
+                assert(!"(start <= last && last <= end)");
+            }
+        
+            // Follow each edge forward
+            //std::cerr << "            // Follow each edge forward" << std::endl;
+            start = _forward(first, x);
+            //std::cerr << "start: " << start << std::endl;
+            end   = _forward(last, x);
+            //std::cerr << "end: " << end << start << std::endl;
+            end   = _last_edge_of_node(_edge_to_node(end));
+            //std::cerr << "second end: " << end << start << std::endl;
+        }
+        return boost::optional<node_type>(node_type(start, end));
+    }
+
+
+  // ssize_t outgoing_edge(size_t u, symbol_type x) const {
+  //   assert(u < num_nodes());
+  //   assert(x < sigma + 1);
+  //   if (x == 0) return -1;
+  //   auto range = _node_range(u);
+  //   size_t first = get<0>(range);
+  //   size_t last  = get<1>(range);
+  //   // Try both with and without a flag
+  //   for (symbol_type c = _with_edge_flag(x,false); c <= _with_edge_flag(x, true); c++) {
+  //     size_t rnk = m_edges.rank(last+1, c);
+  //     if (rnk == 0) continue;
+  //     size_t most_recent = m_edges.select(rnk, c);
+  //     // if within range, follow forward
+  //     if (first <= most_recent && most_recent <= last) {
+  //       // Don't have to check fwd for -1 since we checked for $ above
+  //       return _forward(most_recent);
+  //     }
+  //   }
+  //   return -1;
+  // }
+
+
+  ssize_t outgoing_edge(size_t u, symbol_type x) const {
+    assert(u < num_nodes());
+    assert(x < sigma + 1);
+    if (x == 0) return -1;
+    auto range = _node_range(u);
+    size_t first = get<0>(range);
+    size_t last  = get<1>(range);
+    // Try both with and without a flag
+    for (symbol_type c = _with_edge_flag(x,false); c <= _with_edge_flag(x, true); c++) {
+      size_t most_recent = m_edges.select(m_edges.rank(last+1, c), c);
+      // if within range, follow forward
+      if (first <= most_recent && most_recent <= last) {
+        // Don't have to check fwd for -1 since we checked for $ above
+        return _forward(most_recent);
+      }
+    }
+    return -1;
+  }
+
+    
+    
 };
 
 #endif
