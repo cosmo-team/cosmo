@@ -248,8 +248,7 @@ class debruijn_graph_shifted {
     return -1;
   }
 
-  // incoming
-  ssize_t incoming(size_t v, symbol_type x) const {
+inline  ssize_t incoming_edge(size_t v, symbol_type x) const {
     // This is very similar to indegree, so should maybe be refactored
     assert(v < num_nodes());
     assert(x < sigma + 1);
@@ -269,9 +268,16 @@ class debruijn_graph_shifted {
     auto accessor = [&](size_t i) -> symbol_type { return _first_symbol(selector(i)); };
     ssize_t sub_idx = function_binary_search(0, num_predecessors-1, x, accessor);
     if (sub_idx == -1) return -1;
-    return _edge_to_node(selector(sub_idx));
+    return selector(sub_idx);
   }
 
+    
+  // incoming
+  ssize_t incoming(size_t v, symbol_type x) const {
+    return _edge_to_node(incoming_edge(v, x));
+  }
+
+    
   // string -> node, edge
   // BGL style API
 

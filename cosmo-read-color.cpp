@@ -19,6 +19,45 @@ using namespace sdsl;
 
 #include <sys/timeb.h>
 
+
+
+//////////// pack-color headers
+
+
+#include <iostream>
+#include <fstream>
+#include <utility>
+#include <ctime>
+
+// TCLAP
+#include "tclap/CmdLine.h"
+
+#include <sdsl/bit_vectors.hpp>
+#include <cstdio>
+
+#include <cstdlib>
+
+#include <libgen.h>
+
+// Custom Headers
+//#include "uint128_t.hpp"
+//#include "debug.h"
+#include "kmer.hpp"
+
+//using namespace std;
+//using namespace sdsl;
+
+#include <cstdlib>
+#include <sys/timeb.h>
+//#include "pack-color.hpp"
+
+
+
+
+
+
+
+
 bool trace = false;
 string file_extension = ".dbg";
 
@@ -30,8 +69,8 @@ char dna_bases[] = "$ACGT";
 unsigned colorgroups[] = {1, 25, 49, 57, 72, 88};
 unsigned num_colorgroups = 5;
 debruijn_graph_shifted<>* gdbg;
-sd_vector<>* gcolors;
-rank_support_sd<>* gcolor_ranks;
+//sd_vector<>* gcolors;
+//rank_support_sd<>* gcolor_ranks;
 const char *const starts[] = {"GCCATACTGCGTCATGTCGCCCTGACGCGC","GCAGGTTCGAATCCTGCACGACCCACCAAT","GCTTAACCTCACAACCCGAAGATGTTTCTT","AAAACCCGCCGAAGCGGGTTTTTACGTAAA","AATCCTGCACGACCCACCAGTTTTAACATC","AGAGTTCCCCGCGCCAGCGGGGATAAACCG","GAATACGTGCGCAACAACCGTCTTCCGGAG"};
 
 int getMilliCount(){
@@ -225,7 +264,36 @@ void dumping_advance(debruijn_graph_shifted<>& dbg, const std::string& ref_fasta
     
 }
 
+inline void dumping_advance2(debruijn_graph_shifted<>& dbg, const std::string& ref_fasta_content, const unsigned amount, ssize_t& node_k, ssize_t& node_k_pos,  std::vector<unsigned>& group_counts, std::stringstream& ret, std::set<unsigned long long>& found_kmers)
+{
+    //std::cout << dbg.node_label(node_k) << " ";
+    unsigned node_label_size = dbg.k - 1;  
+    for (unsigned i = 0; i < amount; ++i) {
+        
+        ssize_t edge = dbg.outgoing_edge(node_k, dna_ord(ref_fasta_content[node_k_pos + node_label_size]));
+        if (edge == -1) {
+            std::cerr <<  ref_fasta_content.substr(node_k_pos, node_label_size) << " Reference fasta guides graph traversal through invalid path at position " << node_k_pos + node_label_size << std::endl ;
+        }
+        found_kmers.insert(edge);
 
+        // for (unsigned i=0; i< num_colorgroups; ++i) {
+        //     group_counts[i] += color_ranks(edge * num_colors + colorgroups[i+1]-1) - color_ranks(edge * num_colors + colorgroups[i]-1);
+        // }
+
+        //std::cout << "color group counts: ";
+        // for (unsigned i=0; i< num_colorgroups; ++i) {
+        //     std::cout << group_counts[i] / (float)(colorgroups[i+1] - colorgroups[i]) / (float)ref_fasta_content.size() << " ";
+        // }
+        
+        //std::cout << " time: " << (getMilliCount() - global_perseq_t) / 1000.0 << " s"  << std::endl;
+        
+
+        node_k = dbg._edge_to_node(edge);
+        node_k_pos++;
+    }
+    
+    
+}
 int colored_outdegree(debruijn_graph_shifted<>& dbg, ssize_t v, const uint64_t sample_mask, unsigned num_colors, sd_vector<> &colors)
 {
     unsigned out_count = 0;
@@ -533,14 +601,14 @@ std::string find_divergent_paths(debruijn_graph_shifted<>& dbg, sd_vector<> &col
     return ret.str();
 }
 
-std::string walk_refs(std::string ref_fasta_content )
+std::set<unsigned long long> walk_refs(std::string ref_fasta_content )
 {
-
+    std::set<unsigned long long> found_kmers;
     std::stringstream ret;
     unsigned long long t = getMilliCount();
 
     //int variant_num = 0;
-    int num_colors = gcolors->size() / gdbg->num_edges();
+//    int num_colors = gcolors->size() / gdbg->num_edges();
 
     unsigned node_label_size = gdbg->k - 1;
 
@@ -552,9 +620,10 @@ std::string walk_refs(std::string ref_fasta_content )
     auto node = gdbg->index(first_node_label.begin());
 
     if (!node) {
-        
-        return  "ERROR: could not locate the first node specified by the reference sequence in the graph!";
+        assert(false);
+        //return  "ERROR: could not locate the first node specified by the reference sequence in the graph!";
     }
+    found_kmers.insert(get<0>(*node));
     ssize_t first_node =  gdbg->_edge_to_node(get<0>(*node));
     ret << "first_node label = " << gdbg->node_label(first_node) << std::endl;
     ret << "per seq wall time: " << (getMilliCount() - t) / 1000.0 << " s"  << std::endl;
@@ -565,8 +634,8 @@ std::string walk_refs(std::string ref_fasta_content )
 
     std::vector<unsigned> group_counts(num_colorgroups, 0);
     
-    while(node_i_pos < (ssize_t)ref_fasta_content.size() - node_label_size - 2 ) {
-        dumping_advance(*gdbg, ref_fasta_content, 1, node_i, node_i_pos, *gcolor_ranks, group_counts, num_colors, ret);
+    while(node_i_pos < (ssize_t)ref_fasta_content.size() - gdbg->k + 1 ) {
+        dumping_advance2(*gdbg, ref_fasta_content, 1, node_i, node_i_pos, group_counts, ret, found_kmers);
         
     }
 
@@ -577,7 +646,7 @@ std::string walk_refs(std::string ref_fasta_content )
     ret << " time: " << (getMilliCount() - t)/1000.0 << " s";
     ret << std::endl;
     std::string retval = ret.str();
-    return retval;
+    return found_kmers;
 
 }
 
@@ -801,12 +870,12 @@ unsigned parse_fasta(const std::string& ref_fasta_fname, std::vector<std::string
     std::ifstream f(ref_fasta_fname);
     std::string s;
     //process first line
-    if (!std::getline(f, s) || s[0] != '>') {
+    if (!std::getline(f, s) || !(s[0] == '>'||s[0] == '@')) {
         std::cerr << "ERROR: File " << ref_fasta_fname << " doesn't seem like a FASTA file." << std::endl;
         exit(EXIT_FAILURE);
     }
 
-
+    bool capture_mode = true; // capture mode
     ids.push_back(s);
     s = "";
     ref_fastas.push_back(s);
@@ -815,12 +884,14 @@ unsigned parse_fasta(const std::string& ref_fasta_fname, std::vector<std::string
     while(std::getline(f, s) && s.size() > 0){
 
 
-        if (s[0] == '>') {
+        if (s[0] == '>' || s[0] == '@') {
             ids.push_back(s);
-
+            capture_mode = true;
             s = "";
             ref_fastas.push_back(s);
-        } else {
+        } else if (s[0] == '+') {
+            capture_mode = false;
+        } else if (capture_mode == true) {
             *(ref_fastas.end()-1) += s;
         }
     }
@@ -829,7 +900,20 @@ unsigned parse_fasta(const std::string& ref_fasta_fname, std::vector<std::string
 
 }
 
+//KMC discards reads with non DNA letters, so we do the same
+bool read_okay(const std::string& readstr)
+{
+    for (const char& c : readstr) {
+        if (c == 'A' || c == 'G' || c == 'C' || c == 'T') {
+            continue;
+        } else {
+            return false;
+        }
+    }
 
+    return true;
+}
+    
 int main(int argc, char* argv[])
 {
     global_t = getMilliCount();
@@ -847,22 +931,22 @@ int main(int argc, char* argv[])
   load_from_file(dbg, p.input_filename);
   std::cerr << "done" << std::endl << "graph load wall time: " << (getMilliCount() - t) / 1000.0 << " s" << std::endl;
 
-  sd_vector<> colors;
-  unsigned long long t2 = getMilliCount();
-  std::cerr << "Loading color matrix...";
-  load_from_file(colors, p.color_filename);
-  std::cerr << "done" << std::endl << "matrix load wall time: " << (getMilliCount() - t2) / 1000.0  << " s" << std::endl;
-  std::cerr << "Total wall time: " << (getMilliCount() - global_t) / 1000.0 << " s" << std::endl;
+  // sd_vector<> colors;
+  // unsigned long long t2 = getMilliCount();
+  // std::cerr << "Loading color matrix...";
+  // load_from_file(colors, p.color_filename);
+  // std::cerr << "done" << std::endl << "matrix load wall time: " << (getMilliCount() - t2) / 1000.0  << " s" << std::endl;
+  // std::cerr << "Total wall time: " << (getMilliCount() - global_t) / 1000.0 << " s" << std::endl;
 
 
   std::cerr << "=== Calculating/reporting stats ===" << std::endl;
   cerr << "k             : " << dbg.k << endl;
   cerr << "num_nodes()   : " << dbg.num_nodes() << endl;
   cerr << "num_edges()   : " << dbg.num_edges() << endl;
-  cerr << "colors        : " << colors.size() / dbg.num_edges() << endl; 
+//  cerr << "colors        : " << colors.size() / dbg.num_edges() << endl; 
   cerr << "Total size    : " << size_in_mega_bytes(dbg) << " MB" << endl;
   cerr << "Bits per edge : " << bits_per_element(dbg) << " Bits" << endl;
-  cerr << "Color size    : " << size_in_mega_bytes(colors) << " MB" << endl;
+//  cerr << "Color size    : " << size_in_mega_bytes(colors) << " MB" << endl;
   std::cerr << "Total wall time: " << (getMilliCount() - global_t) / 1000.0 << " s" << std::endl;
   // std::cout << "BEGIN dump_graph_shifted" << std::endl;
   // dump_graph_shifted(dbg, colors);
@@ -880,30 +964,85 @@ int main(int argc, char* argv[])
   std::cerr << "Total wall time: " << (getMilliCount() - global_t) / 1000.0 << " s" << std::endl;
   int i = 0;
   std::cerr << "Creating Rank support..." ;
-  rank_support_sd<1> color_ranks(&colors);
+//  rank_support_sd<1> color_ranks(&colors);
 
   std::cerr << "done" << std::endl << "Total wall time: " << (getMilliCount() - global_t) / 1000.0 << " s" << std::endl;
 
-  std::cerr << "=== Traversing graph ==" << std::endl;
-  std::vector<std::future<std::string> > retvals;
+  std::cerr << "=== making sd_vector_builder ==" << std::endl;
+  // trimmed/97_GTGGCC_L008_reverse_paired.fastq counts/97_GTGGCC_L008_reverse_paired.fastq
+  // trimmed/118_ACAAAC_L006_forward_paired.fastq
+  //trimmed/1_CGATGT_L002_forward_paired.fastq
+
+
+  
+  std::cerr << "=== determining size of color matrix ==" << std::endl;
+  std::vector<std::future<std::set<unsigned long long> > > retvals;
   // make global version since async can't pass reference args
   
-  gcolors = &colors;
+//  gcolors = &colors;
   gdbg = &dbg;
-  gcolor_ranks = &color_ranks;
-  for (std::vector<std::string>::iterator rf = ref_fastas.begin(); rf != ref_fastas.end(); ++i, ++rf) {
+//  gcolor_ranks = &color_ranks;
+  size_t sd_base_pos = 0;
+  unsigned count = 0;
+  unsigned discarded = 0; // for having non DNA symbols
+  unsigned long long totkmers = 0;
+  for (std::vector<std::string >::iterator rf = ref_fastas.begin(); rf != ref_fastas.end(); ++i, ++rf) {
+      if (count % 100000 == 0) std::cerr << "on read " << count << " discarded: " << discarded << " sd_vector progress: " << count << "/" << ref_fastas.size() << "(" << count / (float)ref_fastas.size() << "%)"<< std::endl;
         // unsigned long long t3 = getMilliCount();
         // global_perseq_t = getMilliCount();
       //std::cerr << "Processing reference sequence" << i << " '"<< ids[i] << "', containing " << rf->size() << " nucleotides." << std::endl;
-      retvals.push_back(std::async(std::launch::deferred, walk_refs, *rf));
+      //retvals.push_back(std::async(std::launch::deferred, walk_refs, *rf));
+
+      //KMC discards reads with non DNA letters, so we do the same
+      if (read_okay(*rf)) {
+          totkmers += rf->size() - dbg.k + 1;
+          count += 1;
+      } else {
+          discarded += 1;
+      }
         //std::cerr << "time: " << (getMilliCount() - t3) / 1000.0  << " s" << std::endl;
         //std::cerr << "Total wall time: " << (getMilliCount() - global_t) / 1000.0 << " s" << std::endl;
+  }
+  std::cerr << "total kmers: " << totkmers << std::endl;
+  size_t n = count /*reads*/ * dbg.num_edges()/*edges*/;  //params.n;
+    //size_t m = 120543830541;
+    // size_t m = 201136208922; // 80 color set -d
+    //size_t m = 54489174; // ecoli6 -d
+  size_t m = totkmers; /*total k-mers*/ //1611287698ull; //params.m;
+    std::cerr << "stack allocing sdsl::sd_vector_builder base object with n=" << n
+              << " m=" << m << std::endl;
+    sdsl::sd_vector_builder b_builder(n, m);// = bit_vector(num_edges*num_color, 0);
 
+  std::cerr << "===  traversing graph ==" << std::endl;
+  
+  discarded = 0;
+  count = 0;
+  for (std::vector<std::string >::iterator rf = ref_fastas.begin(); rf != ref_fastas.end(); ++i, ++rf) {
+      if (count % 100000 == 0) std::cerr << "on read " << count << " discarded: " << discarded << " sd_vector progress: " << b_builder.items() << "/" << b_builder.capacity() << "(" << (float)b_builder.items() / (float)b_builder.capacity() << "%)"<< std::endl;
+        // unsigned long long t3 = getMilliCount();
+        // global_perseq_t = getMilliCount();
+      //std::cerr << "Processing reference sequence" << i << " '"<< ids[i] << "', containing " << rf->size() << " nucleotides." << std::endl;
+      //retvals.push_back(std::async(std::launch::deferred, walk_refs, *rf));
+
+      //KMC discards reads with non DNA letters, so we do the same
+      if (read_okay(*rf)) {
+          std::set<unsigned long long> found_kmers = walk_refs(*rf);
+          for (std::set<unsigned long long>::iterator it = found_kmers.begin(); it != found_kmers.end(); ++it) {
+              b_builder.set(sd_base_pos + *it);
+          }
+          sd_base_pos += dbg.num_edges();
+          count++;
+
+      } else {
+          discarded += 1;
+      }
+        //std::cerr << "time: " << (getMilliCount() - t3) / 1000.0  << " s" << std::endl;
+        //std::cerr << "Total wall time: " << (getMilliCount() - global_t) / 1000.0 << " s" << std::endl;
   }
 
-  for (i=0; i < ref_fastas.size(); ++i) {
-      std::cerr << "ref seq " << i << " :" << ids[i] << std::endl << retvals[i].get() << std::endl;
-  }
+  // for (i=0; i < ref_fastas.size(); ++i) {
+  //     std::cerr << "ref seq " << i << " :" << ids[i] << std::endl << retvals[i].get() << std::endl;
+  // }
   std::cerr << "Total wall time: " << (getMilliCount() - global_t) / 1000.0 << " s" << std::endl;
 //   std::cerr << "=== path divergence ====" << std::endl;
 //     for (i=0; i < ref_fastas.size(); ++i) {
@@ -912,6 +1051,10 @@ int main(int argc, char* argv[])
 //         find_divergent_paths(dbg, colors, mask2, ref_fastas[i]);
 //   }
 //   std::cerr << "Total wall time: " << (getMilliCount() - global_t) / 1000.0 << " s" << std::endl;
-  
+     sdsl::sd_vector<> b(b_builder);
+ 
+     std::string outfilename = "97_GTGGCC_L008_reverse_paired.colors.sd_vector";
+    sdsl::store_to_file(b, outfilename);
+    std::cerr << "done!" << std::endl;
 
 }

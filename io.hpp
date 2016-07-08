@@ -192,6 +192,7 @@ size_t kmc_read_kmers(std::vector<CKMCFile *> &kmer_data_bases, uint32_t k, Visi
     std::vector<uint64> kmers_read(kmer_data_bases.size());
     std::vector<uint64> total_kmers(kmer_data_bases.size());
     std::vector<uint64> multiplicity_histogram(256);
+    unsigned long long kmer_token_count = 0;
 
     for (unsigned int i = 0; i < multiplicity_histogram.size(); ++i) {
         multiplicity_histogram[i] = 0;
@@ -229,6 +230,7 @@ size_t kmc_read_kmers(std::vector<CKMCFile *> &kmer_data_bases, uint32_t k, Visi
     // pop the first element into 'current' to initialize our state (and init any other state here such as this one's color)
     queue_entry current = pop_replace(queue, kmer_data_bases, k);
     update_multiplicity(current, max_multiplicity, multiplicity_histogram);
+    kmer_token_count += std::get<2>(current);
     kmers_read[std::get<0>(current)]++;
     
     color.set(std::get<0>(current)); // FIXME: make sure not using << operator elsewhere!
@@ -243,6 +245,7 @@ size_t kmc_read_kmers(std::vector<CKMCFile *> &kmer_data_bases, uint32_t k, Visi
         if (*const_cast<CKmerAPI*>(&(std::get<1>(queue.top()))) == *const_cast<CKmerAPI*>(&(std::get<1>(current)))) { // if this is the same kmer we've seen before
             queue_entry additional_instance = pop_replace(queue, kmer_data_bases, k);
             update_multiplicity(additional_instance, max_multiplicity, multiplicity_histogram);
+            kmer_token_count += std::get<2>(additional_instance);
             kmers_read[std::get<0>(additional_instance)]++;
             color.set(std::get<0>(additional_instance));
             //std::cout << "additional_instance = " << print_entry(additional_instance) << " = queue.pop()" << std::endl;
@@ -287,6 +290,7 @@ size_t kmc_read_kmers(std::vector<CKMCFile *> &kmer_data_bases, uint32_t k, Visi
 
             // now initialize our current state with the top
             current = pop_replace(queue, kmer_data_bases, k);
+            kmer_token_count += std::get<2>(current);
             kmers_read[std::get<0>(current)]++;
             update_multiplicity(current, max_multiplicity, multiplicity_histogram);
             //std::cout << "current = " << print_entry(current) << " = queue.pop()" << std::endl;
@@ -344,6 +348,7 @@ size_t kmc_read_kmers(std::vector<CKMCFile *> &kmer_data_bases, uint32_t k, Visi
         kmer_data_base->Close();
         delete kmer_data_base;
     }
+    std::cerr << "Total k-mer token count: " << kmer_token_count << std::endl;
     return num_merged_kmers;
     
 }
