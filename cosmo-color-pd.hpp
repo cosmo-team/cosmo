@@ -8,6 +8,7 @@ struct parameters_t {
     std::string ref_color = "";
     std::string sample_mask = "";
     std::string ref_fasta = "";
+    std::string output_matrix = "";
 };
 
 int getMilliCount();
