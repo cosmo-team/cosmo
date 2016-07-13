@@ -68,7 +68,7 @@ template <typename T, typename iterator>
 struct typed_iterator : iterator {
   typedef input_iterator_tag iterator_category;
   typedef T value_type;
-  typedef size_t difference_type;
+  typedef ssize_t difference_type;
   typedef T& reference;
   typedef T* pointer;
 };
