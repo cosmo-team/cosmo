@@ -14,6 +14,8 @@
 
 Cosmo is a fast, low-memory DNA assembler that uses a [succinct de Bruijn graph][succ].
 
+VARI, a succinct colored de Bruijn graph, can be found in this [no_boost_log](https://github.com/cosmo-team/cosmo/tree/no_boost_log) branch.
+
 
 ## Usage
 
