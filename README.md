@@ -36,7 +36,7 @@ $ pack-color  [-o <output_prefix>] [--] [--version] [-h] <input_file>  <num colo
 $ cosmo-color  [-b <color_mask2>] [-a <color_mask1>] [-o <output_prefix>] [--] [--version] [-h] <input_file>  <color_file> # reads rrr
 
 ```
-practical example:
+practical example using the cortex front end:
 ```sh
 $ cd /s/oak/b/nobackup/muggli/src/CORTEX_release_v1.0.5.21/demo/example4_using_reference_genome_to_exclude_paralogs
 $ ../../bin/cortex_var_31_c2 --kmer_size 17 --colour_list colours  --dump_binary both.ctx
@@ -46,7 +46,7 @@ $ ./pack-color both.ctx.colors 2
 $ ./cosmo-color both.ctx.packed both.ctx.colors.rrr
 ```
 
-
+A practical example of the KMC2 front end can be found in cosmo/experiments/ecoli6.sh.  Note that the programs are those in github.com/mmuggli/cosmo.  Some of the commands have changed and will be documented further in the next day or two - MDM, Sept 19. 2016
 
 
 ## Caveats
@@ -92,6 +92,7 @@ graphs: clone [this](https://github.com/alexbowe/sdsl-lite) and checkout the `de
 - [DSK][dsk] - k-mer counting (we need this for input),
 - Optionally (for developers): [Python][python] and [NumPy][numpy] - rebuilding the lookup tables,
 - [STXXL][stxxl] - external merging (not actually required yet though)
+- [KMC2][kmc2] - k-mer counting with sorted output, used to generate the union for colored de Bruijn graph
 
 Many of these are all installable with a package manager (e.g. `(apt-get | yum | brew ) install boost libstxxl tclap`).
 However, you will have to download and build these manually: [DSK][dsk] and [SDSL-lite][sdsl-lite].
@@ -100,6 +101,7 @@ However, you will have to download and build these manually: [DSK][dsk] and [SDS
 ## Authors
 
 Implemented by [Alex Bowe][abowe]. Original concept and prototype by [Kunihiko Sadakane][ksadakane].
+Colored extension prototyped by Robert Raymond and substantially extended by Martin D. Muggli, with help from Alex Bowe.
 
 These people also proved *incredibly* helpful: [Rayan Chikhi][rchikhi], [Simon Puglisi][spuglisi],
 [Travis Gagie][tgagie], [Christina Boucher][cboucher], [Simon Gog][sgog], [Dominik Kempa][dkempa].
