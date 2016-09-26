@@ -1,11 +1,12 @@
-
-
-                    .ooooo.   .ooooo.   .oooo.o ooo. .oo.  .oo.    .ooooo.  
-                   d88' `"Y8 d88' `88b d88(  "8 `888P"Y88bP"Y88b  d88' `88b 
-                   888       888   888 `"Y88b.   888   888   888  888   888 
-                   888   .o8 888   888 o.  )88b  888   888   888  888   888 
-                   `Y8bod8P' `Y8bod8P' 8""888P' o888o o888o o888o `Y8bod8P' 
-                                                                  ver 0.5.1
+                                                                  88                                 o8o  
+                                                                 .8'                                 `"'  
+     .ooooo.   .ooooo.   .oooo.o ooo. .oo.  .oo.    .ooooo.     .8'  oooo    ooo  .oooo.   oooo d8b oooo  
+    d88' `"Y8 d88' `88b d88(  "8 `888P"Y88bP"Y88b  d88' `88b   .8'    `88.  .8'  `P  )88b  `888""8P `888  
+    888       888   888 `"Y88b.   888   888   888  888   888  .8'      `88..8'    .oP"888   888      888  
+    888   .o8 888   888 o.  )88b  888   888   888  888   888 .8'        `888'    d8(  888   888      888  
+    `Y8bod8P' `Y8bod8P' 8""888P' o888o o888o o888o `Y8bod8P' 88          `8'     `Y888""8o d888b    o888o 
+                                                                                                      
+                                                                                                ver 0.5.1
 
 
 # Cosmo
@@ -14,7 +15,7 @@
 
 Cosmo is a fast, low-memory DNA assembler that uses a [succinct de Bruijn graph][succ].
 
-VARI, a succinct colored de Bruijn graph, can be found in this [no_boost_log](https://github.com/cosmo-team/cosmo/tree/no_boost_log) branch.
+**VARI**, a succinct colored de Bruijn graph, can be found in the [no_boost_log](https://github.com/cosmo-team/cosmo/tree/no_boost_log) branch.
 
 
 ## Usage
