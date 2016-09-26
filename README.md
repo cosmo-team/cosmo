@@ -1,41 +1,46 @@
 
+                                     o8o  
+                                     `"'  
+     oooo    ooo  .oooo.   oooo d8b oooo  
+      `88.  .8'  `P  )88b  `888""8P `888  
+       `88..8'    .oP"888   888      888  
+        `888'    d8(  888   888      888  
+         `8'     `Y888""8o d888b    o888o
+                                ver 0.7.0
 
-                    .ooooo.   .ooooo.   .oooo.o ooo. .oo.  .oo.    .ooooo.  
-                   d88' `"Y8 d88' `88b d88(  "8 `888P"Y88bP"Y88b  d88' `88b 
-                   888       888   888 `"Y88b.   888   888   888  888   888 
-                   888   .o8 888   888 o.  )88b  888   888   888  888   888 
-                   `Y8bod8P' `Y8bod8P' 8""888P' o888o o888o o888o `Y8bod8P' 
-                                                                  ver 0.7.0
 
-
-# Cosmo
+# VARI
 
 [**Version**][semver]: 0.7.0
 
 Cosmo is a fast, low-memory DNA assembler that uses a [succinct de Bruijn graph][succ].
 
-VARI is an extension to Cosmo and supports offline construction of succinct colored de Bruijn graphs.  Updated building/usage documentation to follow in the next day or two.   -MDM, Sept 19. 2016.
+**VARI** is an extension to Cosmo and supports offline construction of succinct colored de Bruijn graphs.  Updated building/usage documentation to follow in the next day or two.   -MDM, Sept 26. 2016.
 
+## Building notes
+
+Four third party packages are required for VARI. All should be cloned within the 3rd_party_src directory.
+
+
+1. KMC2 --  'git clone https://github.com/refresh-bio/KMC'
+2. sdsl-lite -- 'git clone https://github.com/cosmo-team/sdsl-lite.git'
+3. stxxl -- 'git clone https://github.com/stxxl/stxxl'
+4. tclap -- 'git clone https://github.com/eile/tclap'
+
+They should be configured and built following their own instructions and set to install their files in a 3rd_party_inst subdirectory which is a sibling of 3rd_party_src.
 
 ## Usage
 
-After [compiling](#compilation), you can run Cosmo like so:
-
-```sh
-$ pack-edges <input_file> # this adds reverse complements and dummy edges, and packs them
-$ cosmo-build <input_file>.packed # compresses and builds indices
-$ cosmo-assemble <input_file>.packed.dbg # output: <input_file>.packed.dbg.fasta # NOT IMPLEMENTED YET
-```
-
-Where `input_file` is the binary output of a [DSK][dsk] run. Each program has a `--help` option for a more
-detailed description of how to use them.
 
 
 ### Colored de Bruijn graph usage:
 ```sh
-$ cosmo-pack -c kmer_counts.ctx # read cortex binary file format of kmer counts, writes .colors file
-$ pack-color  [-o <output_prefix>] [--] [--version] [-h] <input_file>  <num colors> # convert a "color file" (a sequence of 64 bit ints, one per edge) to an SDSL::rrr_vector
-$ cosmo-color  [-b <color_mask2>] [-a <color_mask1>] [-o <output_prefix>] [--] [--version] [-h] <input_file>  <color_file> # reads rrr
+$ cosmo-build <KMC2_count_names> # KMC2_count_names list base names for k-mer counts produced by KMC2 (i.e. no .kmc_pre/.kmc_suf)
+$ pack-color -input <filename> -num_colors <num colors> -n <Vector size> -m <number of 1's> -o <output prefix>
+$    # The sdsl-lite Elias Fano encoder must know ahead of time the size of the vector and number of 1s.
+$    # pack-color will fail if these are wrong, but it will tell you the actual number it found during loading, so you can rerun
+$    # with the correct values
+$ cosmo-color  [-b <color_mask2>] [-a <color_mask1>] [-o <output_prefix>] [--] [--version] [-h] <input_file> <color_file> # BubbleCaller
 
 ```
 practical example using the cortex front end:
