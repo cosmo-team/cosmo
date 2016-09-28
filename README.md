@@ -35,11 +35,19 @@ They should be configured and built following their own instructions and set to 
 
 ### Colored de Bruijn graph usage:
 ```sh
-$ cosmo-build <KMC2_count_names> # KMC2_count_names list base names for k-mer counts produced by KMC2 (i.e. no .kmc_pre/.kmc_suf)
-$ pack-color -input <filename> -num_colors <num colors> -n <Vector size> -m <number of 1's> -o <output prefix>
+# Use KMC2 to k-mer count the FASTA (*.fna) files
+$ ls -1 --color=no *.fna |xargs -l -i  ~/kmc -ci0 -fm -k32 -cs300 {} {}_kmc kmc_temp
+$ ls -1 --color=no *.fna |xargs -l -i  ~/kmc_tools sort {}_kmc {}_kmc_sorted_kmc.kmc
+$ ls -1 --color=no *.fna |xargs -l -i echo "{}_kmc_sorted_kmc.kmc" >ecoli6_kmc2_list
+
+# Build the succinct de Bruijn graph and permute uncompresed color matrix accordingly
+$ cosmo-build -d <KMC2_count_names> # KMC2_count_names list base names for k-mer counts produced by KMC2 (i.e. no .kmc_pre/.kmc_suf)
+
+# Make succinct color matrix
+$ pack-color -input <filename.colors>  <num colors> <total bits> <set bits> 
 $    # The sdsl-lite Elias Fano encoder must know ahead of time the size of the vector and number of 1s.
-$    # pack-color will fail if these are wrong, but it will tell you the actual number it found during loading, so you can rerun
-$    # with the correct values
+$    # pack-color will fail if these are wrong, but it will tell you the actual number it found during loading, so you can double
+$    # check.  cosmo-build reports total bits and set bits in its output
 $ cosmo-color  [-b <color_mask2>] [-a <color_mask1>] [-o <output_prefix>] [--] [--version] [-h] <input_file> <color_file> # BubbleCaller
 
 ```
