@@ -27,7 +27,41 @@ Four third party packages are required for VARI. All should be cloned within the
 3. stxxl -- 'git clone https://github.com/stxxl/stxxl'
 4. tclap -- 'git clone https://github.com/eile/tclap'
 
-They should be configured and built following their own instructions and set to install their files in a 3rd_party_inst subdirectory which is a sibling of 3rd_party_src.
+They should be configured and built following their own instructions and set to install their files in a 3rd_party_inst subdirectory which is a sibling of 3rd_party_src.  The following sequence of commands should build the required parts.  Errors may or may not affect the functionality of VARI.   Please email me if you run into trouble. I'm actively working on streamlining the process. -MDM Sept. 28
+
+    git clone https://github.com/cosmo-team/cosmo/
+    cd cosmo/
+    git checkout no_boost_log
+    mkdir 3rd_party_src
+    mkdir 3rd_party_inst
+    cd 3rd_party_src
+    git clone https://github.com/refresh-bio/KMC
+    git clone https://github.com/cosmo-team/sdsl-lite.git
+    git clone https://github.com/stxxl/stxxl
+    git clone https://github.com/eile/tclap
+
+    cd sdsl-lite/
+    /usr/bin/time sh install.sh /home/martin_muggli/git/test/cosmo/3rd_party_inst
+    cd ..
+
+    cd stxxl
+    mkdir build
+    cd build
+    cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/home/martin_muggli/git/test/cosmo/3rd_party_inst -DBUILD_STATIC_LIBS=ON
+    make
+    make install
+    cd ../..
+
+    cd KMC
+    make
+    cd ..
+
+    cd tclap/
+    autoreconf -fvi
+    ./configure --prefix=/home/martin_muggli/git/test/cosmo/3rd_party_inst
+    make
+    make install
+
 
 ## Usage
 
