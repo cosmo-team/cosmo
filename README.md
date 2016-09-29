@@ -77,6 +77,10 @@ They should be configured and built following their own instructions and set to 
 
 ### Colored de Bruijn graph usage:
 ```sh
+# Grab 6 E. coli assemblies:
+git clone https://github.com/cosmo-team/e_coli6
+cd e_coli6
+
 # Use KMC2 to k-mer count the FASTA (*.fna) files
 $ mkdir kmc_temp
 $ ls -1 --color=no *.fna |xargs -l -i  ~/kmc -ci0 -fm -k32 -cs300 {} {}_kmc kmc_temp
@@ -84,15 +88,19 @@ $ ls -1 --color=no *.fna |xargs -l -i  ~/kmc_tools sort {}_kmc {}_kmc_sorted_kmc
 $ ls -1 --color=no *.fna |xargs -l -i echo "{}_kmc_sorted_kmc.kmc" >ecoli6_kmc2_list
 
 # Build the succinct de Bruijn graph and permute uncompresed color matrix accordingly
-$ cosmo-build -d <KMC2_count_names> # KMC2_count_names list base names for k-mer counts produced by KMC2 (i.e. no .kmc_pre/.kmc_suf)
+# cosmo-build -d <KMC2_count_names> # KMC2_count_names list base names for k-mer counts produced by KMC2 (i.e. no .kmc_pre/.kmc_suf)
+$ cosmo-build -d ecoli6_kmc2_list
 
 # Make succinct color matrix
-$ pack-color -input <filename.colors>  <num colors> <total bits> <set bits> 
-$    # The sdsl-lite Elias Fano encoder must know ahead of time the size of the vector and number of 1s.
-$    # pack-color will fail if these are wrong, but it will tell you the actual number it found during loading, so you can double
-$    # check.  cosmo-build reports total bits and set bits in its output
-$ cosmo-color  [-b <color_mask2>] [-a <color_mask1>] [-o <output_prefix>] [--] [--version] [-h] <input_file> <color_file> # BubbleCaller
+# pack-color -input <filename.colors>  <num colors> <total bits> <set bits> 
+#     The sdsl-lite Elias Fano encoder must know ahead of time the size of the vector and number of 1s.
+#     pack-color will fail if these are wrong, but it will tell you the actual number it found during loading, so you can double
+#     check.  cosmo-build reports total bits and set bits in its output
+$ pack-color ecoli6_kmc2_list.colors 6  55539132 54489174
 
+# Run bubble caller to load and traverse the succinct colored de Bruijn graph
+# cosmo-color  [-b <color_mask2>] [-a <color_mask1>] [-o <output_prefix>] [--] [--version] [-h] <input_file> <color_file> # BubbleCaller
+$ cosmo-color -a 1 -b 2 ecoli6_kmc2_list.dbg ecoli6_kmc2_list.sd_vector >bubbles
 ```
 # Legacy Information
 Note: Information below this point was in sync with previous states of this software but may be out of date now.  
