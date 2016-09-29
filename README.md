@@ -29,6 +29,9 @@ Four third party packages are required for VARI. All should be cloned within the
 
 They should be configured and built following their own instructions and set to install their files in a 3rd_party_inst subdirectory which is a sibling of 3rd_party_src.  The following sequence of commands should build the required parts.  Errors may or may not affect the functionality of VARI.   Please email me if you run into trouble. I'm actively working on streamlining the process. -MDM Sept. 28
 
+**Note**: Change "/home/martin_muggli/git/test/cosmo" to wherever your cosmo working tree ends up.
+
+    # Fetch software and setup directories
     git clone https://github.com/cosmo-team/cosmo/
     cd cosmo/
     git checkout no_boost_log
@@ -40,6 +43,7 @@ They should be configured and built following their own instructions and set to 
     git clone https://github.com/stxxl/stxxl
     git clone https://github.com/eile/tclap
 
+    # Build the four dependencies
     cd sdsl-lite/
     /usr/bin/time sh install.sh /home/martin_muggli/git/test/cosmo/3rd_party_inst
     cd ..
@@ -61,6 +65,10 @@ They should be configured and built following their own instructions and set to 
     ./configure --prefix=/home/martin_muggli/git/test/cosmo/3rd_party_inst
     make
     make install
+    cd ..
+    
+    # Build VARI
+    make
 
 
 ## Usage
@@ -70,6 +78,7 @@ They should be configured and built following their own instructions and set to 
 ### Colored de Bruijn graph usage:
 ```sh
 # Use KMC2 to k-mer count the FASTA (*.fna) files
+$ mkdir kmc_temp
 $ ls -1 --color=no *.fna |xargs -l -i  ~/kmc -ci0 -fm -k32 -cs300 {} {}_kmc kmc_temp
 $ ls -1 --color=no *.fna |xargs -l -i  ~/kmc_tools sort {}_kmc {}_kmc_sorted_kmc.kmc
 $ ls -1 --color=no *.fna |xargs -l -i echo "{}_kmc_sorted_kmc.kmc" >ecoli6_kmc2_list
@@ -85,6 +94,9 @@ $    # check.  cosmo-build reports total bits and set bits in its output
 $ cosmo-color  [-b <color_mask2>] [-a <color_mask1>] [-o <output_prefix>] [--] [--version] [-h] <input_file> <color_file> # BubbleCaller
 
 ```
+# Legacy Information
+Note: Information below this point was in sync with previous states of this software but may be out of date now.  
+
 practical example using the cortex front end:
 ```sh
 $ cd /s/oak/b/nobackup/muggli/src/CORTEX_release_v1.0.5.21/demo/example4_using_reference_genome_to_exclude_paralogs
