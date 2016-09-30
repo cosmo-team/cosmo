@@ -73,9 +73,18 @@ They should be configured and built following their own instructions and set to 
 
 ## Usage
 
+Below is an example of using the succinct colored de Bruijn graph for bubble calling.  
 
+### External vs Internal memory
+cosmo-build can use external memory for various arrays during construction.  See the STXXL website and documentation for configuring whether these arrays are in internal or external memory and where the external data should be placed on various drives/directories.  
 
-### Colored de Bruijn graph usage:
+### Color Matrix Compression
+The color matrix can be compressed either with RRR or Elias-Fano encoding.  The current version uses Elias-Fano and will stream the uncompressed color matrix (.colors file emitted by cosmo-build) from disk and build the succinct version online.  The pack-color program in earlier commits uses RRR and reads the same .colors file and only takes the number of colors as an argument.  To use this flow, change the sdsl::sd_vector types to sdsl::rrr_vector.  
+
+### 
+cosmo-build can, in addition to the streaming KMC2 flow, accept a multi-colored cortex de Bruijn graph binary file (.ctx).  This flow was used during development before the implementation of the KMC2 flow. It requires that the host machine have sufficient RAM to store the non-succinct colored de Bruijn graph in memory.  
+
+### Colored de Bruijn graph example:
 ```sh
 # Grab 6 E. coli assemblies:
 git clone https://github.com/cosmo-team/e_coli6
