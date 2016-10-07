@@ -14,8 +14,8 @@
 #include "algorithm.hpp"
 #include "cosmo-color.hpp"
 
-using namespace std;
-using namespace sdsl;
+//using namespace std;
+//using namespace sdsl;
 
 #include <sys/timeb.h>
 
@@ -93,13 +93,14 @@ void find_bubbles(debruijn_graph_shifted<> dbg, sd_vector<> &colors, uint64_t co
     int t = getMilliCount();
     int num_colors = colors.size() / dbg.size();
     //uint64_t combined_mask = color_mask1 | color_mask2;
-    bit_vector visited = bit_vector(dbg.num_nodes(), 0);
+    sdsl::bit_vector visited = sdsl::bit_vector(dbg.num_nodes(), 0);
     cout << "Starting to look for bubbles\n";
     std::vector<std::string> branch(2);
-    bool found_miss = false;
+    bool found_miss = false; // flag to enable debugging for missing bubbles
+    // for each node i in the graph
     for (size_t i = 0; i < dbg.num_nodes(); i++) {
-        ssize_t start = i; // place to store start of branch kmer
-        std::string start_label(dbg.node_label(start));
+        ssize_t start_node = i; // AKA left flank end.  place to store start of branch node
+        std::string start_label(dbg.node_label(start_node));
         found_miss = false;
         // for (int si = 0; si < 7; ++si) {
         //     if (!start_label.compare(starts[si])) {
@@ -109,10 +110,12 @@ void find_bubbles(debruijn_graph_shifted<> dbg, sd_vector<> &colors, uint64_t co
         // }
 
         // cout << "Node " << i << ":" << dbg.node_label(i) << " color: " << color_mask << "\n";
+
+        // if its out degree is two and we haven't encountered it already, start processing it like it's the start of a bubble
         if (!visited[i] && dbg.outdegree(i) == 2) { //FIXME: why do we only care about outdegree == 2?
             // initialize bubble tracking variables
             int branch_num = 0;
-            ssize_t end[2]; // place to store end of branch kmer
+            ssize_t end_nodes[2]; // AKA right flank start. place to store end of branch node
 
             branch[0].clear();
             branch[1].clear();
@@ -149,52 +152,53 @@ void find_bubbles(debruijn_graph_shifted<> dbg, sd_vector<> &colors, uint64_t co
                     pos = dbg._edge_to_node(next_edge);
                     //cout << pos << ":" << dbg.node_label(pos) << "\n";
                 }
-                if (found_miss) {
-                    std::cerr << "dbg.indegree(pos) = " << dbg.indegree(pos)  << " dbg.outdegree(pos) = " << dbg.outdegree(pos)  << std::endl;
-                    ssize_t next_edge = 0;
-                    std::cerr << "outgoing bases: ";
-                    for (unsigned long x2 = 1; x2 < dbg.sigma + 1; x2++) { // iterate through the alphabet
-                        next_edge = dbg.outgoing_edge(pos, x2);
-                        uint64_t color_mask = 0;
+//                 if (found_miss) {
+//                     std::cerr << "dbg.indegree(pos) = " << dbg.indegree(pos)  << " dbg.outdegree(pos) = " << dbg.outdegree(pos)  << std::endl;
+//                     ssize_t next_edge = 0;
+//                     std::cerr << "outgoing bases: ";
+//                     for (unsigned long x2 = 1; x2 < dbg.sigma + 1; x2++) { // iterate through the alphabet
+//                         next_edge = dbg.outgoing_edge(pos, x2);
+//                         uint64_t color_mask = 0;
 
-                        if (next_edge != -1) {
-                            for (int c = 0; c < num_colors; c++)
-                                color_mask |= colors[next_edge * num_colors + c] << c;
+//                         if (next_edge != -1) {
+//                             for (int c = 0; c < num_colors; c++)
+//                                 color_mask |= colors[next_edge * num_colors + c] << c;
 
 
-                            std::cerr << base[x2] << " (c " << color_mask << ") (p " << dbg._edge_to_node(next_edge) << ")" << std::endl;
-;
-                        }
-                    }
-                    std::cerr << std::endl;
+//                             std::cerr << base[x2] << " (c " << color_mask << ") (p " << dbg._edge_to_node(next_edge) << ")" << std::endl;
+// ;
+//                         }
+//                     }
+//                     std::cerr << std::endl;
                     
-                }
+//                 }
                 // cout << "Stopped due to : " << dbg.indegree(pos) << ":" << dbg.outdegree(pos) << ":" << branch_offset << "\n";
 
-                end[branch_num++] =  (dbg.indegree(pos) > 1) ? pos : 0;
+                // if we stopped walking along the bubble on a node where indegree > 1, then record this new node
+                end_nodes[branch_num++] =  (dbg.indegree(pos) > 1) ? pos : 0;
                 //branch_offset = 0;
             }
             // check if both branches ended on the same kmer and they pass the requested color masks
-            //cout << "Trying " << branch_color[0] << ":" << branch_color[1] << " " << end[0] << ":" << end[1] <<"\n";
+            //cout << "Trying " << branch_color[0] << ":" << branch_color[1] << " " << end_nodes[0] << ":" << end_nodes[1] <<"\n";
             //cout << color_mask1 << ":" << color_mask2 << "\n";
             //cout << "PutativeStart flank: " << dbg.node_label(start) << " c: " << branch_color[0] << ":" << branch_color[1] << "\n";
-            if (found_miss) {
-                std::cerr << "arm sizes: " << branch[0].size() << "  " << branch[1].size() << std::endl;
-                std::cerr << branch[0] << std::endl << branch[1] << std::endl;
-            }
+            // if (found_miss) {
+            //     std::cerr << "arm sizes: " << branch[0].size() << "  " << branch[1].size() << std::endl;
+            //     std::cerr << branch[0] << std::endl << branch[1] << std::endl;
+            // }
                                     
             // check same end node
-            if ((end[0] && end[0] == end[1]) ) {
+            if ((end_nodes[0] && end_nodes[0] == end_nodes[1]) ) {
                 if (found_miss)  std::cerr << "Missing bubble passed end check" << std::endl;
                 // check color:
                 if (true || ((color_mask1 & branch_color[0] && !(~color_mask1 & branch_color[0]) &&
                   color_mask2 & branch_color[1] && !(~color_mask2 & branch_color[1])) || 
                  (color_mask1 & branch_color[1] && !(~color_mask1 & branch_color[1]) &&
                   color_mask2 & branch_color[0] && !(~color_mask2 & branch_color[0])))) {
-                    cout << "\nStart flank: " << dbg.node_label(start) << " c: " << branch_color[0] << ":" << branch_color[1] << "\n";
+                    cout << "\nStart flank: " << dbg.node_label(start_node) << " c: " << branch_color[0] << ":" << branch_color[1] << "\n";
                     cout << "Branch: " << branch[0] << "\n";
                     cout << "Branch: " << branch[1] << "\n";
-                    cout << "End flank: " << dbg.node_label(end[0]) << "\n";
+                    cout << "End flank: " << dbg.node_label(end_nodes[0]) << "\n";
                     if (found_miss) std::cerr << "Reported 'missing' bubble" << std::endl;
                 }
             }
