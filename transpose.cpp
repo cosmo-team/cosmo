@@ -66,6 +66,7 @@ unsigned long long global_t;
 static char base[] = {'?','A','C','G','T'};
 char dna_bases[] = "$ACGT";
 
+
 debruijn_graph_shifted<>* gdbg;
 //sd_vector<>* gcolors;
 //rank_support_sd<>* gcolor_ranks;
@@ -115,6 +116,7 @@ void parse_arguments(int argc, char **argv, parameters_t & params)
   params.input_filename  = input_filename_arg.getValue();
   params.color_filename  = color_filename_arg.getValue();
   params.output_prefix   = output_prefix_arg.getValue();
+
   params.ref_color       = ref_color_arg.getValue();
   params.sample_mask     = sample_mask_arg.getValue();
   // params.ref_fasta       = ref_fasta_arg.getValue();
@@ -129,6 +131,7 @@ int main(int argc, char* argv[])
     parameters_t p;
     parse_arguments(argc, argv, p);
     
+
     // load the color matrix
     sd_vector<> colors;
     std::cerr << "=== Loading data structures from disk ==" << std::endl;
@@ -149,6 +152,7 @@ int main(int argc, char* argv[])
 
     // for each 1 in the matrix, compute the position in the new serialized matrix 'elems'
     std::vector<unsigned long long> elems;
+
     std::cerr << "=== gen int vector ==" << std::endl;
     for (unsigned long long i = 0; i < num_ones; ++i) {
 
@@ -162,6 +166,7 @@ int main(int argc, char* argv[])
 
     }
     std::cerr << "Elapsed wall time: " << (getMilliCount() - global_t) / 1000.0 << " s" << std::endl;
+
 
 
     // sort the 1 positions in elems
