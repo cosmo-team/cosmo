@@ -10,7 +10,7 @@
 #include <sdsl/wavelet_trees.hpp>
 
 #include "io.hpp"
-#include "debruijn_graph.hpp"
+#include "debruijn_graph_shifted.hpp"
 #include "algorithm.hpp"
 #include "cosmo-color.hpp"
 
@@ -88,7 +88,7 @@ void dump_edges(debruijn_graph<> dbg, uint64_t * colors) {
 
 const char *const starts[] = {"GCCATACTGCGTCATGTCGCCCTGACGCGC","GCAGGTTCGAATCCTGCACGACCCACCAAT","GCTTAACCTCACAACCCGAAGATGTTTCTT","AAAACCCGCCGAAGCGGGTTTTTACGTAAA","AATCCTGCACGACCCACCAGTTTTAACATC","AGAGTTCCCCGCGCCAGCGGGGATAAACCG","GAATACGTGCGCAACAACCGTCTTCCGGAG"};
     
-void find_bubbles(debruijn_graph<> dbg, rrr_vector<63> &colors, uint64_t color_mask1, uint64_t color_mask2)
+void find_bubbles(debruijn_graph_shifted<> dbg, sd_vector<> &colors, uint64_t color_mask1, uint64_t color_mask2)
 {
     int t = getMilliCount();
     int num_colors = colors.size() / dbg.size();
@@ -210,11 +210,11 @@ int main(int argc, char* argv[]) {
 
   //ifstream input(p.input_filename, ios::in|ios::binary|ios::ate);
   // Can add this to save a couple seconds off traversal - not really worth it.
-  debruijn_graph<> dbg;
+  debruijn_graph_shifted<> dbg;
   load_from_file(dbg, p.input_filename);
   //input.close();
 
-  rrr_vector<63> colors;
+  sd_vector<> colors;
   load_from_file(colors, p.color_filename);
 
   cerr << "k             : " << dbg.k << endl;

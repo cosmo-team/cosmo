@@ -1,42 +1,103 @@
 
+                                     o8o  
+                                     `"'  
+     oooo    ooo  .oooo.   oooo d8b oooo  
+      `88.  .8'  `P  )88b  `888""8P `888  
+       `88..8'    .oP"888   888      888  
+        `888'    d8(  888   888      888  
+         `8'     `Y888""8o d888b    o888o
+                                ver 0.7.0
 
-                    .ooooo.   .ooooo.   .oooo.o ooo. .oo.  .oo.    .ooooo.  
-                   d88' `"Y8 d88' `88b d88(  "8 `888P"Y88bP"Y88b  d88' `88b 
-                   888       888   888 `"Y88b.   888   888   888  888   888 
-                   888   .o8 888   888 o.  )88b  888   888   888  888   888 
-                   `Y8bod8P' `Y8bod8P' 8""888P' o888o o888o o888o `Y8bod8P' 
-                                                                  ver 0.7.0
 
-
-# Cosmo
+# VARI
 
 [**Version**][semver]: 0.7.0
 
 Cosmo is a fast, low-memory DNA assembler that uses a [succinct de Bruijn graph][succ].
 
+**VARI** is an extension to Cosmo and supports offline construction of succinct colored de Bruijn graphs.  Updated building/usage documentation to follow in the next day or two.   -MDM, Sept 26. 2016.
+
+## Building notes
+
+Four third party packages are required for VARI. All should be cloned within the 3rd_party_src directory.
+
+
+1. KMC2 --  'git clone https://github.com/refresh-bio/KMC'
+2. sdsl-lite -- 'git clone https://github.com/cosmo-team/sdsl-lite.git'
+3. stxxl -- 'git clone https://github.com/stxxl/stxxl'
+4. tclap -- 'git clone https://github.com/eile/tclap'
+
+They should be configured and built following their own instructions and set to install their files in a 3rd_party_inst subdirectory which is a sibling of 3rd_party_src.  The following sequence of commands should build the required parts.  Errors may or may not affect the functionality of VARI.   Please email me if you run into trouble. I'm actively working on streamlining the process. -MDM Sept. 28
+
+**Note**: Change "/home/martin_muggli/git/test/cosmo" to wherever your cosmo working tree ends up.
+
+    # Fetch software and setup directories
+    git clone https://github.com/cosmo-team/cosmo/
+    cd cosmo/
+    git checkout no_boost_log
+    mkdir 3rd_party_src
+    mkdir 3rd_party_inst
+    cd 3rd_party_src
+    git clone https://github.com/refresh-bio/KMC
+    git clone https://github.com/cosmo-team/sdsl-lite.git
+    git clone https://github.com/stxxl/stxxl
+    git clone https://github.com/eile/tclap
+
+    # Build the four dependencies
+    cd sdsl-lite/
+    /usr/bin/time sh install.sh /home/martin_muggli/git/test/cosmo/3rd_party_inst
+    cd ..
+
+    cd stxxl
+    mkdir build
+    cd build
+    cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/home/martin_muggli/git/test/cosmo/3rd_party_inst -DBUILD_STATIC_LIBS=ON
+    make
+    make install
+    cd ../..
+
+    cd KMC
+    make
+    cd ..
+
+    cd tclap/
+    autoreconf -fvi
+    ./configure --prefix=/home/martin_muggli/git/test/cosmo/3rd_party_inst
+    make
+    make install
+    cd ..
+    
+    # Build VARI
+    make
+
 
 ## Usage
 
-After [compiling](#compilation), you can run Cosmo like so:
-
-```sh
-$ pack-edges <input_file> # this adds reverse complements and dummy edges, and packs them
-$ cosmo-build <input_file>.packed # compresses and builds indices
-$ cosmo-assemble <input_file>.packed.dbg # output: <input_file>.packed.dbg.fasta # NOT IMPLEMENTED YET
-```
-
-Where `input_file` is the binary output of a [DSK][dsk] run. Each program has a `--help` option for a more
-detailed description of how to use them.
 
 
 ### Colored de Bruijn graph usage:
 ```sh
-$ cosmo-pack -c kmer_counts.ctx # read cortex binary file format of kmer counts, writes .colors file
-$ pack-color  [-o <output_prefix>] [--] [--version] [-h] <input_file>  <num colors> # convert a "color file" (a sequence of 64 bit ints, one per edge) to an SDSL::rrr_vector
-$ cosmo-color  [-b <color_mask2>] [-a <color_mask1>] [-o <output_prefix>] [--] [--version] [-h] <input_file>  <color_file> # reads rrr
+# Use KMC2 to k-mer count the FASTA (*.fna) files
+$ mkdir kmc_temp
+$ ls -1 --color=no *.fna |xargs -l -i  ~/kmc -ci0 -fm -k32 -cs300 {} {}_kmc kmc_temp
+$ ls -1 --color=no *.fna |xargs -l -i  ~/kmc_tools sort {}_kmc {}_kmc_sorted_kmc.kmc
+$ ls -1 --color=no *.fna |xargs -l -i echo "{}_kmc_sorted_kmc.kmc" >ecoli6_kmc2_list
+
+# Build the succinct de Bruijn graph and permute uncompresed color matrix accordingly
+$ cosmo-build -d <KMC2_count_names> # KMC2_count_names list base names for k-mer counts produced by KMC2 (i.e. no .kmc_pre/.kmc_suf)
+
+# Make succinct color matrix
+$ pack-color -input <filename.colors>  <num colors> <total bits> <set bits> 
+$    # The sdsl-lite Elias Fano encoder must know ahead of time the size of the vector and number of 1s.
+$    # pack-color will fail if these are wrong, but it will tell you the actual number it found during loading, so you can double
+$    # check.  cosmo-build reports total bits and set bits in its output
+$ cosmo-color  [-b <color_mask2>] [-a <color_mask1>] [-o <output_prefix>] [--] [--version] [-h] <input_file> <color_file> # BubbleCaller
 
 ```
-practical example:
+# Legacy Information
+Note: Information below this point was in sync with previous states of this software but may be out of date now.  
+
+practical example using the cortex front end:
 ```sh
 $ cd /s/oak/b/nobackup/muggli/src/CORTEX_release_v1.0.5.21/demo/example4_using_reference_genome_to_exclude_paralogs
 $ ../../bin/cortex_var_31_c2 --kmer_size 17 --colour_list colours  --dump_binary both.ctx
@@ -46,7 +107,7 @@ $ ./pack-color both.ctx.colors 2
 $ ./cosmo-color both.ctx.packed both.ctx.colors.rrr
 ```
 
-
+A practical example of the KMC2 front end can be found in cosmo/experiments/ecoli6.sh.  Note that the programs are those in github.com/mmuggli/cosmo.  Some of the commands have changed and will be documented further in the next day or two - MDM, Sept 19. 2016
 
 
 ## Caveats
@@ -92,6 +153,7 @@ graphs: clone [this](https://github.com/alexbowe/sdsl-lite) and checkout the `de
 - [DSK][dsk] - k-mer counting (we need this for input),
 - Optionally (for developers): [Python][python] and [NumPy][numpy] - rebuilding the lookup tables,
 - [STXXL][stxxl] - external merging (not actually required yet though)
+- [KMC2][kmc2] - k-mer counting with sorted output, used to generate the union for colored de Bruijn graph
 
 Many of these are all installable with a package manager (e.g. `(apt-get | yum | brew ) install boost libstxxl tclap`).
 However, you will have to download and build these manually: [DSK][dsk] and [SDSL-lite][sdsl-lite].
@@ -100,6 +162,7 @@ However, you will have to download and build these manually: [DSK][dsk] and [SDS
 ## Authors
 
 Implemented by [Alex Bowe][abowe]. Original concept and prototype by [Kunihiko Sadakane][ksadakane].
+Colored extension prototyped by Robert Raymond and substantially extended by Martin D. Muggli, with help from Alex Bowe.
 
 These people also proved *incredibly* helpful: [Rayan Chikhi][rchikhi], [Simon Puglisi][spuglisi],
 [Travis Gagie][tgagie], [Christina Boucher][cboucher], [Simon Gog][sgog], [Dominik Kempa][dkempa].
