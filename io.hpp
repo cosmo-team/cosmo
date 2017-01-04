@@ -1,6 +1,7 @@
 #ifndef IO_HPP
 #define IO_HPP
 
+#include <algorithm>
 #include <fcntl.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -162,7 +163,7 @@ inline bool kmc_read_header(std::string db_fname, uint32_t & k, size_t &min_unio
             }
             max_union += _total_kmers;
             //std::string str;
-            COSMO_LOG(info) << " max kmer count: " << _max_count << " total kmers: " << _total_kmers << std::endl;
+            COSMO_LOG(info) << "k: " << k << " max kmer count: " << _max_count << " total kmers: " << _total_kmers << std::endl;
         }
     }
     assert(kmer_data_bases.size() > 0);
@@ -280,10 +281,11 @@ size_t kmc_read_kmers(std::vector<CKMCFile *> &kmer_data_bases, uint32_t k, Visi
 
             //std::cout << const_cast<CKmerAPI*>(&(current.second))->to_string() << " : " << color << std::endl;
             //FIXME: the following line is to fix a bug in the kmc2 API where it shifts word[0] << 64 when k=63 which results in "word[1] =  word[0] + word[1]" the next line compensates; not sure how pervasive this is in the k>32 space.
-            if (kmer.size() >= 2) {
-              kmer[1] -= kmer[0];
-            }
+            // if (kmer.size() >= 2) {
+            //   kmer[1] -= kmer[0];
+            // }
 
+            std::reverse(kmer.begin(), kmer.end());
             visit(*((kmer_t*)&kmer[0]), color);
             color.reset();
 
@@ -305,10 +307,10 @@ size_t kmc_read_kmers(std::vector<CKMCFile *> &kmer_data_bases, uint32_t k, Visi
         
 
     //FIXME: the following line is to fix a bug in the kmc2 API where it shifts word[0] << 64 when k=63 which results in "word[1] =  word[0] + word[1]" the next line compensates; not sure how pervasive this is in the k>32 space.
-    if (kmer.size() >= 2) {
-      kmer[1] -= kmer[0];
-    }
-
+    // if (kmer.size() >= 2) {
+    //   kmer[1] -= kmer[0];
+    // }
+    std::reverse(kmer.begin(), kmer.end());
     visit(*((kmer_t*)&kmer[0]), color);
     color.reset();
 

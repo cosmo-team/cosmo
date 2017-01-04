@@ -57,7 +57,7 @@ void parse_arguments(int argc, char **argv, parameters_t & params)
 static char base[] = {'?','A','C','G','T'};
 
 
-void test_symmetry(debruijn_graph<> dbg) {
+void test_symmetry(debruijn_graph_shifted<> dbg) {
   for (unsigned long x = 0; x<dbg.sigma+1;x++) {
     ssize_t in = dbg.incoming(43, x);
     if (in == -1)
@@ -73,14 +73,14 @@ void test_symmetry(debruijn_graph<> dbg) {
 
 
 
-void dump_nodes(debruijn_graph<> dbg, uint64_t * colors) {
+void dump_nodes(debruijn_graph_shifted<> dbg, uint64_t * colors) {
   for (size_t i = 0; i < dbg.num_nodes(); i++) {
     cout << i << ":" << dbg.node_label(i) << colors[dbg._node_to_edge(i)] << "\n";
   }
 }
 
 
-void dump_edges(debruijn_graph<> dbg, uint64_t * colors) {
+void dump_edges(debruijn_graph_shifted<> dbg, uint64_t * colors) {
   for (size_t i = 0; i < dbg.size(); i++) {
     cout << i << "e:" << dbg.edge_label(i) << colors[i] << "\n";
   }
@@ -88,7 +88,7 @@ void dump_edges(debruijn_graph<> dbg, uint64_t * colors) {
 
 const char *const starts[] = {"GCCATACTGCGTCATGTCGCCCTGACGCGC","GCAGGTTCGAATCCTGCACGACCCACCAAT","GCTTAACCTCACAACCCGAAGATGTTTCTT","AAAACCCGCCGAAGCGGGTTTTTACGTAAA","AATCCTGCACGACCCACCAGTTTTAACATC","AGAGTTCCCCGCGCCAGCGGGGATAAACCG","GAATACGTGCGCAACAACCGTCTTCCGGAG"};
     
-void find_bubbles(debruijn_graph_shifted<> dbg, sd_vector<> &colors, uint64_t color_mask1, uint64_t color_mask2)
+void find_bubbles(const debruijn_graph_shifted<> &dbg, sd_vector<> &colors, uint64_t color_mask1, uint64_t color_mask2)
 {
     int t = getMilliCount();
     int num_colors = colors.size() / dbg.size();
@@ -164,16 +164,18 @@ void find_bubbles(debruijn_graph_shifted<> dbg, sd_vector<> &colors, uint64_t co
 }
 
 
+
 int main(int argc, char* argv[]) {
   parameters_t p;
   parse_arguments(argc, argv, p);
 
   //ifstream input(p.input_filename, ios::in|ios::binary|ios::ate);
   // Can add this to save a couple seconds off traversal - not really worth it.
+  cerr << "loading dbg" << std::endl;
   debruijn_graph_shifted<> dbg;
   load_from_file(dbg, p.input_filename);
   //input.close();
-
+  cerr << "loading colors" << std::endl;
   sd_vector<> colors;
   load_from_file(colors, p.color_filename);
 

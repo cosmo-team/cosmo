@@ -43,7 +43,7 @@ int getMilliSpan(int nTimeStart)
     return nSpan;
 }
 
-std::string file_extension = ".sd_vector";
+std::string file_extension = ".<extension>";
 
 
 void parse_arguments(int argc, char **argv, parameters_t & params)
@@ -77,7 +77,7 @@ void deserialize_color_bv(std::ifstream &colorfile, color_bv &value)
 
 int main(int argc, char * argv[])
 {
-
+    const bool rrr = true;
     std::cerr <<"Starting" << std::endl;
     parameters_t params;
     parse_arguments(argc, argv, params);
@@ -103,10 +103,22 @@ int main(int argc, char * argv[])
     // size_t m = 201136208922; // 80 color set -d
     //size_t m = 54489174; // ecoli6 -d
     size_t m = params.m;
-    std::cerr << "stack allocing sdsl::sd_vector_builder base object with n=" << n
-              << " m=" << m << std::endl;
-    sdsl::sd_vector_builder b_builder(n, m);// = bit_vector(num_edges*num_color, 0);
-    std::cerr << "builder size: " << b_builder.size() << " capacity: " << b_builder.capacity() << std::endl;
+    sdsl::bit_vector *b = NULL;
+    sdsl::sd_vector_builder *b_builder = NULL;
+    if (rrr) {
+        std::cerr << "Using RRR encoding.  Allocating a vector for " << num_edges*num_color << " bits." << std::endl;
+        file_extension = ".rrr";
+        b = new sdsl::bit_vector(num_edges*num_color, 0);
+    } else{
+        std::cerr << "Using Elias-Fano encoding" << std::endl;
+        std::cerr << "stack allocing sdsl::sd_vector_builder base object with n=" << n
+                  << " m=" << m << std::endl;
+        file_extension = ".sd_vector";
+        b_builder = new sdsl::sd_vector_builder(n, m);// = bit_vector(num_edges*num_color, 0);
+        std::cerr << "builder size: " << b_builder->size() << " capacity: " << b_builder->capacity() << std::endl;
+    }
+    std::cerr << "Succinct builder object allocated." << std::endl;
+
     size_t cnt0 = 0;
     size_t cnt1 = 0;
     for (size_t i=0; i < num_edges; i++) {
@@ -123,12 +135,16 @@ int main(int argc, char * argv[])
             if (value[j]){
 //b[i*num_color + j] = value[j];
 //                std::cerr << "setting a bit at pos" <<  i * num_color + j<< std::endl;
-                b_builder.set(i*num_color + j);
-
+                if (rrr) {
+                    (*b)[i*num_color + j] = value[j];
+                } else {
+                    b_builder->set(i*num_color + j);
+                }
                 cnt1++;
             } else {
-
-
+                if (rrr) {
+                    (*b)[i*num_color + j] = value[j];
+                }
                 cnt0++;
 
             }
@@ -148,8 +164,23 @@ int main(int argc, char * argv[])
   std::cerr << "BV Access Time: " << getMilliSpan(sysTime) << endl;
   std::cerr << "BV Size (MB): " << size_in_mega_bytes(b) << endl;
 */
-    sysTime = getMilliCount();
-    sdsl::sd_vector<> b(b_builder);
+    if (rrr) {
+        sdsl::rrr_vector<63> rrrb(*b);
+        std::cout << "RRR Creation Time: " << getMilliSpan(sysTime) << std::endl;
+        sysTime = getMilliCount();
+        // for (size_t i=0; i < num_edges*num_color; i++) {
+        //   rrrb[i];
+        // }
+        std::cout << "RRR AccessTime: " << getMilliSpan(sysTime) << std::endl;
+        std::cout << "RRR Size (MB): " << size_in_mega_bytes(rrrb) << std::endl;
+        char * base_name = basename(const_cast<char*>(params.input_filename.c_str()));
+        std::string outfilename = ((params.output_prefix == "")? base_name : params.output_prefix) + file_extension;
+        store_to_file(rrrb, outfilename);
+        delete b;
+    } else {
+    
+        sysTime = getMilliCount();
+        sdsl::sd_vector<> b(*b_builder);
 
 // rrr_vector<63> rrrb(b);
 // std::cerr << "RRR Creation Time: " << getMilliSpan(sysTime) << endl;
@@ -159,10 +190,11 @@ int main(int argc, char * argv[])
 // }
 // std::cerr << "RRR AccessTime: " << getMilliSpan(sysTime) << endl;
 // std::cerr << "RRR Size (MB): " << size_in_mega_bytes(rrrb) << endl;
-    char * base_name = basename(const_cast<char*>(params.input_filename.c_str()));
-    std::string outfilename = ((params.output_prefix == "")? base_name : params.output_prefix) + file_extension;
-    sdsl::store_to_file(b, outfilename);
-
+        char * base_name = basename(const_cast<char*>(params.input_filename.c_str()));
+        std::string outfilename = ((params.output_prefix == "")? base_name : params.output_prefix) + file_extension;
+        sdsl::store_to_file(b, outfilename);
+        delete b_builder;
+    }
 /*
   sysTime = getMilliCount();
   sd_vector<> sdb(b);
