@@ -77,7 +77,7 @@ void deserialize_color_bv(std::ifstream &colorfile, color_bv &value)
 
 int main(int argc, char * argv[])
 {
-    const bool rrr = true;
+    const bool rrr = false;
     std::cerr <<"Starting" << std::endl;
     parameters_t params;
     parse_arguments(argc, argv, params);

@@ -87,8 +87,21 @@ void dump_edges(debruijn_graph_shifted<> dbg, uint64_t * colors) {
 }
 
 const char *const starts[] = {"GCCATACTGCGTCATGTCGCCCTGACGCGC","GCAGGTTCGAATCCTGCACGACCCACCAAT","GCTTAACCTCACAACCCGAAGATGTTTCTT","AAAACCCGCCGAAGCGGGTTTTTACGTAAA","AATCCTGCACGACCCACCAGTTTTAACATC","AGAGTTCCCCGCGCCAGCGGGGATAAACCG","GAATACGTGCGCAACAACCGTCTTCCGGAG"};
-    
-void find_bubbles(const debruijn_graph_shifted<> &dbg, sd_vector<> &colors, uint64_t color_mask1, uint64_t color_mask2)
+
+void print_color(color_bv& color)
+{
+    std::string colstr = color.to_string();
+    for (unsigned int first1 = 0; first1 < colstr.size() ; first1++) {
+        if (colstr[first1] == '1') {
+            std::string outstring = colstr.substr(first1, colstr.size());
+            cout << outstring;
+            return;
+        }
+    }
+    cout << "0";
+
+}
+void find_bubbles(const debruijn_graph_shifted<> &dbg, sd_vector<> &colors, color_bv color_mask1, color_bv color_mask2)
 {
     int t = getMilliCount();
     int num_colors = colors.size() / dbg.size();
@@ -106,7 +119,7 @@ void find_bubbles(const debruijn_graph_shifted<> &dbg, sd_vector<> &colors, uint
 
 
 
-            uint64_t branch_color[2];
+            color_bv branch_color[2];
             size_t end_nodes[2]; // AKA right flank start. place to store end of branch node
             // start of a bubble handling
             int branch_num = -1;
@@ -120,7 +133,7 @@ void find_bubbles(const debruijn_graph_shifted<> &dbg, sd_vector<> &colors, uint
                 
                 branch_labels[branch_num] += base[x];
                 // build color mask
-                uint64_t color_mask = 0;
+                color_bv color_mask = 0;
                 for (int c = 0; c < num_colors; c++)
                     color_mask |= colors[edge * num_colors + c] << c;
                 branch_color[branch_num] = color_mask;
@@ -147,11 +160,15 @@ void find_bubbles(const debruijn_graph_shifted<> &dbg, sd_vector<> &colors, uint
             // check same end node
             if ((end_nodes[0] && end_nodes[0] == end_nodes[1]) ) {
                 // check color:
-                if ((color_mask1 & branch_color[0] && !(~color_mask1 & branch_color[0]) &&
-                  color_mask2 & branch_color[1] && !(~color_mask2 & branch_color[1])) || 
-                 (color_mask1 & branch_color[1] && !(~color_mask1 & branch_color[1]) &&
-                  color_mask2 & branch_color[0] && !(~color_mask2 & branch_color[0]))) {
-                    cout << "\nStart flank: " << dbg.node_label(start_node) << " c: " << branch_color[0] << ":" << branch_color[1] << "\n";
+                if (((color_mask1 & branch_color[0]).any() && (~color_mask1 & branch_color[0]).none() &&
+                     (color_mask2 & branch_color[1]).any() && (~color_mask2 & branch_color[1]).none()) || 
+                    ((color_mask1 & branch_color[1]).any() && (~color_mask1 & branch_color[1]).none() &&
+                     (color_mask2 & branch_color[0]).any() && (~color_mask2 & branch_color[0]).none())) {
+                    cout << "\nStart flank: " << dbg.node_label(start_node) << " c: ";
+                    print_color ( branch_color[0]);
+                    cout << ":";
+                    print_color( branch_color[1]);
+                    cout << "\n";
                     cout << "Branch: " << branch_labels[0] << "\n";
                     cout << "Branch: " << branch_labels[1] << "\n";
                     cout << "End flank: " << dbg.node_label(end_nodes[0]) << "\n";
@@ -189,7 +206,7 @@ int main(int argc, char* argv[]) {
 
   //dump_nodes(dbg, colors);
   //dump_edges(dbg, colors);
-  uint64_t mask1 = (p.color_mask1.length() > 0) ? atoi(p.color_mask1.c_str()) : -1;
-  uint64_t mask2 = (p.color_mask2.length() > 0) ? atoi(p.color_mask2.c_str()) : -1;
+  color_bv mask1 = (p.color_mask1.length() > 0) ? atoi(p.color_mask1.c_str()) : -1;
+  color_bv mask2 = (p.color_mask2.length() > 0) ? atoi(p.color_mask2.c_str()) : -1;
   find_bubbles(dbg, colors, mask1, mask2);
 }
