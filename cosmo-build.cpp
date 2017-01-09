@@ -77,7 +77,7 @@ void serialize_color_bv(std::ofstream &cfs, const color_bv &color)//std::vector<
 
 int main(int argc, char* argv[]) {
   using namespace boost::adaptors;
-
+  COSMO_LOG(info) << "cosmo-build compiled with supported colors=" << NUM_COLS << std::endl;
   // Parameter extraction
   auto params = parse_arguments(argc, argv);
   std::string file_name = params.input_filename;

@@ -185,7 +185,7 @@ void find_bubbles(const debruijn_graph_shifted<> &dbg, sd_vector<> &colors, colo
 int main(int argc, char* argv[]) {
   parameters_t p;
   parse_arguments(argc, argv, p);
-
+  cerr << "pack-color compiled with supported colors=" << NUM_COLS << std::endl;
   //ifstream input(p.input_filename, ios::in|ios::binary|ios::ate);
   // Can add this to save a couple seconds off traversal - not really worth it.
   cerr << "loading dbg" << std::endl;

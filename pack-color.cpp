@@ -78,6 +78,7 @@ void deserialize_color_bv(std::ifstream &colorfile, color_bv &value)
 int main(int argc, char * argv[])
 {
     const bool rrr = false;
+    std::cerr << "pack-color compiled with supported colors=" << NUM_COLS << std::endl;
     std::cerr <<"Starting" << std::endl;
     parameters_t params;
     parse_arguments(argc, argv, params);
