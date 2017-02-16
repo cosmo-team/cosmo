@@ -15,7 +15,21 @@
 
 Cosmo is a fast, low-memory DNA assembler that uses a [succinct de Bruijn graph][succ].
 
-**VARI** is an extension to Cosmo and supports offline construction of succinct colored de Bruijn graphs.  Updated building/usage documentation to follow in the next day or two.   -MDM, Sept 26. 2016.
+**VARI** is an extension to Cosmo and supports offline construction of succinct colored de Bruijn graphs.
+
+If you use VARI in scholarly work, please cite:
+
+_Muggli, M. D., Bowe, A., Noyes, N. R., Morley, P., Belk, K., Raymond, R., Gagie, T., Puglisi, S. J., and Boucher, C. (2017). Succinct colored de bruijn graphs. Bioinformatics. doi: 10.1093/bioinformatics/btx067_
+
+```
+@article{muggli2017vari,
+  title={Succinct Colored de Bruijn Graphs},
+  author={Muggli, Martin D and Bowe, Alexander and Noyes, Noelle R and Morley, Paul and Belk, Keith and Raymond, Robert and  Gagie, Travis and Puglisi, Simon J and Boucher, Christina},
+  journal={Bioinformatics},
+  year={2017},
+  publish={Oxford Univ Press}
+}
+```
 
 ## Building notes
 
