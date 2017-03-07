@@ -48,7 +48,7 @@ They should be configured and built following their own instructions and set to 
     # Fetch software and setup directories
     git clone https://github.com/cosmo-team/cosmo/
     cd cosmo/
-    git checkout no_boost_log
+    git checkout VARI
     mkdir 3rd_party_src
     mkdir 3rd_party_inst
     cd 3rd_party_src
