@@ -33,15 +33,18 @@ _Muggli, M. D., Bowe, A., Noyes, N. R., Morley, P., Belk, K., Raymond, R., Gagie
 
 ## Building notes
 
-Four third party packages are required for VARI. All should be cloned within the 3rd_party_src directory.
+Five third party packages are required for VARI. All should be cloned within the 3rd_party_src directory.
 
 
 1. KMC2 --  'git clone https://github.com/refresh-bio/KMC'
 2. sdsl-lite -- 'git clone https://github.com/cosmo-team/sdsl-lite.git'
 3. stxxl -- 'git clone https://github.com/stxxl/stxxl'
 4. tclap -- 'git clone https://github.com/eile/tclap'
+5. Boost 1.54* -- 'wget http://sourceforge.net/projects/boost/files/boost/1.54.0/boost_1_54_0.tar.bz2'
 
-They should be configured and built following their own instructions and set to install their files in a 3rd_party_inst subdirectory which is a sibling of 3rd_party_src.  The following sequence of commands should build the required parts.  Errors may or may not affect the functionality of VARI.   Please email me if you run into trouble. I'm actively working on streamlining the process. -MDM Sept. 28
+* VARI fails to compile with later versions of Boost.  For the time being, it is necessary to download and compile Boost 1.54 and update BOOST_PATH in the Makefile to reflect the installed directory.  See Issue [#7](/../../issues/7).
+
+They should be configured and built following their own instructions and set to install their files in a 3rd_party_inst subdirectory which is a sibling of 3rd_party_src.  The following sequence of commands should build the required parts.  Errors may or may not affect the functionality of VARI.   Please email me if you run into trouble. I'm intermitently working on streamlining the process. -MDM May 17, 2017
 
 **Note**: Change "/home/martin_muggli/git/test/cosmo" to wherever your cosmo working tree ends up.
 
