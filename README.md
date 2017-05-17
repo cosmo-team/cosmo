@@ -53,14 +53,21 @@ They should be configured and built following their own instructions and set to 
     cd cosmo/
     git checkout VARI
     mkdir 3rd_party_src
-    mkdir 3rd_party_inst
+    mkdir -p 3rd_party_inst/boost
     cd 3rd_party_src
     git clone https://github.com/refresh-bio/KMC
     git clone https://github.com/cosmo-team/sdsl-lite.git
     git clone https://github.com/stxxl/stxxl
     git clone https://github.com/eile/tclap
+    wget http://sourceforge.net/projects/boost/files/boost/1.54.0/boost_1_54_0.tar.bz2
+    tar -xjf boost_1_54_0.tar.bz2
 
-    # Build the four dependencies
+    # Build the five dependencies
+    cd boost_1_54_0
+    ./bootstrap.sh --prefix=../../3rd_party_inst/boost
+    ./b2 install
+    cd ..
+    
     cd sdsl-lite/
     /usr/bin/time sh install.sh /home/martin_muggli/git/test/cosmo/3rd_party_inst
     cd ..
