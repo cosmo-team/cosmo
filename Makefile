@@ -5,7 +5,7 @@ CPP_FLAGS=-pipe -m64 -std=c++14 -pedantic-errors -W -Wall -Wextra -Wpointer-arit
 					-Wunused -Wwrite-strings #-Wcast-qual #-Werror
 
 CLANG_WARNINGS=-Wbool-conversions -Wshift-overflow -Wliteral-conversion # CLANG ONLY
-BOOST_PATH=/s/chopin/h/proj/soma/boost_1_54
+BOOST_PATH=3rd_party_inst/boost
 
 DEP_PATH=3rd_party_inst
 KMC_PATH=./3rd_party_src/KMC
