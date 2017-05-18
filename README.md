@@ -33,18 +33,18 @@ _Muggli, M. D., Bowe, A., Noyes, N. R., Morley, P., Belk, K., Raymond, R., Gagie
 
 ## Building notes
 
-Five third party packages are required for VARI. All should be cloned within the 3rd_party_src directory.
+Five third party packages are required for VARI. All should be cloned within the 3rd_party_src directory.  Any 3rd party software may change in incompatible ways.  The revisions known to work for the published results are included.
 
 
-1. KMC2 --  'git clone https://github.com/refresh-bio/KMC'
-2. sdsl-lite -- 'git clone https://github.com/cosmo-team/sdsl-lite.git'
-3. stxxl -- 'git clone https://github.com/stxxl/stxxl'
-4. tclap -- 'git clone https://github.com/eile/tclap'
+1. KMC2 --  'git clone https://github.com/refresh-bio/KMC' (commit f090276855a3f7c0b14e9f3abc8c99d3213247b3)
+2. sdsl-lite -- 'git clone https://github.com/cosmo-team/sdsl-lite.git' (commit 9fa981958a9d2ddade12d083548f2b09939514fb)
+3. stxxl -- 'git clone https://github.com/stxxl/stxxl' (commit 5b9663e6b769748f3b3d3a9a779b4b89e24d7a27)
+4. tclap -- 'git clone https://github.com/eile/tclap' (commit f41dcb5ce3d063c9fe95623193bba693338f3edb)
 5. Boost 1.54* -- 'wget http://sourceforge.net/projects/boost/files/boost/1.54.0/boost_1_54_0.tar.bz2'
 
 * VARI fails to compile with later versions of Boost.  For the time being, it is necessary to download and compile Boost 1.54 and update BOOST_PATH in the Makefile to reflect the installed directory.  See Issue [#7](/../../issues/7).
 
-They should be configured and built following their own instructions and set to install their files in a 3rd_party_inst subdirectory which is a sibling of 3rd_party_src.  The following sequence of commands should build the required parts.  Errors may or may not affect the functionality of VARI.   Please email me if you run into trouble. I'm intermitently working on streamlining the process. -MDM May 17, 2017
+They should be configured and built following their own instructions and set to install their files in a 3rd_party_inst subdirectory which is a sibling of 3rd_party_src.  The following sequence of commands should build the required parts.  Compilation errors may or may not affect the functionality of VARI, as VARI doesn't use all functionality of 3rd party sources.   Please email me if you run into trouble. I'm intermitently working on streamlining the process. -MDM May 17, 2017
 
 **Note**: Change "/home/martin_muggli/git/test/cosmo" to wherever your cosmo working tree ends up.
 
@@ -107,6 +107,9 @@ The color matrix can be compressed either with RRR or Elias-Fano encoding.  The 
 
 ### Input files
 cosmo-build can, in addition to the streaming KMC2 flow, accept a multi-colored cortex de Bruijn graph binary file (.ctx).  This flow was used during development before the implementation of the KMC2 flow. It requires that the host machine have sufficient RAM to store the non-succinct colored de Bruijn graph in memory.  
+
+### k-mer size
+k-mer size is determined by the -k parameter for KMC2.  The revision of KMC2 used has a bug where large-ish k values (in the neighborhood of 64) may result in corrupted k-mer values.  This will manifest as an abnormally large number of dummy nodes and likely running out of memory or disk space.  There is a workaround in io.hpp which currently must be manually uncommented.   See Issue [#6](/../../issues/6).
 
 ### Colored de Bruijn graph example:
 ```sh
