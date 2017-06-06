@@ -1,5 +1,6 @@
 //#include <iterator>
 //#include <typeinfo>
+#include <sys/timeb.h>
 #include <fstream>
 #include <boost/date_time/posix_time/posix_time.hpp>
 //#include <bitset>
@@ -75,7 +76,24 @@ void serialize_color_bv(std::ofstream &cfs, const color_bv &color)//std::vector<
     cfs.write((char *)&color, sizeof(color_bv)); //FIXME: Is this the right way to serailize std::bitset?
 }
 
+int getMilliCount(){
+  timeb tb;
+  ftime(&tb);
+  int nCount = tb.millitm + (tb.time & 0xfffff) * 1000;
+  return nCount;
+}
+
+
+int getMilliSpan(int nTimeStart){
+  int nSpan = getMilliCount() - nTimeStart;
+  if(nSpan < 0)
+    nSpan += 0x100000 * 1000;
+  return nSpan;
+}
+
 int main(int argc, char* argv[]) {
+    int merge_done_time = 0;
+    int start_time = getMilliCount();
   using namespace boost::adaptors;
   COSMO_LOG(info) << "cosmo-build compiled with supported colors=" << NUM_COLS << std::endl;
   // Parameter extraction
@@ -275,6 +293,8 @@ int main(int argc, char* argv[]) {
 
     COSMO_LOG(info) << "Percentage of min union : " << num_kmers_read/(double)min_union * 100 << "%";
     COSMO_LOG(info) << "Percentage of max union : " << num_kmers_read/(double)max_union * 100 << "%";
+    merge_done_time = getMilliSpan(start_time);
+    COSMO_LOG(info) << "Color merge time:" << merge_done_time << std::endl;
 
 
     ofstream cfs;
@@ -326,5 +346,8 @@ int main(int argc, char* argv[]) {
     << (stxxl::stats_data(*stats) - stats_begin)
     << " Peak disk allocs                           : " << bm->get_maximum_allocation()/1048576.0
     << " MB";
+  int total_time = getMilliSpan(start_time);
+      COSMO_LOG(info) << "total time since start:" << total_time << std::endl;
+      COSMO_LOG(info) << "merge fraction of total time" << (float)merge_done_time / (float)total_time << std::endl;
   return 0;
 }

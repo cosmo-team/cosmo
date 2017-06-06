@@ -261,7 +261,8 @@ size_t kmc_read_kmers(std::vector<CKMCFile *> &kmer_data_bases, uint32_t k, Visi
                 float progress_sum = 0.0;
                 for (unsigned int i = 0; i < max_multiplicity.size(); ++i) {
                     if (max_multiplicity[i] > global_max_mult) global_max_mult = max_multiplicity[i];
-                    progress_sum += (float)(kmers_read[i]) / (float)(total_kmers[i]);
+                    if (total_kmers[i] > 0)
+                        progress_sum += (float)(kmers_read[i]) / (float)(total_kmers[i]);
                 }
 
                 float progress = progress_sum / max_multiplicity.size();
