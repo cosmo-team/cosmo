@@ -372,6 +372,12 @@ inline  ssize_t incoming_edge(size_t v, symbol_type x) const {
     return label;
   }
 
+auto    access_map_symbol(size_t i) const {
+        symbol_type x = _symbol_access(i);
+        return _map_symbol(x);
+
+    }
+
   size_t _next_edge(size_t i, symbol_type x) const {
     if (i >= num_edges() - 1) return i;
     // Might not actually occur if out of rank bounds?

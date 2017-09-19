@@ -13,7 +13,7 @@ INC=-isystem $(DEP_PATH)/include -isystem $(BOOST_PATH)/include
 LIB=-L$(DEP_PATH)/lib -L./ -L$(BOOST_PATH)/lib
 BOOST_FLAGS= -lboost_system -lboost_filesystem
 DEP_FLAGS=$(INC) $(LIB) $(BOOST_FLAGS) -isystem $(KMC_PATH) -lsdsl -fopenmp #openmp is needed for logging
-DEBUG_FLAGS=-pg -gstabs
+DEBUG_FLAGS=-pg -g
 NDEBUG_FLAGS=-DNDEBUG
 OPT_FLAGS=-O3 -mmmx -msse -msse2 -msse3 -msse4 -msse4.2 -march=native -fno-strict-aliasing
 NOPT_FLAGS=-O0
@@ -53,7 +53,7 @@ endif
 KMC_OBJS=$(KMC_PATH)/kmc_api/kmc_file.o $(KMC_PATH)/kmc_api/kmer_api.o $(KMC_PATH)/kmc_api/mmer.o
 BUILD_REQS=lut.hpp debug.hpp utility.hpp io.hpp sort.hpp kmer.hpp dummies.hpp debruijn_graph.hpp debruijn_graph_shifted.hpp pack-color.hpp cosmo-color-pd.hpp 
 COLOR_REQS=colored_debruijn_graph.hpp io.hpp debug.hpp
-BINARIES=cosmo-build cosmo-color cosmo-test cosmo-benchmark cosmo-benchmark-varord pack-color cosmo-color-pd cosmo-read-color transpose cosmo-merge
+BINARIES=cosmo-build cosmo-color cosmo-test cosmo-benchmark cosmo-benchmark-varord pack-color cosmo-color-pd cosmo-read-color transpose cosmo-merge vari-merge
 
 default: all
 
@@ -72,6 +72,9 @@ cosmo-color: cosmo-color.cpp $(BUILD_REQS) compiler_flags
 	$(CXX) $(CPP_FLAGS) -o $@ $< $(KMC_OBJS) $(DEP_FLAGS)
 
 cosmo-merge: cosmo-merge.cpp $(BUILD_REQS) compiler_flags
+	$(CXX) $(CPP_FLAGS) -o $@ $< $(KMC_OBJS) $(DEP_FLAGS)
+
+vari-merge: vari-merge.cpp $(BUILD_REQS) compiler_flags
 	$(CXX) $(CPP_FLAGS) -o $@ $< $(KMC_OBJS) $(DEP_FLAGS)
 
 
