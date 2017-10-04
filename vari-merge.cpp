@@ -194,8 +194,8 @@ int refine_sets(const std::vector<char> &g1_col, const std::vector<char> &g2_col
                   << ", g2_out_set additional sets: " << ((g2_out_set_initsize > g2_out_set.size()) ? num_sets_ge(g2_out_set_initsize + 1, g2_out_set) : 0) << std::endl;        
                   
         if (colno == 0) {
-            Lval.insert(Lval.end(), active_alpha_size - 1, false);
             Lval.push_back(true);
+            Lval.insert(Lval.end(), active_alpha_size - 1, false);
         }
                 
 
@@ -315,11 +315,6 @@ int mainmerge(const debruijn_graph_shifted<> &g1, const debruijn_graph_shifted<>
     g2_sets[g2_sets.size() - 1] = true;
     std::cout << "created g2_sets with " << num_sets(g2_sets) << " sets of size " << length(0, g2_sets) << std::endl;
     std::cout << std::endl;
-
-    std::vector<bool> g1_deletions(g1.num_edges(), false);
-    std::vector<bool> g2_deletions(g2.num_edges(), false);
-    
-
 
     std::vector<bool> L;
 
