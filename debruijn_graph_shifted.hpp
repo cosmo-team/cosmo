@@ -41,15 +41,19 @@ class debruijn_graph_shifted {
 
   const size_t           k{};
 
+    // "L"
   const t_bit_vector_type      m_node_flags{};
   const t_bv_rank_type         m_node_rank{};
   const t_bv_select_type       m_node_select{};
+    // "W EBWT(g)"
   const t_edge_vector_type     m_edges{};
   // This is the "F table" in the blog/paper. It stores the starting positions of the sorted runs
   // of the k-1th symbol of the edge (or, last symbol of the node)
   // Could be implemented as the start positions, but here we store the cumulative sum (i.e. run ends)
   const array<size_t, 1+sigma> m_symbol_ends{};
   const array<size_t, 1+sigma> m_edge_max_ranks{};
+    // in W, the nucleotides are stored as small integers 0..4 for $ACGT, but shifted left 1
+    // so the lsb is the flag. m_alphabet is the string "$ACGT" which can map int->nucleotide
   const label_type             m_alphabet{};
   const size_t                 m_num_nodes{};
 
@@ -400,8 +404,12 @@ auto    access_map_symbol(size_t i) const {
   // This is so we can reuse the symbol lookup - save an access during traversal :)
   ssize_t _forward(size_t i, symbol_type & x) const {
     assert(i < num_edges());
+    // remove edge flag by shifting right and put into alphabet space
     x = _strip_edge_flag(m_edges[i]);
+    
+    // put back into flaggable edge space but with no flag
     symbol_type fullx =_with_edge_flag(x, false);
+    
     // if x == 0 ($) then we can't follow the edge
     // (should maybe make backward consistent with this, but using the edge 0 loop for node label generation).
     if (x == 0) return -1;
@@ -411,12 +419,46 @@ auto    access_map_symbol(size_t i) const {
       i = m_edges.select(m_edges.rank(i, fullx), fullx);
     }
 
-    size_t start = _symbol_start(x);
-    size_t nth   = m_edges.rank(i, fullx);
-    size_t next  = m_node_select(m_node_rank(start+1) + nth);
+    // this works by way of node ranks
+    size_t start_edge = _symbol_start(x);
+    size_t nth_node   = m_edges.rank(i, fullx); // nth flagless, also node number of all nodes ending in fullx
+    size_t next  = m_node_select(m_node_rank(start_edge + 1) + nth_node);
     return next;
   }
 
+    void get_edge_column(std::vector<symbol_type> &newcol)
+        {
+            assert(newcol.size() = 0);
+            for (size_t i = 0; i < num_edges(); ++i) {
+                auto edge = m_edges[i];
+                newcol[i] = _strip_edge_flag(edge);
+            }
+        }
+    void get_column(const std::vector<symbol_type> &oldcol, std::vector<symbol_type> &newcol)
+        {
+            assert(oldcol.size() == num_edges());
+            assert(newcol.size() == num_edges());
+            for (size_t i = 0; i < num_edges(); ++i) {
+                auto edge = m_edges[i];
+                if (edge & 1) continue;
+                
+                symbol_type x = _strip_edge_flag(edge);
+                if (x == 0) continue;
+                
+                symbol_type fullx =_with_edge_flag(x, false);
+                
+                size_t start_edge = _symbol_start(edge);
+                size_t nth_node   = m_edges.rank(i, fullx); // nth flagless, also node number of all nodes ending in fullx
+                size_t new_nth_node = m_node_rank(start_edge + 1) + nth_node;
+                size_t new_edges_end  = m_node_select(new_nth_node);
+                size_t new_edges_begin = 0;
+                if (new_nth_node > 1)
+                    new_edges_begin = m_node_select(new_nth_node - 1);
+                for (size_t j = new_edges_begin; j <= new_edges_end; ++j)
+                    newcol[j] = oldcol[i];
+            }
+        }
+                
 
   size_t _backward(size_t i) const {
     assert(i < num_edges());
