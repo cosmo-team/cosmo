@@ -486,6 +486,16 @@ int main(int argc, char* argv[]) {
   cerr << "Bits per edge : " << bits_per_element(dbg) << " Bits" << endl;
   dumpcolumns(dbg, p);
   dump_edges(dbg);
+
+  std::vector<char> last;
+  std::vector<char>* cur = &last;
+  dbg.get_edge_column(last);
+  
+  for (int i = 0; i < dbg.k; ++i);
+
+      
   mainmerge(dbg, dbg2);
+
+
 
 }

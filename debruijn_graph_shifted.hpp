@@ -431,9 +431,10 @@ auto    access_map_symbol(size_t i) const {
             assert(newcol.size() = 0);
             for (size_t i = 0; i < num_edges(); ++i) {
                 auto edge = m_edges[i];
-                newcol[i] = _strip_edge_flag(edge);
+                newcol[i] = _map_symbol(_strip_edge_flag(edge));
             }
         }
+    
     void get_column(const std::vector<symbol_type> &oldcol, std::vector<symbol_type> &newcol)
         {
             assert(oldcol.size() == num_edges());
@@ -453,7 +454,7 @@ auto    access_map_symbol(size_t i) const {
                 size_t new_edges_end  = m_node_select(new_nth_node);
                 size_t new_edges_begin = 0;
                 if (new_nth_node > 1)
-                    new_edges_begin = m_node_select(new_nth_node - 1);
+                    new_edges_begin = m_node_select(new_nth_node - 1) + ;
                 for (size_t j = new_edges_begin; j <= new_edges_end; ++j)
                     newcol[j] = oldcol[i];
             }
