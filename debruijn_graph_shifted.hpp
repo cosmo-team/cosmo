@@ -454,7 +454,7 @@ auto    access_map_symbol(size_t i) const {
                 size_t new_edges_end  = m_node_select(new_nth_node);
                 size_t new_edges_begin = 0;
                 if (new_nth_node > 1)
-                    new_edges_begin = m_node_select(new_nth_node - 1) + ;
+                    new_edges_begin = m_node_select(new_nth_node - 1) + 0 /*FIXME: what is this supposed to be */;
                 for (size_t j = new_edges_begin; j <= new_edges_end; ++j)
                     newcol[j] = oldcol[i];
             }

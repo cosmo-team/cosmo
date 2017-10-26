@@ -280,7 +280,7 @@ size_t kmc_read_kmers(std::vector<CKMCFile *> &kmer_data_bases, uint32_t k, Visi
 
             }
 
-            //std::cout << const_cast<CKmerAPI*>(&(current.second))->to_string() << " : " << color << std::endl;
+            std::cout << const_cast<CKmerAPI*>(&(std::get<1>(current)))->to_string() << " : " << color << std::endl;
             //FIXME: the following line is to fix a bug in the kmc2 API where it shifts word[0] << 64 when k=63 which results in "word[1] =  word[0] + word[1]" the next line compensates; not sure how pervasive this is in the k>32 space.
             // if (kmer.size() >= 2) {
             //   kmer[1] -= kmer[0];
@@ -311,6 +311,7 @@ size_t kmc_read_kmers(std::vector<CKMCFile *> &kmer_data_bases, uint32_t k, Visi
     // if (kmer.size() >= 2) {
     //   kmer[1] -= kmer[0];
     // }
+    std::cout << const_cast<CKmerAPI*>(&(std::get<1>(current)))->to_string() << " : " << color << std::endl;    
     std::reverse(kmer.begin(), kmer.end());
     visit(*((kmer_t*)&kmer[0]), color);
     color.reset();

@@ -290,7 +290,7 @@ int main(int argc, char* argv[]) {
     size_t num_kmers_read = kmc_read_kmers(kmer_data_bases, k, [&](auto x, auto c) {
       builder.push(x,c);
     });
-
+    COSMO_LOG(info) << "Total k-mer type count: "  << num_kmers_read << std::endl;
     COSMO_LOG(info) << "Percentage of min union : " << num_kmers_read/(double)min_union * 100 << "%";
     COSMO_LOG(info) << "Percentage of max union : " << num_kmers_read/(double)max_union * 100 << "%";
     merge_done_time = getMilliSpan(start_time);
