@@ -616,6 +616,30 @@ void dumpcolumns( const debruijn_graph_shifted<> &dbg, const  parameters_t &p)
         }
         f.close();
     }
+    // std::vector<char> g_colprime;
+    // get_column(dbg, 0, g_colprime);
+
+    // for (auto c: g_colprime)
+    //     g_col.push_back(c);
+    std::vector<unsigned char> g_col(dbg.num_edges());    
+    dbg.get_edge_column(g_col);
+    for (int i = 1; i < dbg.k; ++i) {
+        std::stringstream fname;
+        fname <<  p.input_filename;
+        fname << ".new";
+        fname << i;
+        std::string s = fname.str();
+        ofstream f(s.c_str());
+        std::vector<unsigned char> h_col(g_col.size(),2);
+        dbg.get_column(g_col, h_col);
+        for (auto c: h_col) {
+            f << c << std::endl;
+        }
+        f.close();
+        g_col.clear();
+        g_col.insert(g_col.end(), h_col.begin(), h_col.end());
+    }
+    
 
 }
 
@@ -651,5 +675,7 @@ int main(int argc, char* argv[]) {
       
     mainmerge(dbg, dbg2);
 
-
+    for (int c = 0; c < dbg.m_alphabet.size(); c++) {
+        std::cout << c << ": " << dbg._symbol_start(c) << std::endl;
+    }
  }
