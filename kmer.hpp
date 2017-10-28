@@ -275,6 +275,12 @@ size_t node_lcs(const kmer_t & a, const kmer_t & b, size_t k) {
   return result;//(result)?result - 1:0;
 }
 
+template <typename kmer_t>
+bool is_palindrome(const kmer_t & x, uint8_t k) {
+  return (k%2==0 && x == reverse_complement<kmer_t>(k)(x));
+}
+
+
 /*
 template <typename kmer_t>
 kmer_t clear_nt(const kmer_t & x, uint8_t i) {
@@ -291,10 +297,6 @@ kmer_t set_nt(const kmer_t & x, uint8_t i, uint8_t v) {
   return cleared | (kmer_t(v) << (bitwidth<kmer_t>::width - (1+i)*NT_WIDTH));
 }
 
-template <typename kmer_t>
-bool is_palindrome(const kmer_t & x, uint8_t k) {
-  return (k%2==0 && x == reverse_complement<kmer_t>(k)(x));
-}
 
 template <typename kmer_t>
 kmer_t representative(const kmer_t & x, uint8_t k) {

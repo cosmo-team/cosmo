@@ -247,12 +247,15 @@ struct dbg_builder {
 
     kmer_t x = revnt(edge);
     if (do_swap) x = swap(x);
-    kmer_t y = rc(x);
+    
 
     record_sorter.push(cons(x, payload));
-    record_sorter.push(cons(y, payload));
     edge_sorter.push(x);
-    edge_sorter.push(y);
+    if (!is_palindrome(x, k)) {
+            kmer_t y = rc(x);
+            record_sorter.push(cons(y, payload));
+            edge_sorter.push(y);
+        }
   }
 
   template <typename ... inputs_t>
