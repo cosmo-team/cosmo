@@ -406,7 +406,9 @@ int mainmerge(const debruijn_graph_shifted<> &g1, const debruijn_graph_shifted<>
 
         //std::vector<unsigned char> g1_col; // FIXME: change 'char' type to something less static
         //std::vector<unsigned char> g2_col;
-       
+
+        // g1_col.clear();
+        // g2_col.clear();
         // get_column(g1, col, g1_col);
         // get_column(g2, col, g2_col);
 
@@ -547,10 +549,10 @@ int mainmerge(const debruijn_graph_shifted<> &g1, const debruijn_graph_shifted<>
             ntcounts[g2._map_symbol(g2._symbol_access(g2_ptr))] += 1;            
             if (flags.seen(symbol)) {
                 flag = 1;
-                //std::cout << 1 /*<< (int)(g1.m_edges[g1_ptr] & 0x1)*/ << std::endl;
+                //std::cout << 1 << " == " << g2.edge_label(g2_ptr) << " *" << g2_ptr /*<< (int)(g1.m_edges[g1_ptr] & 0x1)*/ << std::endl;
             } else {
                 flag = 0;
-                //std::cout << 0 /*<< (int)(g1.m_edges[g1_ptr] & 0x1)*/ << std::endl;
+                //std::cout << 0 << " == " << g2.edge_label(g2_ptr) << " " << g2_ptr/*<< (int)(g1.m_edges[g1_ptr] & 0x1)*/ << std::endl;
             }
             flags.add(symbol);
             g2_ptr += 1;
@@ -704,7 +706,7 @@ int main(int argc, char* argv[]) {
     //  dbg.get_edge_column(last);
   
     for (int i = 0; i < dbg.k; ++i);
-
+    assert(dbg.k == dbg2.k);
       
     mainmerge(dbg, dbg2);
 
