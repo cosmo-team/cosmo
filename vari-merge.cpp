@@ -148,8 +148,8 @@ uint64_t maxsize(const std::vector<bool> &sets)
 }
 
 //FIXME: this is pretty inefficient; we should be able to scan through the columns only once
-int subdivide(const std::vector<char> &g1_col, const uint64_t g1_ptr, const uint64_t g1_num,
-              const std::vector<char> &g2_col, const uint64_t g2_ptr, const uint64_t g2_num,
+int subdivide(const std::vector<unsigned char> &g1_col, const uint64_t g1_ptr, const uint64_t g1_num,
+              const std::vector<unsigned char> &g2_col, const uint64_t g2_ptr, const uint64_t g2_num,
               /*const int colno,*/ std::vector<bool> &g1_out_set, std::vector<bool> &g2_out_set, int &active_alpha_size)
 {    
     std::set<char> g1_chars;
@@ -160,7 +160,7 @@ int subdivide(const std::vector<char> &g1_col, const uint64_t g1_ptr, const uint
     for (uint64_t i = 0; i <  g2_num; ++i) {
         g2_chars.insert(g2_col[g2_ptr +i]);
     }
-    std::vector<char> g1_g2_union;
+    std::vector<unsigned char> g1_g2_union;
     std::set_union(g1_chars.begin(), g1_chars.end(),
                    g2_chars.begin(), g2_chars.end(),                  
                    std::back_inserter(g1_g2_union));
@@ -183,7 +183,7 @@ int subdivide(const std::vector<char> &g1_col, const uint64_t g1_ptr, const uint
 }
 
 
-int refine_sets(const std::vector<char> &g1_col, const std::vector<char> &g2_col,
+int refine_sets(const std::vector<unsigned char> &g1_col, const std::vector<unsigned char> &g2_col,
                 const std::vector<bool>& g1_sets, const std::vector<bool> &g2_sets,
                 const int colno,
                 std::vector<bool> &g1_out_set, std::vector<bool> &g2_out_set, std::vector<bool> &Lval)
@@ -199,11 +199,11 @@ int refine_sets(const std::vector<char> &g1_col, const std::vector<char> &g2_col
         uint64_t g1_num = length(g1_set_start, g1_sets);
         uint64_t g2_num = length(g2_set_start, g2_sets);
         int active_alpha_size = 0;
-        std::cout << "subdividing ranges (col " << colno <<" ) " << std::endl << "\t" << g1_ptr << ":+" << g1_num << " = " ;
-        dump_range(g1_ptr, g1_ptr+ g1_num, g1_col);
-        std::cout << std::endl << "\t" << g2_ptr << ":+" << g2_num;
-        dump_range(g2_ptr, g2_ptr+ g2_num, g2_col);
-        std::cout <<std::endl;
+        //std::cout << "subdividing ranges (col " << colno <<" ) " << std::endl << "\t" << g1_ptr << ":+" << g1_num << " = " ;
+        //dump_range(g1_ptr, g1_ptr+ g1_num, g1_col);
+        //std::cout << std::endl << "\t" << g2_ptr << ":+" << g2_num;
+        //dump_range(g2_ptr, g2_ptr+ g2_num, g2_col);
+        //std::cout <<std::endl;
         uint64_t g1_out_set_initsize = g1_out_set.size();
         uint64_t g2_out_set_initsize = g2_out_set.size();        
         subdivide(g1_col, g1_ptr, g1_num,
@@ -212,11 +212,11 @@ int refine_sets(const std::vector<char> &g1_col, const std::vector<char> &g2_col
                   g1_out_set,
                   g2_out_set,
                   active_alpha_size);
-        std::cout << "\talpha size: " << active_alpha_size << std::endl;
-        std::cout << "\tg1_out_set size: " << g1_out_set.size() << ", g2_out_set size: " << g2_out_set.size() << std::endl;
-        std::cout << "validations  " << validate(g1_out_set) << " " << validate(g2_out_set) << std::endl;
-        std::cout << "\tg1_out_set additional sets: " << ((g1_out_set_initsize > g1_out_set.size()) ? (num_sets_ge(g1_out_set_initsize + 1, g1_out_set)) : 0)
-                  << ", g2_out_set additional sets: " << ((g2_out_set_initsize > g2_out_set.size()) ? num_sets_ge(g2_out_set_initsize + 1, g2_out_set) : 0) << std::endl;        
+        //std::cout << "\talpha size: " << active_alpha_size << std::endl;
+        //std::cout << "\tg1_out_set size: " << g1_out_set.size() << ", g2_out_set size: " << g2_out_set.size() << std::endl;
+        //std::cout << "validations  " << validate(g1_out_set) << " " << validate(g2_out_set) << std::endl;
+        //std::cout << "\tg1_out_set additional sets: " << ((g1_out_set_initsize > g1_out_set.size()) ? (num_sets_ge(g1_out_set_initsize + 1, g1_out_set)) : 0)
+        //         << ", g2_out_set additional sets: " << ((g2_out_set_initsize > g2_out_set.size()) ? num_sets_ge(g2_out_set_initsize + 1, g2_out_set) : 0) << std::endl;        
                   
         if (colno == 0) {
             Lval.push_back(0);
@@ -238,7 +238,7 @@ int refine_sets(const std::vector<char> &g1_col, const std::vector<char> &g2_col
     return 0;
 }
 
-int get_column(const debruijn_graph_shifted<> &g, const int col_num, std::vector<char> &g_col)
+int get_column(const debruijn_graph_shifted<> &g, const int col_num, std::vector<unsigned char> &g_col)
 {
     assert (g_col.size() == 0);
     for (uint64_t i = 0; i < g.num_edges(); ++i) {
@@ -346,7 +346,7 @@ char combine(char symbol, bool flag)
         break;
     }
     char ret = (encoded << 1 ) | flag;
-    std::cout << " (" << symbol << ":" << flag << ")=>" << (int)ret << " ";
+    //std::cout << " (" << symbol << ":" << flag << ")=>" << (int)ret << " ";
     return ret;
                     
 }
@@ -381,18 +381,51 @@ int mainmerge(const debruijn_graph_shifted<> &g1, const debruijn_graph_shifted<>
     std::vector<bool> g1_flagsets;//(/*g1_sets*/);
     std::vector<bool> g2_flagsets;//(/*g2_sets*/);
 
+
+    std::vector<unsigned char> g1_col(g1.num_edges(),0);
+    std::vector<unsigned char> g2_col(g2.num_edges(),0);        
+    g1.get_edge_column(g1_col);
+    g2.get_edge_column(g2_col);    
     for (auto col: cols) {
 
+        // get_column // FIXME: be more careful here, maybe use col^1 from g._symbol_starts
+        if (col == 0) {
+            g1.get_edge_column(g1_col);
+            g2.get_edge_column(g2_col);
+        } else {
+            std::vector<unsigned char> h1_col(g1_col.size(),0);
+            g1.get_column(g1_col, h1_col);
+            g1_col.clear();
+            g1_col.insert(g1_col.begin(), h1_col.begin(), h1_col.end());
+            
+            std::vector<unsigned char> h2_col(g2_col.size(),0);
+            g2.get_column(g2_col, h2_col);
+            g2_col.clear();
+            g2_col.insert(g2_col.begin(), h2_col.begin(), h2_col.end());
+        }
 
-        std::vector<char> g1_col; // FIXME: change 'char' type to something less static
-        get_column(g1, col, g1_col);
-        std::vector<char> g2_col;
-        get_column(g2, col, g2_col);
+        //std::vector<unsigned char> g1_col; // FIXME: change 'char' type to something less static
+        //std::vector<unsigned char> g2_col;
+       
+        // get_column(g1, col, g1_col);
+        // get_column(g2, col, g2_col);
 
+            // std::stringstream fname;
+            // fname << "ecolipre1.dbg";
+            // fname << ".new";
+            // fname << col;
+            // std::string s = fname.str();
+            // std::cout << "writing " << s << std::endl;
+            // ofstream f(s.c_str());
+            // for (auto c: g1_col) {
+            //     f << c << std::endl;
+            // }
+            // f.close();
 
+        
         if (col == 1) {
-            std::vector<char> g1_col1(g1_col);
-            std::vector<char> g2_col1(g2_col);
+            std::vector<unsigned char> g1_col1(g1_col);
+            std::vector<unsigned char> g2_col1(g2_col);
         }
         
         std::vector<bool> g1_new_sets;
@@ -429,10 +462,10 @@ int mainmerge(const debruijn_graph_shifted<> &g1, const debruijn_graph_shifted<>
     uint64_t out_ptr = 0; // tracks position in EBWT(g)_M
     
     Flags flags(g1_flagsets, g2_flagsets);
-    std::cout << "flags: ";
-    dump_range(0, g1_flagsets.size(), g1_flagsets);
+    //std::cout << "flags: ";
+    //dump_range(0, g1_flagsets.size(), g1_flagsets);
     std::cout << std::endl;
-    dump_range(0, g2_flagsets.size(), g2_flagsets);
+    //dump_range(0, g2_flagsets.size(), g2_flagsets);
     std::cout << std::endl;
         
 
@@ -482,18 +515,18 @@ int mainmerge(const debruijn_graph_shifted<> &g1, const debruijn_graph_shifted<>
         // if the P_1 set is non-empty
         if (g1_set_ptr > 0 && !g1_sets[g1_set_ptr - 1]) {
                 
-            std::cout << (int)Lcol[g1_ptr] << " :: ";
+            //std::cout << (int)Lcol[g1_ptr] << " :: ";
             symbol = g1._map_symbol(g1._strip_edge_flag(g1.m_edges[g1_ptr]));
-            std::cout << L[out_ptr] << " " << symbol << " "; // FIXME: assuming no flags in m_edges
+            //std::cout << L[out_ptr] << " " << symbol << " "; // FIXME: assuming no flags in m_edges
 
             ntcounts[g1._map_symbol(g1._symbol_access(g1_ptr))] += 1;
 
             if (flags.seen(symbol)) {
                 flag = 1;
-                std::cout << 1 << " == " << g1.edge_label(g1_ptr) << " " << g1_ptr /*<< " : " << (int)(g1.m_edges[g1_ptr] & 0x1) */ << std::endl;
+                //std::cout << 1 << " == " << g1.edge_label(g1_ptr) << " " << g1_ptr /*<< " : " << (int)(g1.m_edges[g1_ptr] & 0x1) */ << std::endl;
             } else {
                 flag = 0;
-                std::cout << 0 << " == " << g1.edge_label(g1_ptr) << " " << g1_ptr/*<< " : " << (g1.m_edges[g1_ptr] & 0x1) */ << std::endl;
+                //std::cout << 0 << " == " << g1.edge_label(g1_ptr) << " " << g1_ptr/*<< " : " << (g1.m_edges[g1_ptr] & 0x1) */ << std::endl;
             }
             flags.add(symbol);
             g1_ptr += 1;
@@ -507,17 +540,17 @@ int mainmerge(const debruijn_graph_shifted<> &g1, const debruijn_graph_shifted<>
 
             
         } else { // else, P_2 MUST be non-empty
-            std::cout << (int)Lcol[g2_ptr] << " :: ";
+            //std::cout << (int)Lcol[g2_ptr] << " :: ";
              symbol = g2._map_symbol(g2._strip_edge_flag(g2.m_edges[g2_ptr]));
-            std::cout << L[out_ptr] << " "  << symbol << " ";
+             //std::cout << L[out_ptr] << " "  << symbol << " ";
 
             ntcounts[g2._map_symbol(g2._symbol_access(g2_ptr))] += 1;            
             if (flags.seen(symbol)) {
                 flag = 1;
-                std::cout << 1 /*<< (int)(g1.m_edges[g1_ptr] & 0x1)*/ << std::endl;
+                //std::cout << 1 /*<< (int)(g1.m_edges[g1_ptr] & 0x1)*/ << std::endl;
             } else {
                 flag = 0;
-                std::cout << 0 /*<< (int)(g1.m_edges[g1_ptr] & 0x1)*/ << std::endl;
+                //std::cout << 0 /*<< (int)(g1.m_edges[g1_ptr] & 0x1)*/ << std::endl;
             }
             flags.add(symbol);
             g2_ptr += 1;
@@ -609,14 +642,14 @@ void dumpcolumns( const debruijn_graph_shifted<> &dbg, const  parameters_t &p)
         fname << i;
         std::string s = fname.str();
         ofstream f(s.c_str());
-        std::vector<char> g_col;
+        std::vector<unsigned char> g_col;
         get_column(dbg, i, g_col);
         for (auto c: g_col) {
             f << c << std::endl;
         }
         f.close();
     }
-    // std::vector<char> g_colprime;
+    // std::vector<unsigned char> g_colprime;
     // get_column(dbg, 0, g_colprime);
 
     // for (auto c: g_colprime)
@@ -663,11 +696,11 @@ int main(int argc, char* argv[]) {
     cerr << "num_edges()   : " << dbg.num_edges() << endl;
     cerr << "Total size    : " << size_in_mega_bytes(dbg) << " MB" << endl;
     cerr << "Bits per edge : " << bits_per_element(dbg) << " Bits" << endl;
-    dumpcolumns(dbg, p);
-    dump_edges(dbg);
+    // dumpcolumns(dbg, p);
+    // dump_edges(dbg);
 
-    std::vector<char> last;
-    std::vector<char>* cur = &last;
+    std::vector<unsigned char> last;
+    std::vector<unsigned char>* cur = &last;
     //  dbg.get_edge_column(last);
   
     for (int i = 0; i < dbg.k; ++i);
