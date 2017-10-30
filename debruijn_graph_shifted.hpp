@@ -16,7 +16,7 @@
 #include "utility.hpp"
 #include "io.hpp"
 //#include "debug.h"
-
+#include <boost/dynamic_bitset.hpp>
 using namespace std;
 using namespace sdsl;
 
@@ -472,7 +472,33 @@ auto    access_map_symbol(size_t i) const {
             }
         }
 
-    void get_column(const std::vector<symbol_type> &edges, const std::vector<symbol_type> &oldcol, std::vector<symbol_type> &newcol) const
+    size_t get_node_flags(boost::dynamic_bitset<> &flags) const
+        {
+            size_t num_set = 0;
+            size_t to_get = 1;
+
+            for (size_t i = 0; i < num_edges(); ++i) {
+                auto flag = m_node_flags[i];
+                if (flag) {
+                    num_set++;
+                    std::cout << i << std::endl;
+                }
+                flags[i] = !flag;
+            }
+            return num_set;
+        } 
+   size_t my_node_select(size_t t, const boost::dynamic_bitset<> &node_flags) const
+        {
+            size_t ret = node_flags.find_first();
+            if (t > 1) {
+                for (size_t i = 0; i < t-1; i++) {
+                    ret = node_flags.find_next(ret);
+                }
+            }
+            return ret;
+        }
+    
+    void get_column(const boost::dynamic_bitset<> &node_flags, const std::vector<symbol_type> &edges, const std::vector<symbol_type> &oldcol, std::vector<symbol_type> &newcol) const
         {
             assert(oldcol.size() == num_edges());
             assert(newcol.size() == num_edges());
@@ -509,10 +535,19 @@ auto    access_map_symbol(size_t i) const {
                 // beginning
 
                 size_t new_nth_node = m_node_rank(start_edge +1) + x_node_rank;
+
                 size_t new_edges_begin  = m_node_select(new_nth_node);
+                size_t my_new_edges_begin  = my_node_select(new_nth_node, node_flags);
+                if (my_new_edges_begin != new_edges_begin) std::cout << "b select( " << new_nth_node <<") diff =" <<  (signed long long)my_new_edges_begin - (signed long long)new_edges_begin << std::endl;
+                
                 size_t new_edges_end = num_edges() - 1;
-                if (new_nth_node < num_nodes())
+                size_t my_new_edges_end = num_edges() - 1;
+                if (new_nth_node < num_nodes()) {
                     new_edges_end = m_node_select(new_nth_node + 1 ) - 1 /*FIXME: what is this supposed to be */;
+                    my_new_edges_end = my_node_select(new_nth_node + 1 , node_flags) - 1;
+                    if (my_new_edges_end != new_edges_end) std::cout << "e select( " << new_nth_node +1 <<") diff ="<< (signed long long)my_new_edges_end - (signed long long)new_edges_end << std::endl;
+    
+                }
                 for (size_t j = new_edges_begin; j <= new_edges_end; ++j)
                     newcol[j] = oldcol[i];
                 

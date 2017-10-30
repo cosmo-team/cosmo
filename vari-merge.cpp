@@ -404,20 +404,20 @@ int mainmerge(const debruijn_graph_shifted<> &g1, const debruijn_graph_shifted<>
 
     // then for m_node_flags
     boost::dynamic_bitset<> g1_node_flags(g1.num_edges());
-    boost::dynamic_bitset<> g2_node_flags(g1.num_edges());    
+    boost::dynamic_bitset<> g2_node_flags(g2.num_edges());    
 
-    std::cerr << "getting node flags" << std::endl << std::flush;
+    std::cerr << "getting node flags for g1" << std::endl << std::flush;
     int startgettime3 = getMilliCount();
-    g1.get_node_flags(g1_node_flags);
+    size_t num_set1 = g1.get_node_flags(g1_node_flags);
     int delta3 = getMilliSpan(startgettime);
-    std::cerr << "got g1_node_flags in " << delta3 << " milliseconds." << std::endl << std::flush;
+    std::cerr << "got  " << num_set1 << ", reported " <<g1_node_flags.count() << " bits  in g1_node_flags in " << delta3 << " milliseconds." << std::endl << std::flush;
 
 
-    std::cerr << "getting node flags" << std::endl << std::flush;
+    std::cerr << "getting node flags for g2" << std::endl << std::flush;
     int startgettime4 = getMilliCount();
-    g1.get_node_flags(g2_node_flags);
+     size_t num_set2 =    g2.get_node_flags(g2_node_flags);
     int delta4 = getMilliSpan(startgettime);
-    std::cerr << "got g2_node_flags in " << delta4 << " milliseconds." << std::endl << std::flush;
+    std::cerr << "got " << num_set2 << ", reported " << g2_node_flags.count() << " bits in g2_node_flags in " << delta4 << " milliseconds." << std::endl << std::flush;
     
     
     for (auto col: cols) {
