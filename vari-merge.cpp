@@ -420,8 +420,11 @@ int mainmerge(const debruijn_graph_shifted<> &g1, const debruijn_graph_shifted<>
      size_t num_set2 =    g2.get_node_flags(g2_node_flags);
     int delta4 = getMilliSpan(startgettime);
     std::cerr << "got " << num_set2 << ", reported " << g2_node_flags.count() << " bits in g2_node_flags in " << delta4 << " milliseconds." << std::endl << std::flush;
-    
-    
+
+    std::cout << std::endl << "*** Starting merge planning phase. ***" << std::endl;
+
+    int colno = 0;
+    int planstarttime = getMilliCount();
     for (auto col: cols) {
 
         // get_column // FIXME: be more careful here, maybe use col^1 from g._symbol_starts
@@ -490,6 +493,11 @@ int mainmerge(const debruijn_graph_shifted<> &g1, const debruijn_graph_shifted<>
             g1_flagsets.insert(g1_flagsets.end(), g1_sets.begin(), g1_sets.end());
             g2_flagsets.insert(g2_flagsets.end(), g2_sets.begin(), g2_sets.end());
         }
+
+        float curplantime = getMilliSpan(planstarttime);
+        colno++;
+        std::cout << curplantime / 1000.0 / 60.0 << " minutes elapsed in planning phase." << std::endl;
+        std::cout << ((curplantime / 1000.0 / 60.0) / (float)colno ) * (g1.k - colno) << " microsoft minutes remaining in planning phase." << std::endl;
     }
 
 
