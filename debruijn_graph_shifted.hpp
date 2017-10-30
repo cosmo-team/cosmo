@@ -427,7 +427,18 @@ auto    access_map_symbol(size_t i) const {
     return next;
   }
 
-    void get_edge_column(std::vector<symbol_type> &newcol) const
+    // this version strips flags
+    void get_edge_column(const std::vector<symbol_type> &edges, std::vector<symbol_type> &newcol) const
+        {
+//            assert(newcol.size() == 0);
+            for (size_t i = 0; i < num_edges(); ++i) {
+                auto edge = edges[i];
+                newcol[i] =  _map_symbol(_strip_edge_flag(edge));
+            }
+        }
+
+    // this version includes flags
+    void get_edges(std::vector<symbol_type> &newcol) const
         {
 //            assert(newcol.size() == 0);
             for (size_t i = 0; i < num_edges(); ++i) {
@@ -435,7 +446,10 @@ auto    access_map_symbol(size_t i) const {
                 newcol[i] = edge; // _map_symbol(_strip_edge_flag(edge));
             }
         }
-    
+
+
+    // deprecated non-caching get_column.  This version is simpler to understand as it uses no caching and matches the theory
+    // it is essentially derived from _forward
     void get_column(const std::vector<symbol_type> &oldcol, std::vector<symbol_type> &newcol) const
         {
             assert(oldcol.size() == num_edges());
@@ -517,7 +531,8 @@ auto    access_map_symbol(size_t i) const {
         }
                 
     }
-    
+
+    // Writes into new column superficially appear random, however they actually write consecutively into $\sigma$ regions
     void get_column(const boost::dynamic_bitset<> &node_flags, const std::vector<symbol_type> &edges, const std::vector<symbol_type> &oldcol, std::vector<symbol_type> &newcol) const
         {
             assert(oldcol.size() == num_edges());
