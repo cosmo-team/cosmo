@@ -14,6 +14,7 @@
 #include "algorithm.hpp"
 #include "vari-merge.hpp"
 #include "sort.hpp"
+#include <boost/dynamic_bitset.hpp>
 //using namespace std;
 //using namespace sdsl;
 
@@ -381,23 +382,43 @@ int mainmerge(const debruijn_graph_shifted<> &g1, const debruijn_graph_shifted<>
     std::vector<bool> g1_flagsets;//(/*g1_sets*/);
     std::vector<bool> g2_flagsets;//(/*g2_sets*/);
 
+    // fill the cache
 
+    // first for m_edges
     std::vector<unsigned char> g1_edges(g1.num_edges(),0);
     std::vector<unsigned char> g2_edges(g2.num_edges(),0);
     std::cerr << "getting edge columns" << std::endl << std::flush;
     int startgettime = getMilliCount();
     g1.get_edge_column(g1_edges);
     int delta1 = getMilliSpan(startgettime);
-    std::cerr << "got col1 in " << delta1 << " milliseconds(?)" << std::endl << std::flush;
+    std::cerr << "got col1 in " << delta1 << " milliseconds." << std::endl << std::flush;
 
 
     int startgettime2 = getMilliCount();
     g2.get_edge_column(g2_edges);
     int delta2 = getMilliSpan(startgettime2);
-    std::cerr << "got col2 in " << delta2 << " milliseconds(?)" << std::endl << std::flush;    
+    std::cerr << "got col2 in " << delta2 << " milliseconds." << std::endl << std::flush;    
 
     std::vector<unsigned char> g1_col(g1_edges);
     std::vector<unsigned char> g2_col(g2_edges);
+
+    // then for m_node_flags
+    boost::dynamic_bitset<> g1_node_flags(g1.num_edges());
+    boost::dynamic_bitset<> g2_node_flags(g1.num_edges());    
+
+    std::cerr << "getting node flags" << std::endl << std::flush;
+    int startgettime3 = getMilliCount();
+    g1.get_node_flags(g1_node_flags);
+    int delta3 = getMilliSpan(startgettime);
+    std::cerr << "got g1_node_flags in " << delta3 << " milliseconds." << std::endl << std::flush;
+
+
+    std::cerr << "getting node flags" << std::endl << std::flush;
+    int startgettime4 = getMilliCount();
+    g1.get_node_flags(g2_node_flags);
+    int delta4 = getMilliSpan(startgettime);
+    std::cerr << "got g2_node_flags in " << delta4 << " milliseconds." << std::endl << std::flush;
+    
     
     for (auto col: cols) {
 
@@ -407,12 +428,12 @@ int mainmerge(const debruijn_graph_shifted<> &g1, const debruijn_graph_shifted<>
             g2.get_edge_column(g2_col);
         } else if (col > 1) {
             std::vector<unsigned char> h1_col(g1_col.size(),0);
-            g1.get_column(g1_edges, g1_col, h1_col);
+            g1.get_column(g1_node_flags, g1_edges, g1_col, h1_col);
             g1_col.clear();
             g1_col.insert(g1_col.begin(), h1_col.begin(), h1_col.end());
             
             std::vector<unsigned char> h2_col(g2_col.size(),0);
-            g2.get_column(g2_edges, g2_col, h2_col);
+            g2.get_column(g2_node_flags, g2_edges, g2_col, h2_col);
             g2_col.clear();
             g2_col.insert(g2_col.begin(), h2_col.begin(), h2_col.end());
         }
