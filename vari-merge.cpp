@@ -382,29 +382,37 @@ int mainmerge(const debruijn_graph_shifted<> &g1, const debruijn_graph_shifted<>
     std::vector<bool> g2_flagsets;//(/*g2_sets*/);
 
 
-    std::vector<unsigned char> g1_col(g1.num_edges(),0);
-    std::vector<unsigned char> g2_col(g2.num_edges(),0);
+    std::vector<unsigned char> g1_edges(g1.num_edges(),0);
+    std::vector<unsigned char> g2_edges(g2.num_edges(),0);
     std::cerr << "getting edge columns" << std::endl << std::flush;
     int startgettime = getMilliCount();
-    g1.get_edge_column(g1_col);
+    g1.get_edge_column(g1_edges);
     int delta1 = getMilliSpan(startgettime);
     std::cerr << "got col1 in " << delta1 << " milliseconds(?)" << std::endl << std::flush;
-    g2.get_edge_column(g2_col);
-    std::cerr << "got col2" << std::endl << std::flush;
+
+
+    int startgettime2 = getMilliCount();
+    g2.get_edge_column(g2_edges);
+    int delta2 = getMilliSpan(startgettime2);
+    std::cerr << "got col2 in " << delta2 << " milliseconds(?)" << std::endl << std::flush;    
+
+    std::vector<unsigned char> g1_col(g1_edges);
+    std::vector<unsigned char> g2_col(g2_edges);
+    
     for (auto col: cols) {
 
         // get_column // FIXME: be more careful here, maybe use col^1 from g._symbol_starts
         if (col == 0) {
             g1.get_edge_column(g1_col);
             g2.get_edge_column(g2_col);
-        } else {
+        } else if (col > 1) {
             std::vector<unsigned char> h1_col(g1_col.size(),0);
-            g1.get_column(g1_col, h1_col);
+            g1.get_column(g1_edges, g1_col, h1_col);
             g1_col.clear();
             g1_col.insert(g1_col.begin(), h1_col.begin(), h1_col.end());
             
             std::vector<unsigned char> h2_col(g2_col.size(),0);
-            g2.get_column(g2_col, h2_col);
+            g2.get_column(g2_edges, g2_col, h2_col);
             g2_col.clear();
             g2_col.insert(g2_col.begin(), h2_col.begin(), h2_col.end());
         }
@@ -438,7 +446,12 @@ int mainmerge(const debruijn_graph_shifted<> &g1, const debruijn_graph_shifted<>
         std::vector<bool> g1_new_sets;
         std::vector<bool> g2_new_sets;
         std::cout << "going to refine sets in bool vectors of sizes " << g1_sets.size() << ", " << g2_sets.size() << ";   " << std::endl << "calling refine_sets() with column " << col << std::endl;
+         int startgettime = getMilliCount();
+
         refine_sets(g1_col, g2_col, g1_sets, g2_sets, col, g1_new_sets, g2_new_sets, L);
+        int delta = getMilliSpan(startgettime);
+        std::cout << "refine_sets() completed in " << delta << " milliseconds." << std::endl << std::flush;    
+        
         std::cout <<"    got back new vectors of bools of sizes " << g1_new_sets.size() << ", " << g2_new_sets.size() << ";   " << std::endl << std::endl;
         assert(g1_col.size() == validate(g1_new_sets));
         assert(g2_col.size() == validate(g2_new_sets));

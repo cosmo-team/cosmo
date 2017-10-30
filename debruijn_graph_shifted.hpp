@@ -432,7 +432,7 @@ auto    access_map_symbol(size_t i) const {
 //            assert(newcol.size() == 0);
             for (size_t i = 0; i < num_edges(); ++i) {
                 auto edge = m_edges[i];
-                newcol[i] = _map_symbol(_strip_edge_flag(edge));
+                newcol[i] = edge; // _map_symbol(_strip_edge_flag(edge));
             }
         }
     
@@ -471,7 +471,54 @@ auto    access_map_symbol(size_t i) const {
                     newcol[j] = oldcol[i];
             }
         }
+
+    void get_column(const std::vector<symbol_type> &edges, const std::vector<symbol_type> &oldcol, std::vector<symbol_type> &newcol) const
+        {
+            assert(oldcol.size() == num_edges());
+            assert(newcol.size() == num_edges());
+            std::vector<size_t> ranks(10,0); // keep track of the ranks as we scan edge vector to avoid sdsl-lite rank queries
+                                       // since we are scanning in order, we can simply count how many of each char we've seen
+            for (size_t i = 0; i < num_edges(); ++i) {
+                auto edge = edges[i];
+
+                if (edge & 1) {
+                    ranks[edge]++;
+                    continue;
+                }
                 
+                symbol_type x = _strip_edge_flag(edge);
+                if (x == 0) {
+                    ranks[edge]++;
+                    continue;
+                }
+                
+                symbol_type fullx =_with_edge_flag(x, false);
+
+                // we want the lexicographic rank n of this edge amongst all nodes ending in x
+                // FIXME: since we are visiting EVERY element in order, we can easily just count as we go!
+                size_t x_node_rank   = ranks[fullx]; // nth flagless, also node number of all nodes ending in fullx
+                //std::cerr << x_node_rank << " ==? " <<  m_edges.rank(i, fullx) << std::endl << std::flush;
+                //assert(x_node_rank == m_edges.rank(i, fullx));
+                // all edges originating at nodes ending in x will be consecutive, this block of such edges can be found
+                // in m_symbol_ends
+                size_t start_edge = _symbol_start(x); // this is the base
+
+                // now we want to find the n-th node within this block.  The trouble is, m_node_flags maps between nodes
+                // and edges starting at the beginning.  So we have to find the number of nodes existing before
+                // start_edge (base) so we can add x_node_rank (offset) to it to get the number of nodes from the
+                // beginning
+
+                size_t new_nth_node = m_node_rank(start_edge +1) + x_node_rank;
+                size_t new_edges_begin  = m_node_select(new_nth_node);
+                size_t new_edges_end = num_edges() - 1;
+                if (new_nth_node < num_nodes())
+                    new_edges_end = m_node_select(new_nth_node + 1 ) - 1 /*FIXME: what is this supposed to be */;
+                for (size_t j = new_edges_begin; j <= new_edges_end; ++j)
+                    newcol[j] = oldcol[i];
+                
+                ranks[edge]++;
+            }
+        }    
 
   size_t _backward(size_t i) const {
     assert(i < num_edges());
