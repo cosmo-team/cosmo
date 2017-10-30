@@ -383,9 +383,14 @@ int mainmerge(const debruijn_graph_shifted<> &g1, const debruijn_graph_shifted<>
 
 
     std::vector<unsigned char> g1_col(g1.num_edges(),0);
-    std::vector<unsigned char> g2_col(g2.num_edges(),0);        
+    std::vector<unsigned char> g2_col(g2.num_edges(),0);
+    std::cerr << "getting edge columns" << std::endl << std::flush;
+    int startgettime = getMilliCount();
     g1.get_edge_column(g1_col);
-    g2.get_edge_column(g2_col);    
+    int delta1 = getMilliSpan(startgettime);
+    std::cerr << "got col1 in " << delta1 << " milliseconds(?)" << std::endl << std::flush;
+    g2.get_edge_column(g2_col);
+    std::cerr << "got col2" << std::endl << std::flush;
     for (auto col: cols) {
 
         // get_column // FIXME: be more careful here, maybe use col^1 from g._symbol_starts
@@ -432,7 +437,7 @@ int mainmerge(const debruijn_graph_shifted<> &g1, const debruijn_graph_shifted<>
         
         std::vector<bool> g1_new_sets;
         std::vector<bool> g2_new_sets;
-        std::cout << "going to refine sets in bool vectors of sizes " << g1_sets.size() << ", " << g2_sets.size() << ";   " << std::endl << "calling refine_sets()\n";
+        std::cout << "going to refine sets in bool vectors of sizes " << g1_sets.size() << ", " << g2_sets.size() << ";   " << std::endl << "calling refine_sets() with column " << col << std::endl;
         refine_sets(g1_col, g2_col, g1_sets, g2_sets, col, g1_new_sets, g2_new_sets, L);
         std::cout <<"    got back new vectors of bools of sizes " << g1_new_sets.size() << ", " << g2_new_sets.size() << ";   " << std::endl << std::endl;
         assert(g1_col.size() == validate(g1_new_sets));
@@ -506,7 +511,7 @@ int mainmerge(const debruijn_graph_shifted<> &g1, const debruijn_graph_shifted<>
     std::cerr << "writing to writer " << std::endl << std::flush;    
 
     // END output stuff
-
+    std::ofstream pf("merged.plan");
 
     do {
         // find the end of the next (equivalence class) set
@@ -533,11 +538,14 @@ int mainmerge(const debruijn_graph_shifted<> &g1, const debruijn_graph_shifted<>
             flags.add(symbol);
             g1_ptr += 1;
             flags.adv_g1();
-
+            
             // if the P_2 set is also non-empty
             if (g2_set_ptr > 0 && !g2_sets[g2_set_ptr - 1]) {
                 g2_ptr += 1;
                 flags.adv_g2();
+                pf << (char)3; // include g1 row and g2 row
+            } else {
+                pf << (char)1; // include only g1 row
             }
 
             
@@ -557,6 +565,7 @@ int mainmerge(const debruijn_graph_shifted<> &g1, const debruijn_graph_shifted<>
             flags.add(symbol);
             g2_ptr += 1;
             flags.adv_g2();
+            pf << (char)2; // include only g2 row
         }
         //*edge_writer << combine(symbol, flag);
         ef << combine(symbol, flag);
@@ -564,6 +573,7 @@ int mainmerge(const debruijn_graph_shifted<> &g1, const debruijn_graph_shifted<>
         ++g1_set_ptr;
         ++g2_set_ptr;
     } while (g1_set_ptr != g1_sets.size()  && g2_set_ptr != g2_sets.size() );
+    pf.close();
     std::cout << "set pointers " << g1_set_ptr << "/" <<g1_sets.size() << " " << g2_set_ptr << "/" << g2_sets.size() << std::endl;
     std::cout << "EBWT(G) ptrs  _1: " << g1_ptr << " _2: " << g2_ptr << " _M: " << out_ptr << std::endl;
     std::cout << "elements in family: " << validate(g1_sets) << " " << validate(g2_sets) << std::endl;

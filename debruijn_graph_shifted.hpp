@@ -450,6 +450,7 @@ auto    access_map_symbol(size_t i) const {
                 symbol_type fullx =_with_edge_flag(x, false);
 
                 // we want the lexicographic rank n of this edge amongst all nodes ending in x
+                // FIXME: since we are visiting EVERY element in order, we can easily just count as we go!
                 size_t x_node_rank   = m_edges.rank(i, fullx); // nth flagless, also node number of all nodes ending in fullx
 
                 // all edges originating at nodes ending in x will be consecutive, this block of such edges can be found
