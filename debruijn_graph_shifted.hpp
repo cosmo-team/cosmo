@@ -481,9 +481,9 @@ auto    access_map_symbol(size_t i) const {
                 auto flag = m_node_flags[i];
                 if (flag) {
                     num_set++;
-                    std::cout << i << std::endl;
                 }
-                flags[i] = !flag;
+                flags[i] = !flag;  // NOTE: BOSS implementation uses rank0/select0, but dynamic bitset uses find_next "1"
+                                   // so we mark with a 1 what the sd_vector marks with a 0
             }
             return num_set;
         } 
@@ -497,6 +497,26 @@ auto    access_map_symbol(size_t i) const {
             }
             return ret;
         }
+
+    size_t my_node_select2(const boost::dynamic_bitset<> &node_flags,   std::vector<std::pair<signed long long, signed long long>> &selectcache, symbol_type x, size_t t) const {
+        if (std::get<0>(selectcache[x]) == -1) {
+            size_t ret = m_node_select(t);
+            selectcache[x] = make_pair(t, ret);
+            return ret;
+        } else {
+            if (std::get<0>(selectcache[x]) == t) {
+                return std::get<1>(selectcache[x]);
+            } else {
+                size_t ret = std::get<1>(selectcache[x]);
+                for (size_t i = 0; i < t-std::get<0>(selectcache[x]); i++) {
+                    ret = node_flags.find_next(ret);
+                }
+                selectcache[x] = make_pair(t, ret);
+                return  ret;
+            }
+        }
+                
+    }
     
     void get_column(const boost::dynamic_bitset<> &node_flags, const std::vector<symbol_type> &edges, const std::vector<symbol_type> &oldcol, std::vector<symbol_type> &newcol) const
         {
@@ -504,6 +524,12 @@ auto    access_map_symbol(size_t i) const {
             assert(newcol.size() == num_edges());
             std::vector<size_t> ranks(10,0); // keep track of the ranks as we scan edge vector to avoid sdsl-lite rank queries
                                        // since we are scanning in order, we can simply count how many of each char we've seen
+
+            std::vector<std::pair<signed long long, signed long long>> selectcache;
+            for (int i = 0; i < 5; i++)
+                selectcache.push_back(make_pair(-1,-1));
+
+            
             for (size_t i = 0; i < num_edges(); ++i) {
                 auto edge = edges[i];
 
@@ -536,16 +562,16 @@ auto    access_map_symbol(size_t i) const {
 
                 size_t new_nth_node = m_node_rank(start_edge +1) + x_node_rank;
 
-                size_t new_edges_begin  = m_node_select(new_nth_node);
-                size_t my_new_edges_begin  = my_node_select(new_nth_node, node_flags);
-                if (my_new_edges_begin != new_edges_begin) std::cout << "b select( " << new_nth_node <<") diff =" <<  (signed long long)my_new_edges_begin - (signed long long)new_edges_begin << std::endl;
+                size_t new_edges_begin  = my_node_select2(node_flags, selectcache, x, new_nth_node); //m_node_select(new_nth_node);
+                size_t my_new_edges_begin  = my_node_select2(node_flags, selectcache, x, new_nth_node);
+//                if (my_new_edges_begin != new_edges_begin) std::cout << "b select( " << new_nth_node <<") diff =" <<  (signed long long)my_new_edges_begin - (signed long long)new_edges_begin << std::endl;
                 
                 size_t new_edges_end = num_edges() - 1;
                 size_t my_new_edges_end = num_edges() - 1;
                 if (new_nth_node < num_nodes()) {
-                    new_edges_end = m_node_select(new_nth_node + 1 ) - 1 /*FIXME: what is this supposed to be */;
-                    my_new_edges_end = my_node_select(new_nth_node + 1 , node_flags) - 1;
-                    if (my_new_edges_end != new_edges_end) std::cout << "e select( " << new_nth_node +1 <<") diff ="<< (signed long long)my_new_edges_end - (signed long long)new_edges_end << std::endl;
+                    new_edges_end = my_node_select2( node_flags, selectcache, x, new_nth_node + 1 ) - 1; // m_node_select(new_nth_node + 1 ) - 1 /*FIXME: what is this supposed to be */;
+                    //my_new_edges_end = my_node_select2( node_flags, selectcache, x, new_nth_node + 1 ) - 1;
+                    //if (my_new_edges_end != new_edges_end) std::cout << "e select( " << new_nth_node +1 <<") diff ="<< (signed long long)my_new_edges_end - (signed long long)new_edges_end << std::endl;
     
                 }
                 for (size_t j = new_edges_begin; j <= new_edges_end; ++j)
