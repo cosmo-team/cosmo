@@ -424,8 +424,12 @@ int mainmerge(const debruijn_graph_shifted<> &g1, const debruijn_graph_shifted<>
 
         // get_column // FIXME: be more careful here, maybe use col^1 from g._symbol_starts
         if (col == 0) {
-            g1.get_edge_column(g1_col);
-            g2.get_edge_column(g2_col);
+            g1_col.clear();
+            g1_col.insert(g1_col.begin(), g1_edges.begin(), g1_edges.end());
+
+            g2_col.clear();
+            g2_col.insert(g2_col.begin(), g2_edges.begin(), g2_edges.end());
+                
         } else if (col > 1) {
             std::vector<unsigned char> h1_col(g1_col.size(),0);
             g1.get_column(g1_node_flags, g1_edges, g1_col, h1_col);
