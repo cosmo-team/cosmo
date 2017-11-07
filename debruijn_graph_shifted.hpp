@@ -427,14 +427,23 @@ auto    access_map_symbol(size_t i) const {
     return next;
   }
 
-    void get_edge_column(std::vector<symbol_type> &newcol) const
+    void get_edge_column(const std::vector<symbol_type> &edges, std::vector<symbol_type> &newcol) const
         {
 //            assert(newcol.size() == 0);
             for (size_t i = 0; i < num_edges(); ++i) {
-                auto edge = m_edges[i];
-                newcol[i] = edge; // _map_symbol(_strip_edge_flag(edge));
+                auto edge = edges[i];
+                newcol[i] =  _map_symbol(_strip_edge_flag(edge));
             }
         }
+
+    void get_edges(std::vector<symbol_type> &newcol) const
+        {
+            for (size_t i = 0; i < num_edges(); ++i) {
+                auto edge = m_edges[i];
+                newcol[i] =  edge;
+            }
+        }
+            
     
     void get_column(const std::vector<symbol_type> &oldcol, std::vector<symbol_type> &newcol) const
         {

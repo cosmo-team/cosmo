@@ -386,26 +386,28 @@ int mainmerge(const debruijn_graph_shifted<> &g1, const debruijn_graph_shifted<>
     std::vector<unsigned char> g2_edges(g2.num_edges(),0);
     std::cerr << "getting edge columns" << std::endl << std::flush;
     int startgettime = getMilliCount();
-    g1.get_edge_column(g1_edges);
+    g1.get_edges(g1_edges);
     int delta1 = getMilliSpan(startgettime);
     std::cerr << "got col1 in " << delta1 << " milliseconds(?)" << std::endl << std::flush;
 
 
     int startgettime2 = getMilliCount();
-    g2.get_edge_column(g2_edges);
+    g2.get_edges(g2_edges);
     int delta2 = getMilliSpan(startgettime2);
     std::cerr << "got col2 in " << delta2 << " milliseconds(?)" << std::endl << std::flush;    
 
-    std::vector<unsigned char> g1_col(g1_edges);
-    std::vector<unsigned char> g2_col(g2_edges);
+    std::vector<unsigned char> g1_col(g1.num_edges());
+    std::vector<unsigned char> g2_col(g2.num_edges());
+    g1.get_edge_column(g1_edges, g1_col);
+    g2.get_edge_column(g2_edges, g2_col);
     
     for (auto col: cols) {
 
         // get_column // FIXME: be more careful here, maybe use col^1 from g._symbol_starts
         if (col == 0) {
-            g1.get_edge_column(g1_col);
-            g2.get_edge_column(g2_col);
-        } else if (col > 1) {
+            g1.get_edge_column(g1_edges, g1_col);
+            g2.get_edge_column(g2_edges, g2_col);
+        } else  {
             std::vector<unsigned char> h1_col(g1_col.size(),0);
             g1.get_column(g1_edges, g1_col, h1_col);
             g1_col.clear();
@@ -680,7 +682,7 @@ void dumpcolumns( const debruijn_graph_shifted<> &dbg, const  parameters_t &p)
     // for (auto c: g_colprime)
     //     g_col.push_back(c);
     std::vector<unsigned char> g_col(dbg.num_edges());    
-    dbg.get_edge_column(g_col);
+//    dbg.get_edge_column(g_col);
     for (int i = 1; i < dbg.k; ++i) {
         std::stringstream fname;
         fname <<  p.input_filename;
