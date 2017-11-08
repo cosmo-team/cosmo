@@ -51,9 +51,9 @@ CPP_FLAGS+=-DVERBOSE
 endif
 
 KMC_OBJS=$(KMC_PATH)/kmc_api/kmc_file.o $(KMC_PATH)/kmc_api/kmer_api.o $(KMC_PATH)/kmc_api/mmer.o
-BUILD_REQS=lut.hpp debug.hpp utility.hpp io.hpp sort.hpp kmer.hpp dummies.hpp debruijn_graph.hpp debruijn_graph_shifted.hpp pack-color.hpp pack-color-merge.hpp cosmo-dump.hpp cosmo-dump-full-edges.hpp cosmo-color-pd.hpp 
+BUILD_REQS=lut.hpp debug.hpp utility.hpp io.hpp sort.hpp kmer.hpp dummies.hpp debruijn_graph.hpp debruijn_graph_shifted.hpp pack-color.hpp pack-color-merge.hpp cosmo-dump.hpp cosmo-dump-full-edges.hpp cosmo-color-pd.hpp color-merge.hpp
 COLOR_REQS=colored_debruijn_graph.hpp io.hpp debug.hpp
-BINARIES=cosmo-build cosmo-color cosmo-test cosmo-benchmark cosmo-benchmark-varord pack-color cosmo-color-pd cosmo-read-color transpose cosmo-merge vari-merge cosmo-dump cosmo-dump-full-edges
+BINARIES=cosmo-build cosmo-color cosmo-test cosmo-benchmark cosmo-benchmark-varord pack-color cosmo-color-pd cosmo-read-color transpose cosmo-merge vari-merge cosmo-dump cosmo-dump-full-edges color-merge
 
 default: all
 
@@ -78,6 +78,8 @@ cosmo-dump-full-edges: cosmo-dump-full-edges.cpp $(BUILD_REQS) compiler_flags
 	$(CXX) $(CPP_FLAGS) -o $@ $< $(KMC_OBJS) $(DEP_FLAGS)
 
 cosmo-merge: cosmo-merge.cpp $(BUILD_REQS) compiler_flags
+	$(CXX) $(CPP_FLAGS) -o $@ $< $(KMC_OBJS) $(DEP_FLAGS) 
+color-merge: color-merge.cpp $(BUILD_REQS) compiler_flags
 	$(CXX) $(CPP_FLAGS) -o $@ $< $(KMC_OBJS) $(DEP_FLAGS) 
 
 vari-merge: vari-merge.cpp $(BUILD_REQS) compiler_flags

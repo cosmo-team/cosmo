@@ -88,6 +88,10 @@ int main(int argc, char * argv[])
     const char * plan_file = params.plan_filename.c_str();
     std::ifstream planfile(plan_file, std::ios::in|std::ios::binary);
 
+    planfile.seekg(0, planfile.end);
+    size_t end = planfile.tellg();
+    planfile.seekg(0, planfile.beg);
+    
     const char * matrix1_file = params.matrix1_filename.c_str();
     sdsl::sd_vector<> colors1;
     load_from_file(colors1, params.matrix1_filename);
@@ -99,11 +103,11 @@ int main(int argc, char * argv[])
     sdsl::sd_vector<> colors2;
     load_from_file(colors2, params.matrix2_filename);
 
-  
-    size_t n = (colors1.size() + colors2.size()) * 1.5; // total bits FIXME: we can figure this out
+    size_t out_colors = params.num_colors1 + params.num_colors2;  
+    size_t n = out_colors * end;// (colors1.size() + colors2.size()) * 1.5; // total bits FIXME: we can figure this out
     size_t m = colors1.low.size() + colors2.low.size();
   
-    size_t out_colors = params.num_colors1 + params.num_colors2;
+
 
     sdsl::sd_vector_builder *b_builder = NULL;
     
