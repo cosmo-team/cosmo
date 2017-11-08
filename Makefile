@@ -13,7 +13,7 @@ INC=-isystem $(DEP_PATH)/include -isystem $(BOOST_PATH)/include
 LIB=-L$(DEP_PATH)/lib -L./ -L$(BOOST_PATH)/lib
 BOOST_FLAGS= -lboost_system -lboost_filesystem
 DEP_FLAGS=$(INC) $(LIB) $(BOOST_FLAGS) -isystem $(KMC_PATH) -lsdsl -fopenmp #openmp is needed for logging
-DEBUG_FLAGS=-pg -g
+DEBUG_FLAGS= -g
 NDEBUG_FLAGS=-DNDEBUG
 OPT_FLAGS=-O3 -mmmx -msse -msse2 -msse3 -msse4 -msse4.2 -march=native -fno-strict-aliasing
 NOPT_FLAGS=-O0

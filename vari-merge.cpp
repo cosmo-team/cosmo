@@ -436,13 +436,15 @@ int mainmerge(const debruijn_graph_shifted<> &g1, const debruijn_graph_shifted<>
         } else  {
             std::vector<unsigned char> h1_col(g1_col.size(),0);
             g1.get_column(g1_node_flags, g1_edges, g1_col, h1_col);
-            g1_col.clear();
-            g1_col.insert(g1_col.begin(), h1_col.begin(), h1_col.end());
+            g1_col.assign(h1_col.begin(), h1_col.end());
+            // g1_col.clear();
+            // g1_col.insert(g1_col.begin(), h1_col.begin(), h1_col.end());
             
             std::vector<unsigned char> h2_col(g2_col.size(),0);
             g2.get_column(g2_node_flags, g2_edges, g2_col, h2_col);
-            g2_col.clear();
-            g2_col.insert(g2_col.begin(), h2_col.begin(), h2_col.end());
+            g2_col.assign( h2_col.begin(), h2_col.end());
+            // g2_col.clear();
+            // g2_col.insert(g2_col.begin(), h2_col.begin(), h2_col.end());
         }
 
         //std::vector<unsigned char> g1_col; // FIXME: change 'char' type to something less static
@@ -471,8 +473,13 @@ int mainmerge(const debruijn_graph_shifted<> &g1, const debruijn_graph_shifted<>
             std::vector<unsigned char> g2_col1(g2_col);
         }
         
+
         std::vector<bool> g1_new_sets;
         std::vector<bool> g2_new_sets;
+        // https://github.com/facebook/folly/blob/master/folly/docs/FBVector.md
+        g1_new_sets.reserve(g1_sets.size() * 1.5);
+        g2_new_sets.reserve(g2_sets.size() * 1.5);
+        
         std::cout << "going to refine sets in bool vectors of sizes " << g1_sets.size() << ", " << g2_sets.size() << ";   " << std::endl << "calling refine_sets() with column " << col << std::endl;
          int startgettime = getMilliCount();
 
@@ -737,36 +744,41 @@ void dumpcolumns( const debruijn_graph_shifted<> &dbg, const  parameters_t &p)
 int main(int argc, char* argv[]) {
     parameters_t p;
     parse_arguments(argc, argv, p);
-    cerr << "pack-color compiled with supported colors=" << NUM_COLS << std::endl;
+
     //ifstream input(p.input_filename, ios::in|ios::binary|ios::ate);
     // Can add this to save a couple seconds off traversal - not really worth it.
-    cerr << "loading dbg "<< p.input_filename  << std::endl;
+    cerr << "loading dbg1 "<< p.input_filename  << std::endl;
     debruijn_graph_shifted<> dbg;
     load_from_file(dbg, p.input_filename);
     //input.close();
-
+    cerr << "k             : " << dbg.k << endl;
+    cerr << "num_nodes()   : " << dbg.num_nodes() << endl;
+    cerr << "num_edges()   : " << dbg.num_edges() << endl;
+    cerr << "Total size    : " << size_in_mega_bytes(dbg) << " MB" << endl;
+    cerr << "Bits per edge : " << bits_per_element(dbg) << " Bits" << endl <<endl;
+ 
     cerr << "loading dbg2 " << p.input_filename2 << std::endl;
     debruijn_graph_shifted<> dbg2;
     load_from_file(dbg2, p.input_filename2);
 
+    // dumpcolumns(dbg, p);
+    // dump_edges(dbg);
     cerr << "k             : " << dbg.k << endl;
     cerr << "num_nodes()   : " << dbg.num_nodes() << endl;
     cerr << "num_edges()   : " << dbg.num_edges() << endl;
     cerr << "Total size    : " << size_in_mega_bytes(dbg) << " MB" << endl;
     cerr << "Bits per edge : " << bits_per_element(dbg) << " Bits" << endl;
-    // dumpcolumns(dbg, p);
-    // dump_edges(dbg);
 
     std::vector<unsigned char> last;
     std::vector<unsigned char>* cur = &last;
     //  dbg.get_edge_column(last);
   
-    for (int i = 0; i < dbg.k; ++i);
+//    for (int i = 0; i < dbg.k; ++i);
     assert(dbg.k == dbg2.k);
       
     mainmerge(dbg, dbg2);
 
-    for (int c = 0; c < dbg.m_alphabet.size(); c++) {
-        std::cout << c << ": " << dbg._symbol_start(c) << std::endl;
-    }
+    // for (int c = 0; c < dbg.m_alphabet.size(); c++) {
+    //     std::cout << c << ": " << dbg._symbol_start(c) << std::endl;
+    // }
  }
