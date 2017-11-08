@@ -148,19 +148,106 @@ uint64_t maxsize(const std::vector<bool> &sets)
 //    return sum + length(pos, sets);
 }
 
+int subdivide2(const std::vector<unsigned char> &g1_col, const uint64_t g1_ptr, const uint64_t g1_num,
+              const std::vector<unsigned char> &g2_col, const uint64_t g2_ptr, const uint64_t g2_num,
+              /*const int colno,*/ std::vector<bool> &g1_out_set, std::vector<bool> &g2_out_set, int &active_alpha_size)
+{
+    uint64_t g1_local_ptr = g1_ptr;
+    uint64_t g2_local_ptr = g2_ptr;
+    char chars_seen = 0;
+
+    while (g1_local_ptr < g1_ptr + g1_num || g2_local_ptr < g2_ptr + g2_num) {
+        
+        // assumtion 1: we just finished a run or we're at the beginning
+
+        // if only col1 has characters:
+        //   consume characters (adding zeros) while the run continues, then add one to both out sets, then go back to assumption 1
+        
+        if (g2_local_ptr == g2_ptr + g2_num) {
+            unsigned char run_char = g1_col[g1_local_ptr];
+            while (g1_local_ptr <  g1_ptr + g1_num && run_char == g1_col[g1_local_ptr]) {
+                g1_local_ptr++;
+                g1_out_set.push_back(false);
+            }
+        }
+
+        // if only col2 has chracters:
+        //   consume characters (adding zeros) while the run continues, then add one to both out sets, then go back to assumption 1
+        else if (g1_local_ptr == g1_ptr + g1_num) {
+            unsigned char run_char = g2_col[g2_local_ptr];
+            while (g2_local_ptr < g2_ptr + g2_num && run_char == g2_col[g2_local_ptr]) {
+                g2_local_ptr++;
+                g2_out_set.push_back(false);
+            }
+        }
+
+
+        // if col1 and col2 have characters:
+        //   if they are the same character:
+        //      process all of col1, process all of col2, add ones to both bit sets
+        else  if (g1_col[g1_local_ptr] ==  g2_col[g2_local_ptr]) {
+            
+            unsigned char run_char = g1_col[g1_local_ptr];
+            while (g1_local_ptr <  g1_ptr + g1_num && run_char == g1_col[g1_local_ptr]) {
+                g1_local_ptr++;
+                g1_out_set.push_back(false);
+            }
+            while (g2_local_ptr < g2_ptr + g2_num && run_char == g2_col[g2_local_ptr]) {
+                g2_local_ptr++;
+                g2_out_set.push_back(false);
+            }
+        }
+
+        
+        //   else:
+        //      process all characters from lexicographically smaller one as if the other one was empty, add one to both out sets
+        else if (g1_col[g1_local_ptr] < g2_col[g2_local_ptr]) {
+            unsigned char run_char = g1_col[g1_local_ptr];
+            while (g1_local_ptr <  g1_ptr + g1_num && run_char == g1_col[g1_local_ptr]) {
+                g1_local_ptr++;
+                g1_out_set.push_back(false);
+            }
+        } else {
+            unsigned char run_char = g2_col[g2_local_ptr];
+            while (g2_local_ptr < g2_ptr + g2_num && run_char == g2_col[g2_local_ptr]) {
+                g2_local_ptr++;
+                g2_out_set.push_back(false);
+            }
+        }
+        chars_seen++;
+        g1_out_set.push_back(true);
+        g2_out_set.push_back(true);
+     
+
+    
+        // look at head of each queue
+        // if either contains cur_char, read from queue
+    
+    }
+
+    active_alpha_size = chars_seen;
+
+    // if c1 is empty
+}
+
 //FIXME: this is pretty inefficient; we should be able to scan through the columns only once
 int subdivide(const std::vector<unsigned char> &g1_col, const uint64_t g1_ptr, const uint64_t g1_num,
               const std::vector<unsigned char> &g2_col, const uint64_t g2_ptr, const uint64_t g2_num,
               /*const int colno,*/ std::vector<bool> &g1_out_set, std::vector<bool> &g2_out_set, int &active_alpha_size)
-{    
+{
+    // build a set of used characters for g1 within a window in g1
     std::set<char> g1_chars;
     for (uint64_t i = 0; i <  g1_num; ++i) {
         g1_chars.insert(g1_col[g1_ptr + i]);
     }
+
+    // build a set of used characters for g2 within a window in g2
     std::set<char> g2_chars;    
     for (uint64_t i = 0; i <  g2_num; ++i) {
         g2_chars.insert(g2_col[g2_ptr +i]);
     }
+
+    // generate the union 
     std::vector<unsigned char> g1_g2_union;
     std::set_union(g1_chars.begin(), g1_chars.end(),
                    g2_chars.begin(), g2_chars.end(),                  
@@ -183,6 +270,19 @@ int subdivide(const std::vector<unsigned char> &g1_col, const uint64_t g1_ptr, c
      return 0;
 }
 
+void dumprange(const std::vector<unsigned char> &g1_col, size_t a, size_t b)
+{
+    for (size_t i = a; i < a+b; i++)
+        std::cout << g1_col[i];
+    std::cout <<std::endl;
+}
+
+void dumpboolrange(const std::vector<bool> &g1_col, size_t a, size_t b)
+{
+    for (size_t i = a; i < a+b; i++)
+        std::cout << (int)g1_col[i];
+    std::cout <<std::endl;
+}
 
 int refine_sets(const std::vector<unsigned char> &g1_col, const std::vector<unsigned char> &g2_col,
                 const std::vector<bool>& g1_sets, const std::vector<bool> &g2_sets,
@@ -200,19 +300,39 @@ int refine_sets(const std::vector<unsigned char> &g1_col, const std::vector<unsi
         uint64_t g1_num = length(g1_set_start, g1_sets);
         uint64_t g2_num = length(g2_set_start, g2_sets);
         int active_alpha_size = 0;
+//        int active_alpha_size2 = 0;        
         //std::cout << "subdividing ranges (col " << colno <<" ) " << std::endl << "\t" << g1_ptr << ":+" << g1_num << " = " ;
         //dump_range(g1_ptr, g1_ptr+ g1_num, g1_col);
         //std::cout << std::endl << "\t" << g2_ptr << ":+" << g2_num;
         //dump_range(g2_ptr, g2_ptr+ g2_num, g2_col);
         //std::cout <<std::endl;
         uint64_t g1_out_set_initsize = g1_out_set.size();
-        uint64_t g2_out_set_initsize = g2_out_set.size();        
-        subdivide(g1_col, g1_ptr, g1_num,
+        uint64_t g2_out_set_initsize = g2_out_set.size();
+//         std::vector<bool> g1t1,g2t1,g1t2,g2t2;
+//         subdivide(g1_col, g1_ptr, g1_num,
+//                   g2_col, g2_ptr, g2_num,
+// //                  colno,
+//                   g1t1,//g1_out_set,
+//                   g2t1,//g2_out_set,
+//                   active_alpha_size2);
+
+
+          subdivide2(g1_col, g1_ptr, g1_num,
                   g2_col, g2_ptr, g2_num,
 //                  colno,
-                  g1_out_set,
-                  g2_out_set,
+                     g1_out_set,
+                     g2_out_set,
                   active_alpha_size);
+          // if (g1t1 != g1t2 || g2t1 != g2t2 || active_alpha_size != active_alpha_size2) {
+          //     dumprange(g1_col, g1_ptr, g1_num);
+          //     dumprange(g2_col, g2_ptr, g2_num);
+          //     dumpboolrange(g1t2,0,g1t2.size());
+          //     dumpboolrange(g2t2,0,g2t2.size());
+          //     exit(1);
+          // }
+
+          // g1_out_set.insert(g1_out_set.end(), g1t2.begin(), g1t2.end());
+          // g2_out_set.insert(g2_out_set.end(), g2t2.begin(), g2t2.end());
         //std::cout << "\talpha size: " << active_alpha_size << std::endl;
         //std::cout << "\tg1_out_set size: " << g1_out_set.size() << ", g2_out_set size: " << g2_out_set.size() << std::endl;
         //std::cout << "validations  " << validate(g1_out_set) << " " << validate(g2_out_set) << std::endl;
@@ -775,7 +895,17 @@ int main(int argc, char* argv[]) {
   
 //    for (int i = 0; i < dbg.k; ++i);
     assert(dbg.k == dbg2.k);
-      
+
+    std::vector<unsigned char> a = {'A', 'C', 'C', 'C', 'T', 'T'};
+    std::vector<unsigned char> b = {'G'};
+    std::vector<bool> x,y;
+    int z;
+    subdivide2(a, 0, 6,
+               b, 0, 1,
+//                  5,
+                     x,//g1_out_set,
+               y,//g2_out_set,
+                  z);
     mainmerge(dbg, dbg2);
 
     // for (int c = 0; c < dbg.m_alphabet.size(); c++) {
