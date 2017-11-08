@@ -541,8 +541,17 @@ int mainmerge(const debruijn_graph_shifted<> &g1, const debruijn_graph_shifted<>
     int delta4 = getMilliSpan(startgettime);
     std::cerr << "got " << num_set2 << ", reported " << g2_node_flags.count() << " bits in g2_node_flags in " << delta4 << " milliseconds." << std::endl << std::flush;
 
+
+    std::vector<size_t> g1_node_rank_cache;
+    g1.init_rank_cache(g1_node_rank_cache);
+
+    std::vector<size_t> g2_node_rank_cache;
+    g2.init_rank_cache(g2_node_rank_cache);
+    
     std::cout << std::endl << "*** Starting merge planning phase. ***" << std::endl;
 
+
+    
     int colno = 0;
     int planstarttime = getMilliCount();
     for (auto col: cols) {
@@ -555,13 +564,13 @@ int mainmerge(const debruijn_graph_shifted<> &g1, const debruijn_graph_shifted<>
                 
         } else  {
             std::vector<unsigned char> h1_col(g1_col.size(),0);
-            g1.get_column(g1_node_flags, g1_edges, g1_col, h1_col);
+            g1.get_column(g1_node_rank_cache, g1_node_flags, g1_edges, g1_col, h1_col);
             g1_col.assign(h1_col.begin(), h1_col.end());
             // g1_col.clear();
             // g1_col.insert(g1_col.begin(), h1_col.begin(), h1_col.end());
             
             std::vector<unsigned char> h2_col(g2_col.size(),0);
-            g2.get_column(g2_node_flags, g2_edges, g2_col, h2_col);
+            g2.get_column(g2_node_rank_cache, g2_node_flags, g2_edges, g2_col, h2_col);
             g2_col.assign( h2_col.begin(), h2_col.end());
             // g2_col.clear();
             // g2_col.insert(g2_col.begin(), h2_col.begin(), h2_col.end());
@@ -608,10 +617,10 @@ int mainmerge(const debruijn_graph_shifted<> &g1, const debruijn_graph_shifted<>
         std::cout << "refine_sets() completed in " << delta << " milliseconds." << std::endl << std::flush;    
         
         std::cout <<"    got back new vectors of bools of sizes " << g1_new_sets.size() << ", " << g2_new_sets.size() << ";   " << std::endl << std::endl;
-        assert(g1_col.size() == validate(g1_new_sets));
-        assert(g2_col.size() == validate(g2_new_sets));
-        std::cout << "validation passed g1: " << validate(g1_new_sets)
-                  << " g2: " << validate(g2_new_sets) << std::endl;
+        // assert(g1_col.size() == validate(g1_new_sets));
+        // assert(g2_col.size() == validate(g2_new_sets));
+        // std::cout << "validation passed g1: " << validate(g1_new_sets)
+        //           << " g2: " << validate(g2_new_sets) << std::endl;
         //FIXME: avoid copying values in this next part
         g1_sets.assign(g1_new_sets.begin(), g1_new_sets.end()); 
         g2_sets.assign(g2_new_sets.begin(), g2_new_sets.end()); 
@@ -660,10 +669,10 @@ int mainmerge(const debruijn_graph_shifted<> &g1, const debruijn_graph_shifted<>
 
 
     // Lcol is just for debugging
-    std::vector<bool> Lcol(g1.num_edges(), false); //DEBUG ONLY
-    fill_Lcol(g1, Lcol);                           //DEBUG ONLY
+    // std::vector<bool> Lcol(g1.num_edges(), false); //DEBUG ONLY
+    // fill_Lcol(g1, Lcol);                           //DEBUG ONLY
 
-    std::cout << "debug Lcol.size = " << Lcol.size() << " L.size = " << L.size() << std::endl;
+    // std::cout << "debug Lcol.size = " << Lcol.size() << " L.size = " << L.size() << std::endl;
 
     // BEGIN output stuff
 

@@ -532,8 +532,16 @@ auto    access_map_symbol(size_t i) const {
                 
     }
 
+    void init_rank_cache(std::vector<size_t> &cache) const
+        {
+            for (int i = 0; i < sigma+1; i++) {
+                size_t start_edge = _symbol_start(i);
+                cache.push_back(m_node_rank(start_edge +1));
+
+            }
+        }
     // Writes into new column superficially appear random, however they actually write consecutively into $\sigma$ regions
-    void get_column(const boost::dynamic_bitset<> &node_flags, const std::vector<symbol_type> &edges, const std::vector<symbol_type> &oldcol, std::vector<symbol_type> &newcol) const
+    void get_column(const std::vector<size_t> &node_rank_cache, const boost::dynamic_bitset<> &node_flags, const std::vector<symbol_type> &edges, const std::vector<symbol_type> &oldcol, std::vector<symbol_type> &newcol) const
         {
             assert(oldcol.size() == num_edges());
             assert(newcol.size() == num_edges());
@@ -574,8 +582,7 @@ auto    access_map_symbol(size_t i) const {
                 // and edges starting at the beginning.  So we have to find the number of nodes existing before
                 // start_edge (base) so we can add x_node_rank (offset) to it to get the number of nodes from the
                 // beginning
-
-                size_t new_nth_node = m_node_rank(start_edge +1) + x_node_rank;
+                size_t new_nth_node = node_rank_cache[x] + x_node_rank;
 
                 size_t new_edges_begin  = my_node_select2(node_flags, selectcache, x, new_nth_node); //m_node_select(new_nth_node);
                 size_t my_new_edges_begin  = my_node_select2(node_flags, selectcache, x, new_nth_node);
