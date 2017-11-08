@@ -295,7 +295,7 @@ int refine_sets(const std::vector<unsigned char> &g1_col, const std::vector<unsi
     
     uint64_t g1_set_start = 0;
     uint64_t g2_set_start = 0;
-    std::cout << "subdividing " << num_sets(g1_sets) << " and " << num_sets(g2_sets) << " sets" << std::endl;
+    //std::cout << "subdividing " << num_sets(g1_sets) << " and " << num_sets(g2_sets) << " sets" << std::endl;
     do {
         uint64_t g1_num = length(g1_set_start, g1_sets);
         uint64_t g2_num = length(g2_set_start, g2_sets);
