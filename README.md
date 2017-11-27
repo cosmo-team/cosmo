@@ -88,7 +88,8 @@ They should be configured and built following their own instructions and set to 
 
 To merge the succinct de Bruin graphs from VARI (or Cosmo), simply list the two .dbg files on the command line of vari-merge
 
-```$ vari-merge a.dbg b.dbg
+```
+$ vari-merge a.dbg b.dbg
 ```
 
 This will produce a file called merged.dbg.
@@ -97,7 +98,8 @@ It will also produce a file called merged.plan.  This filename is a bit of a mis
 
 To merge two color matrices (which must be done AFTER merging the succinct de Bruijn graphs, because you need the plan file) , run color-merge like so:
 
-```$ color-merge merged.plan a.colors.sd_vector b.colors.sd_vector 3 4
+``
+`$ color-merge merged.plan a.colors.sd_vector b.colors.sd_vector 3 4
 ```
 
 The last two arguments are the number of columns (colors) in each of the input color matrices, respectively (e.g. color matrix A has 3 columns and color matrix B has 4 columns).
