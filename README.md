@@ -98,8 +98,8 @@ It will also produce a file called merged.plan.  This filename is a bit of a mis
 
 To merge two color matrices (which must be done AFTER merging the succinct de Bruijn graphs, because you need the plan file) , run color-merge like so:
 
-``
-`$ color-merge merged.plan a.colors.sd_vector b.colors.sd_vector 3 4
+```
+$ color-merge merged.plan a.colors.sd_vector b.colors.sd_vector 3 4
 ```
 
 The last two arguments are the number of columns (colors) in each of the input color matrices, respectively (e.g. color matrix A has 3 columns and color matrix B has 4 columns).
