@@ -15,21 +15,10 @@
 
 Cosmo is a fast, low-memory DNA assembler that uses a [succinct de Bruijn graph][succ].
 
-**VARI** is an extension to Cosmo and supports offline construction of succinct colored de Bruijn graphs.
+**VARI** is an extension to Cosmo and supports offline construction of succinct colored de Bruijn graphs.  It can be found in the VARi branch.
 
-If you use VARI in scholarly work, please cite:
+**VARI-merge** is a pair of tools (vari-merge and color-merge) capable of merging the succinct colored de Bruijn graphs produced by VARI.  The VARI-merge branch includes all of VARI.
 
-_Muggli, M. D., Bowe, A., Noyes, N. R., Morley, P., Belk, K., Raymond, R., Gagie, T., Puglisi, S. J., and Boucher, C. (2017). Succinct colored de bruijn graphs. Bioinformatics. doi: 10.1093/bioinformatics/btx067_
-
-```
-@article{muggli2017vari,
-  title={Succinct Colored de Bruijn Graphs},
-  author={Muggli, Martin D and Bowe, Alexander and Noyes, Noelle R and Morley, Paul and Belk, Keith and Raymond, Robert and  Gagie, Travis and Puglisi, Simon J and Boucher, Christina},
-  journal={Bioinformatics},
-  year={2017},
-  publish={Oxford Univ Press}
-}
-```
 
 ## Building notes
 
@@ -95,7 +84,25 @@ They should be configured and built following their own instructions and set to 
     make
 
 
-## Usage
+## VARI-merge Usage
+
+To merge the succinct de Bruin graphs from VARI (or Cosmo), simply list the two .dbg files on the command line of vari-merge
+
+```$ vari-merge a.dbg b.dbg
+```
+
+This will produce a file called merged.dbg.
+
+It will also produce a file called merged.plan.  This filename is a bit of a misnomber, as it does not contain the intervals described in the VARI-merge manuscript.  However, the final plan described in the manuscript does entail how to combine edge labels (and thus color matrix rows) from the two sources.  This is the information contained in the .plan file.  The plan file is a sequence of unsigned chars, where 0x1 means to take a single edge label (color matrix row) from input 1, 0x2 means to take a single edge label (color matrix row) from input 2, and 0x3 means to take one edge label (color matrix row) from both input 1 and input 2 and collapse them into a single edge label (color matrix row) in the output.
+
+To merge two color matrices (which must be done AFTER merging the succinct de Bruijn graphs, because you need the plan file) , run color-merge like so:
+
+```$ color-merge merged.plan a.colors.sd_vector b.colors.sd_vector 3 4
+```
+
+The last two arguments are the number of columns (colors) in each of the input color matrices, respectively (e.g. color matrix A has 3 columns and color matrix B has 4 columns).
+
+## VARI Usage
 
 Below is an example of using the succinct colored de Bruijn graph for bubble calling.  
 
