@@ -9,8 +9,9 @@ BOOST_PATH=3rd_party_inst/boost
 
 DEP_PATH=3rd_party_inst
 KMC_PATH=./3rd_party_src/KMC
-INC=-isystem $(DEP_PATH)/include -isystem $(BOOST_PATH)/include
-LIB=-L$(DEP_PATH)/lib -L./ -L$(BOOST_PATH)/lib
+SDREADER_PATH=3rd_party_src/sdreader
+INC=-isystem $(DEP_PATH)/include -isystem $(BOOST_PATH)/include -I$(SDREADER_PATH)
+LIB=-L$(DEP_PATH)/lib -L./ -L$(BOOST_PATH)/lib -L$(SDREADER_PATH)
 BOOST_FLAGS= -lboost_system -lboost_filesystem
 DEP_FLAGS=$(INC) $(LIB) $(BOOST_FLAGS) -isystem $(KMC_PATH) -lsdsl -fopenmp #openmp is needed for logging
 DEBUG_FLAGS= -g
@@ -50,6 +51,7 @@ ifeq ($(verbose),1)
 CPP_FLAGS+=-DVERBOSE
 endif
 
+SDREADER_OBJS=$(SDREADER_PATH)/LowReader.o $(SDREADER_PATH)/HighReader.o $(SDREADER_PATH)/SDIter.o
 KMC_OBJS=$(KMC_PATH)/kmc_api/kmc_file.o $(KMC_PATH)/kmc_api/kmer_api.o $(KMC_PATH)/kmc_api/mmer.o
 BUILD_REQS=lut.hpp debug.hpp utility.hpp io.hpp sort.hpp kmer.hpp dummies.hpp debruijn_graph.hpp debruijn_graph_shifted.hpp pack-color.hpp pack-color-merge.hpp cosmo-dump.hpp cosmo-dump-full-edges.hpp cosmo-color-pd.hpp color-merge.hpp
 COLOR_REQS=colored_debruijn_graph.hpp io.hpp debug.hpp
@@ -80,7 +82,7 @@ cosmo-dump-full-edges: cosmo-dump-full-edges.cpp $(BUILD_REQS) compiler_flags
 cosmo-merge: cosmo-merge.cpp $(BUILD_REQS) compiler_flags
 	$(CXX) $(CPP_FLAGS) -o $@ $< $(KMC_OBJS) $(DEP_FLAGS) 
 color-merge: color-merge.cpp $(BUILD_REQS) compiler_flags
-	$(CXX) $(CPP_FLAGS) -o $@ $< $(KMC_OBJS) $(DEP_FLAGS) 
+	$(CXX) $(CPP_FLAGS) -o $@ $< $(KMC_OBJS) $(SDREADER_OBJS) $(DEP_FLAGS) 
 
 vari-merge: vari-merge.cpp $(BUILD_REQS) compiler_flags
 	$(CXX) $(CPP_FLAGS) -o $@ $< $(KMC_OBJS) $(DEP_FLAGS) -lstxxl

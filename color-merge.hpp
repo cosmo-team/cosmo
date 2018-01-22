@@ -16,52 +16,60 @@ typedef struct p
 
 void parse_arguments(int argc, char **argv, parameters_t & params);
 
-class SDIter {
-    sdsl::sd_vector<> *m_s;
-    size_t lowndx = 0;
-    size_t highndx = 0; // points to next chunk to read
-    size_t cur_high = 0;
-    size_t nextlow = 0;
-    size_t nexthigh = 0;
-    size_t next_cur_high = 0;
-    size_t num_advanced = 0;
-    bool peeked = false;
-public:
-    SDIter(sdsl::sd_vector<> *a_s) {m_s = a_s;};
-    signed long long peek() {
-        if (num_advanced >= m_s->low.size()) {
-            return -1;
-        }
-        nextlow = lowndx;
-        nexthigh = highndx;
-        next_cur_high = cur_high;
-        
-        size_t high_increment = 0;
-        while (m_s->high[nexthigh] != 1) {
-            high_increment++;
-            nexthigh++;
-        }
-        nexthigh++; // advance to next one
-        next_cur_high += high_increment;
-        size_t low = m_s->low[nextlow];
-        // for (int i = 1; i <= m_s->wl; i++) {
-        //     low |= (m_s->low[nextlow] << (m_s->wl - i));
-        // }
-        nextlow++;
+// class SDIter {
+//     /* from sd_vector, we require:
+//        low.size() 
+//        high.operator[]
+//        low.operator[]
+//        wl
 
-        peeked = true;
-        size_t one_loc = (next_cur_high << m_s->wl) | low; // '1' location
-        assert((*m_s)[one_loc]);
-        return one_loc;
-    };
-    void advance() {
-            if (!peeked) { peek();}
-            lowndx = nextlow;
-            highndx = nexthigh;
-            cur_high = next_cur_high;
-            peeked = false;
-            num_advanced++;
-    }
-};
+//      */
+//     sdsl::sd_vector<> *m_s;
+
+//     // position in m_s->low
+//     size_t lowndx = 0;
+
+//     // position in m_s->high
+//     // we compute a 'next' value during peek() which actually gets locked in by advance()    
+//     size_t highndx = 0; // points to next chunk of bits to read from m_s->high
+//     size_t nexthigh = 0; // if peek() has been called, points to the next chunk of bits to read from m_s->high
+
+//     // each chunk of bits in m_s->high stores a /delta/.  We need to keep track of the accumulated value of all the deltas
+//     // again, we compute a 'next' value during peek() which actually gets locked in by advance()
+//     size_t cur_high = 0; // accumulated (i.e. non-delta) value of the position of the last 1 instance
+//     size_t next_cur_high = 0; // if peek() has been called, accumulated (i.e. non-delta) value of the position of the peeked 1 instance
+//     bool peeked = false;
+// public:
+//     SDIter(sdsl::sd_vector<> *a_s) {m_s = a_s;};
+//     signed long long peek() {
+//         if (lowndx >= m_s->low.size()) {
+//             return -1;
+//         }
+//         nexthigh = highndx;
+//         next_cur_high = cur_high;
+        
+//         size_t high_increment = 0; // accumulates number of 0's
+//         while (m_s->high[nexthigh] != 1) {
+//             high_increment++;
+//             nexthigh++;
+//         }
+//         nexthigh++; // advance to next one
+//         next_cur_high += high_increment;
+//         size_t low = m_s->low[lowndx];
+
+//         peeked = true;
+//         size_t one_loc = (next_cur_high << m_s->wl) | low; // '1' location
+//         assert((*m_s)[one_loc]);
+//         return one_loc;
+//     };
+//     void advance() {
+//             if (!peeked) { peek();}
+//             lowndx++;
+//             highndx = nexthigh;
+//             cur_high = next_cur_high;
+//             peeked = false;
+
+//     }
+// };
 
 #endif

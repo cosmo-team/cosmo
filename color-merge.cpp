@@ -26,6 +26,7 @@
 #include <cstdlib>
 #include <sys/timeb.h>
 #include "color-merge.hpp"
+#include "SDIter.h"
 
 int getMilliCount()
 {
@@ -93,19 +94,23 @@ int main(int argc, char * argv[])
     planfile.seekg(0, planfile.beg);
     
     const char * matrix1_file = params.matrix1_filename.c_str();
-    sdsl::sd_vector<> colors1;
-    load_from_file(colors1, params.matrix1_filename);
+    //sdsl::sd_vector<> colors1;
+    //load_from_file(colors1, params.matrix1_filename);
 
 
 
 
     const char * matrix2_file = params.matrix2_filename.c_str();
-    sdsl::sd_vector<> colors2;
-    load_from_file(colors2, params.matrix2_filename);
+    //sdsl::sd_vector<> colors2;
+    //load_from_file(colors2, params.matrix2_filename);
 
+    SDIter color1iter(matrix1_file);
+    SDIter color2iter(matrix2_file);
+
+    
     size_t out_colors = params.num_colors1 + params.num_colors2;  
     size_t n = out_colors * end;// (colors1.size() + colors2.size()) * 1.5; // total bits FIXME: we can figure this out
-    size_t m = colors1.low.size() + colors2.low.size();
+    size_t m = color1iter.size() + color2iter.size();
   
 
 
@@ -116,12 +121,11 @@ int main(int argc, char * argv[])
     b_builder = new sdsl::sd_vector_builder(n, m);// = bit_vector(num_edges*num_color, 0);
     std::cerr << "builder size: " << b_builder->size() << " capacity: " << b_builder->capacity() << std::endl;
 
-    SDIter color1iter(&colors1);
-    SDIter color2iter(&colors2);
 
     size_t color1_row = 0;
     size_t color2_row = 0;
     size_t output_row = 0;
+
     
     char planstep = 0;
     while (planfile >> planstep) {
