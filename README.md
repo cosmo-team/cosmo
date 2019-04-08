@@ -15,7 +15,7 @@
 
 Cosmo is a fast, low-memory DNA assembler that uses a [succinct de Bruijn graph][succ].
 
-**VARI** is an extension to Cosmo and supports offline construction of succinct colored de Bruijn graphs.  It can be found in the VARi branch.
+**VARI** is an extension to Cosmo and supports offline construction of succinct colored de Bruijn graphs.  It can be found in the VARi branch, however all the components are also in this branch.  You should use this branch for the VARI tools because it includes an important bugfix: Palendromes are not duplicated during the revcomp generation phase of succinct de Bruijn graph construction.
 
 **VARI-merge** is a pair of tools (vari-merge and color-merge) capable of merging the succinct colored de Bruijn graphs produced by VARI.  The VARI-merge branch includes all of VARI.
 
@@ -35,84 +35,7 @@ Five third party packages are required for VARI. All should be cloned within the
 
 They should be configured and built following their own instructions and set to install their files in a 3rd_party_inst subdirectory which is a sibling of 3rd_party_src.  The following sequence of commands should build the required parts.  Compilation errors may or may not affect the functionality of VARI, as VARI doesn't use all functionality of 3rd party sources.   Please email me if you run into trouble. I'm intermitently working on streamlining the process. -MDM May 17, 2017
 
-**Note**: Change "/home/martin_muggli/git/test/cosmo" to wherever your cosmo working tree ends up.
-
-    # Fetch software and setup directories
-    git clone https://github.com/cosmo-team/cosmo/
-    cd cosmo/
-    git checkout VARI-merge
-    mkdir 3rd_party_src
-    mkdir -p 3rd_party_inst/boost
-    cd 3rd_party_src
-    git clone https://github.com/refresh-bio/KMC
-    cd KMC
-    git checkout f090276855a3f7c0b14e9f3abc8c99d3213247b3
-    cd ..
-    git clone https://github.com/cosmo-team/sdsl-lite.git
-    cd sdsl-lite
-    git checkout 9fa981958a9d2ddade12d083548f2b09939514fb
-    cd ..
-    git clone https://github.com/stxxl/stxxl
-    cd stxxl
-    git checkout 5b9663e6b769748f3b3d3a9a779b4b89e24d7a27
-    cd ..
-    git clone https://github.com/eile/tclap
-    cd tclap
-    git checkout f41dcb5ce3d063c9fe95623193bba693338f3edb
-    cd ..
-    git clone https://github.com/emil-e/rapidcheck
-    cd rapidcheck
-    git checkout b2032e6e7029a6e5183ddc9f0c1f6edf5d619a4a
-    cd ..
-    git clone https://github.com/mmuggli/sdreader
-    wget http://sourceforge.net/projects/boost/files/boost/1.54.0/boost_1_54_0.tar.bz2
-    tar -xjf boost_1_54_0.tar.bz2
-
-    # Build the five dependencies
-    cd boost_1_54_0
-    ./bootstrap.sh --prefix=../../3rd_party_inst/boost
-    ./b2 install
-    cd ..
-    
-    cd sdsl-lite/
-    /usr/bin/time sh install.sh /home/martin_muggli/git/test/cosmo/3rd_party_inst
-    cd ..
-
-    cd stxxl
-    mkdir build
-    cd build
-    cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/home/martin_muggli/git/test/cosmo/3rd_party_inst -DBUILD_STATIC_LIBS=ON
-    make
-    make install
-    cd ../..
-
-    cd KMC
-    make
-    cd ..
-
-    cd tclap/
-    autoreconf -fvi
-    ./configure --prefix=/home/martin_muggli/git/test/cosmo/3rd_party_inst
-    make
-    make install
-    cd ..
-
-    cd rapidcheck
-    mkdir build
-    cd build
-    cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/home/martin_muggli/git/test/cosmo/3rd_party_inst
-    make
-    make install
-    cd ../..
-
-    cd sdreader
-    make
-    cd ..
-    
-    # Build VARI
-    cd ..
-    make
-
+The download_and_build.sh script has commands to check out this branch of the repository and perform all these steps in the appropriate directories. 
 
 ## VARI-merge Usage
 
