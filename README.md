@@ -28,7 +28,7 @@ Five third party packages are required for VARI. All should be cloned within the
 1. KMC2 --  'git clone https://github.com/refresh-bio/KMC' (commit f090276855a3f7c0b14e9f3abc8c99d3213247b3)
 2. sdsl-lite -- 'git clone https://github.com/cosmo-team/sdsl-lite.git' (commit 9fa981958a9d2ddade12d083548f2b09939514fb)
 3. stxxl -- 'git clone https://github.com/stxxl/stxxl' (commit 5b9663e6b769748f3b3d3a9a779b4b89e24d7a27)
-4. tclap -- 'git clone https://github.com/eile/tclap' (commit f41dcb5ce3d063c9fe95623193bba693338f3edb)
+4. tclap -- 'git clone https://github.com/cosmo-team/tclap' (commit f41dcb5ce3d063c9fe95623193bba693338f3edb)
 5. Boost 1.54* -- 'wget http://sourceforge.net/projects/boost/files/boost/1.54.0/boost_1_54_0.tar.bz2'
 6. rapidcheck -- 'git clone https://github.com/emil-e/rapidcheck' (commit b2032e6e7029a6e5183ddc9f0c1f6edf5d619a4a)
 * VARI fails to compile with later versions of Boost.  For the time being, it is necessary to download and compile Boost 1.54 and update BOOST_PATH in the Makefile to reflect the installed directory.  See Issue [#7](/../../issues/7).  This issue is under active investigation -MDM April 4, 2019.
