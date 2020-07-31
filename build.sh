@@ -16,7 +16,7 @@
     cd stxxl
     git checkout 5b9663e6b769748f3b3d3a9a779b4b89e24d7a27
     cd ..
-    git clone https://github.com/eile/tclap
+    git clone https://github.com/cosmo-team/tclap
     cd tclap
     git checkout f41dcb5ce3d063c9fe95623193bba693338f3edb
     cd ..
