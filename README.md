@@ -89,7 +89,7 @@ They should be configured and built following their own instructions and set to 
     ./configure --prefix=/home/martin_muggli/git/test/cosmo/3rd_party_inst
     make
     make install
-    cd ..
+    cd ../..
     
     # Build VARI
     make
