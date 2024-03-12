@@ -104,7 +104,7 @@ this stuff).
 
 ## License
 
-This software is copyright (c) Alex Bowe 2014 (bowe dot alexander at gmail dot com).
+This software is copyright (c) Alex Bowe 2024 (alex at alexbowe dot com).
 It is released under the GNU General Public License (GPL) version 3.
 
 
